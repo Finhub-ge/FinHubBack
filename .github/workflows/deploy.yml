@@ -25,12 +25,12 @@ jobs:
             git pull origin staging
             
             # Stop and remove all containers (optional if you want clean slate)
-            docker-compose down
+            docker compose down
             
             # Remove unused images, containers, volumes, and networks to free space
             docker system prune -af --volumes
             
             # Build and run the app container
-            docker-compose build app
-            docker-compose up -d app
+            docker compose build app
+            docker compose up -d app
           EOF
