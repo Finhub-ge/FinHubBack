@@ -16,7 +16,7 @@ COPY prisma ./prisma
 COPY . .
 
 # Generate Prisma Client
-RUN npx prisma generate
+RUN yarn prisma generate
 
 # Build the application
 RUN yarn build
