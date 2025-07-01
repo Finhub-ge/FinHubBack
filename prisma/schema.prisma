@@ -32,3 +32,36 @@ model Role {
   updated_at DateTime @updatedAt
   deleted_at DateTime?
 }
+
+model Portfolio {
+  id                    Int      @id @default(autoincrement())
+  portfolio_name        String
+  original_creditor     String
+  purchase_date         DateTime
+  original_loan_id      String   @unique
+  internal_loan_id      String?  // optional
+  loan_product_type     String
+  loan_origination_date DateTime
+  last_payment_date     DateTime?
+  outstanding_amount    Float
+  original_loan_amount  Float
+  currency              String
+  debtor_full_name      String
+  debtor_id_number      String
+  phone_primary         String
+  phone_secondary       String?
+  email                 String?
+  address               String?
+  dpd                   Int      // Days Past Due
+  missed_installments   Int?
+  client_segment        String
+  previous_attempts     String?
+  ownership_confirmed   Boolean
+  contract_available    Boolean
+  debtor_notified       Boolean
+  contract_file_link    String?
+  assignee_id           Int?     // reference to User table later
+  loan_score            Int      @default(0)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+}

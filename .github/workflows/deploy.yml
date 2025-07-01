@@ -1,0 +1,36 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.LS_SSH_PRIVATE_KEY }}
+
+      - name: Deploy Backend
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LS_USER }}@${{ secrets.LS_HOST }} << 'EOF'
+            cd /home/ubuntu/FinHubBack
+            git pull origin staging
+            
+            # Stop and remove all containers (optional if you want clean slate)
+            docker-compose down
+            
+            # Remove unused images, containers, volumes, and networks to free space
+            docker system prune -af --volumes
+            
+            # Build and run the app container
+            docker-compose build app
+            docker-compose up -d app
+          EOF

@@ -51,8 +51,4 @@ export class AuthController {
   getRoles() {
     return this.authService.getRoles()
   }
-
-
-
-
 }
