@@ -4,7 +4,7 @@ WORKDIR /src
 
 # Copy dependency definitions
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # Copy Prisma schema and files
 COPY prisma ./prisma
