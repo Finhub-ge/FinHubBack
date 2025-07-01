@@ -2,9 +2,12 @@
 FROM node:20-slim AS build
 WORKDIR /src
 
+# Set faster Yarn registry
+RUN yarn config set registry https://registry.npmjs.org
+
 # Copy dependency definitions
-COPY package.json package-lock.json ./
-RUN npm install
+COPY package.json yarn.lock ./
+ RUN yarn install --frozen-lockfile
 
 # Copy Prisma schema and files
 COPY prisma ./prisma
@@ -16,7 +19,7 @@ COPY . .
 RUN npx prisma generate
 
 # Build the application
-RUN npm run build
+RUN yarn build
 
 # ---------- Run Stage ----------
 FROM node:20-slim AS run
@@ -32,7 +35,7 @@ COPY --from=build /src/tsconfig*.json ./
 COPY --from=build /src/prisma ./prisma
 
 # Development start (switch to prod as needed)
-CMD ["npm", "run", "start:dev"]
-# For production: CMD ["npm", "start:prod"]
+CMD ["yarn", "run", "start:dev"]
+# For production: CMD ["yarn", "start:prod"]
 
 EXPOSE 3000
