@@ -11,7 +11,7 @@ import { SignUpSuperAdminDto } from "./dto/signupSuperAdmin.dto";
 import { UserSigninDto } from "./dto/userSignin.dto";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { GetUser } from "./decorator/get-user.decorator";
-import { User } from "generated/prisma";
+import { User } from "@prisma/client";
 
 @ApiTags('Auth')
 @Controller('auth')

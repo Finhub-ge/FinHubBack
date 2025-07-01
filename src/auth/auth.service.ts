@@ -8,9 +8,9 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { generateAccountId } from "src/helpers/accountId.helper";
 import { SignUpSuperAdminDto } from "./dto/signupSuperAdmin.dto";
 import { UserSigninDto } from "./dto/userSignin.dto";
-import { User } from "generated/prisma";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { Role } from "src/enums/role.enum";
+import { User } from "@prisma/client";
 
 @Injectable()
 export class AuthService {
