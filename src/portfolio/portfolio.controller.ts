@@ -4,7 +4,9 @@ import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Portfolio')
 @Controller('portfolio')
 export class PortfolioController {
   constructor(private readonly portfolioService: PortfolioService) {}
@@ -16,4 +18,3 @@ export class PortfolioController {
     return this.portfolioService.getAll();
   }
 }
-//for deployment test
