@@ -40,6 +40,7 @@ export class UserService {
 
       // send to email
       return {
+        email: user.email,
         accountId: user.account_id,
         password: randomPwd
       }

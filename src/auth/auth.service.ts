@@ -116,7 +116,7 @@ export class AuthService {
     const user =
       await this.prisma.user.findFirst({
         where: {
-          account_id: dto.accountId,
+          email: dto.email,
         },
         include: {
           role: true,
