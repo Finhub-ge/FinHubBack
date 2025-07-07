@@ -7,38 +7,31 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.LS_SSH_PRIVATE_KEY }}
-
-      - name: Deploy Backend
+      - name: Pull and Deploy Backend
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.LS_USER }}@${{ secrets.LS_HOST }} << 'EOF'
-            cd /home/ubuntu/FinHubBack
+          cd /home/ubuntu/FinHubBack
 
-            echo "Pulling latest code from staging..."
-            git pull origin staging
+          echo "Pulling latest code from staging..."
+          git pull origin staging
 
-            echo "Installing dependencies..."
-            rm -rf node_modules
-            npm install
+          echo "Installing dependencies..."
+          rm -rf node_modules
+          npm install
 
-            echo "Generating Prisma client..."
-            npx prisma generate
+          echo "Generating Prisma client..."
+          npx prisma generate
 
-            echo "Building app..."
-            npm run build
+          echo "Building app..."
+          npm run build
 
-            echo "Restarting with PM2..."
-            pm2 delete finhub-back || true
-            pm2 start dist/main.js --name finhub-back
+          echo "Restarting with PM2..."
+          pm2 delete finhub-back || true
+          pm2 start dist/main.js --name finhub-back
 
-            echo "Deployment completed successfully."
-          EOF
+          echo "Deployment completed successfully."
