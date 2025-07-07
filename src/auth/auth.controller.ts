@@ -52,4 +52,12 @@ export class AuthController {
   getRoles() {
     return this.authService.getRoles()
   }
+
+  @ApiBearerAuth('access-token')
+  @UseGuards( JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @Get('me')
+  getCurrentUser(@GetUser() user: User) {
+    return this.authService.getCurrentUser(user)
+  }
 }

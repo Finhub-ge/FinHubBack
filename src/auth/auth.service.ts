@@ -223,4 +223,30 @@ export class AuthService {
   async getRoles() {
     return await this.prisma.role.findMany()
   }
+
+  async getCurrentUser(user: User) {
+    const currentUser =
+      await this.prisma.user.findFirst({
+        where: {
+          id: user.id,
+        },
+        include: {
+          role: true,
+        },
+      });
+
+    // if user does not exist throw exception
+    if(!currentUser) {
+      throw new HttpException(
+        {
+          status: HttpStatus.FORBIDDEN,
+          error:
+            'User not found.',
+        },
+        HttpStatus.FORBIDDEN,
+        {},
+      );
+    }
+    return currentUser
+  }
 }
