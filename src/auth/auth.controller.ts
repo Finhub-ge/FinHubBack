@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { AuthDto } from "./dto/auth.dto";
 import { Public } from "./decorator/public.decorator";
@@ -45,6 +45,7 @@ export class AuthController {
     return this.authService.changePwd(user, dto);
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards( JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('roles')
