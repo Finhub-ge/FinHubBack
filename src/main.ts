@@ -38,10 +38,7 @@ async function bootstrap() {
     },
   });
   const reflector = app.get(Reflector)
-  app.enableCors({
-    origin: ['https://master.d9jqcke86n65y.amplifyapp.com'],
-    credentials: true,
-  });
+  app.enableCors();
   await app.listen(4444);
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log(swaggerPrefix)
