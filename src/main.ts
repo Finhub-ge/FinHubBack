@@ -37,6 +37,5 @@ async function bootstrap() {
   app.enableCors();
   await app.listen(4444);
   console.log(`Application is running on: ${await app.getUrl()}`);
-  console.log(swaggerPrefix)
 }
 bootstrap();
