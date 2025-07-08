@@ -20,6 +20,6 @@ import { AppController } from './app.controller';
     PortfolioModule
   ],
   controllers: [AppController],
-  providers: [ConfigModule],
+  providers: [],
 })
 export class AppModule {}
