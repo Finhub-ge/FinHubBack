@@ -15,7 +15,7 @@ export class UserService {
   async createUser(data: CreateUserDto) {
     const randomPwd = randomUUID()
     const hash = await argon.hash(
-      randomPwd,
+      data.passsword,
       {},
     );
     const accountId = generateAccountId(data.first_name)
@@ -42,7 +42,7 @@ export class UserService {
       return {
         email: user.email,
         accountId: user.account_id,
-        password: randomPwd
+        password: data.passsword,
       }
     } catch (error) {
       if (

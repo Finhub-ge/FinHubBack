@@ -16,6 +16,11 @@ export class CreateUserDto {
     @IsString()
     @IsNotEmpty()
     last_name: string;
+
+    @ApiProperty()
+    @IsString()
+    @IsNotEmpty()
+    passsword: string;
   
     @ApiProperty()
     @IsInt()
