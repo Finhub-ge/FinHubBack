@@ -76,6 +76,14 @@ export class UserService {
     })
   }
 
+  async getAllUsers() {
+    return await this.prisma.user.findMany({
+      include: { 
+        role: true 
+      },
+    })
+  }
+
   async getUsersByRoleId(roleId: string) {
     return await this.prisma.user.findMany({
       where: { 

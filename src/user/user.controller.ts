@@ -31,6 +31,13 @@ export class UserController {
 
   @UseGuards( JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('getAll')
+  getAllUsers() {
+    return this.userService.getAllUsers()
+  }
+
+  @UseGuards( JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get(':roleId')
   getUsersByRoleId(@Param('roleId') roleId: string) {
     return this.userService.getUsersByRoleId(roleId)
