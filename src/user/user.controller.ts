@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/createUser.dto";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -8,6 +8,7 @@ import { Role } from "src/enums/role.enum";
 import { Roles } from "src/auth/decorator/role.decorator";
 
 @ApiTags('User')
+@ApiBearerAuth('access-token')
 @Controller('user')
 export class UserController {
   constructor(
@@ -26,6 +27,13 @@ export class UserController {
   @Get('byRole')
   getUsersGroupedByRole() {
     return this.userService.getUsersGroupedByRole()
+  }
+
+  @UseGuards( JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('getAll')
+  getAllUsers() {
+    return this.userService.getAllUsers()
   }
 
   @UseGuards( JwtGuard, RolesGuard)

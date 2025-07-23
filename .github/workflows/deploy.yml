@@ -1,0 +1,37 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Pull and Deploy Backend
+        run: |
+          cd /home/ubuntu/FinHubBack
+
+          echo "Pulling latest code from staging..."
+          git pull origin staging
+
+          echo "Installing dependencies..."
+          rm -rf node_modules
+          npm install
+
+          echo "Generating Prisma client..."
+          npx prisma generate
+
+          echo "Building app..."
+          npm run build
+
+          echo "Restarting with PM2..."
+          pm2 delete finhub-back || true
+          pm2 start dist/main.js --name finhub-back
+
+          echo "Deployment completed successfully."

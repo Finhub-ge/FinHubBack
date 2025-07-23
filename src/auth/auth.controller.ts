@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { AuthDto } from "./dto/auth.dto";
 import { Public } from "./decorator/public.decorator";
@@ -11,7 +11,7 @@ import { SignUpSuperAdminDto } from "./dto/signupSuperAdmin.dto";
 import { UserSigninDto } from "./dto/userSignin.dto";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { GetUser } from "./decorator/get-user.decorator";
-import { User } from "generated/prisma";
+import { User } from "@prisma/client";
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -45,6 +45,7 @@ export class AuthController {
     return this.authService.changePwd(user, dto);
   }
 
+  @ApiBearerAuth('access-token')
   @UseGuards( JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('roles')
@@ -52,7 +53,11 @@ export class AuthController {
     return this.authService.getRoles()
   }
 
-
-
-
+  @ApiBearerAuth('access-token')
+  @UseGuards( JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @Get('me')
+  getCurrentUser(@GetUser() user: User) {
+    return this.authService.getCurrentUser(user)
+  }
 }

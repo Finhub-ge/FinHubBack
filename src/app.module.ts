@@ -3,6 +3,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
+import { LoanModule } from './loan/loan.module';
+import { AppController } from './app.controller';
+import { AminModule } from './admin/admin.module';
 
 
 @Module({
@@ -14,9 +17,11 @@ import { UserModule } from './user/user.module';
     }),
     PrismaModule,
     AuthModule,
-    UserModule
+    UserModule,
+    LoanModule,
+    AminModule
   ],
-  controllers: [],
-  providers: [ConfigModule],
+  controllers: [AppController],
+  providers: [],
 })
 export class AppModule {}
