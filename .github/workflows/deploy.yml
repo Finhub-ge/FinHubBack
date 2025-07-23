@@ -3,7 +3,7 @@ name: Deploy Backend
 on:
   push:
     branches:
-      - staging
+      - main
 
 jobs:
   deploy:
@@ -17,8 +17,8 @@ jobs:
         run: |
           cd /home/ubuntu/FinHubBack
 
-          echo "Pulling latest code from staging..."
-          git pull origin staging
+          echo "Pulling latest code from main..."
+          git pull origin main
 
           echo "Installing dependencies..."
           rm -rf node_modules
