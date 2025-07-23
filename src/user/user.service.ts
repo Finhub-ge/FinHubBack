@@ -28,12 +28,12 @@ export class UserService {
       const user = await this.prisma.user.create(
         {
           data: {
-            account_id: accountId,
+            accountId: accountId,
             email: data.email,
-            first_name: data.first_name,
-            last_name: data.last_name,
+            firstName: data.first_name,
+            lastName: data.last_name,
             hash,
-            role_id: role.id
+            roleId: role.id
           },
         },
       );
@@ -41,7 +41,7 @@ export class UserService {
       // send to email
       return {
         email: user.email,
-        accountId: user.account_id,
+        accountId: user.accountId,
         password: data.password,
       }
     } catch (error) {
@@ -66,7 +66,7 @@ export class UserService {
         name: true,
         users: {
           select: {
-            first_name: true
+            firstName: true
           }
         }
       },
@@ -87,7 +87,7 @@ export class UserService {
   async getUsersByRoleId(roleId: string) {
     return await this.prisma.user.findMany({
       where: { 
-        role_id: Number(roleId) 
+        roleId: Number(roleId) 
       },
       include: { 
         role: true 

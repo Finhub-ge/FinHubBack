@@ -42,18 +42,18 @@ export class AuthService {
       const user = await this.prisma.user.create(
         {
           data: {
-            account_id: accountId,
+            accountId: accountId,
             email: dto.email,
-            first_name: dto.first_name,
-            last_name: dto.last_name,
+            firstName: dto.first_name,
+            lastName: dto.last_name,
             hash,
-            role_id: role.id,
-            must_change_password: false
+            roleId: role.id,
+            mustChangePassword: false
           },
         },
       );
 
-      return this.signToken(user.id, user.email, user.account_id, role.name);
+      return this.signToken(user.id, user.email, user.accountId, role.name);
     } catch (error) {
       if (
         error instanceof
@@ -109,7 +109,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
     
-    return this.signToken(user.id, user.email, user.account_id, user.role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.role.name);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -146,7 +146,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.account_id, user.role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.role.name);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -187,10 +187,10 @@ export class AuthService {
     const newHash = await argon.hash(dto.newPassword);
     await this.prisma.user.update({
       where: { id: userHash.id},
-      data: { hash: newHash, must_change_password: false }
+      data: { hash: newHash, mustChangePassword: false }
     })
 
-    return this.signToken(userHash.id, userHash.email, userHash.account_id, userHash.role.name);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.role.name);
   }
 
   async signToken(
