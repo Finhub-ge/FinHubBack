@@ -8,6 +8,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { User } from '@prisma/client';
+import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -45,5 +46,16 @@ export class LoanController {
     @Body() createContactDto: CreateContactDto
   ) {
     return this.loanService.addDebtorContact(id, createContactDto, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('/:id/loan-attributes')
+  addLoanAttributes(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) id: number, 
+    @Body() addLoanAttributesDto: AddLoanAttributesDto
+  ) {
+    return this.loanService.addLoanAttributes(id, addLoanAttributesDto, user.id);
   }
 }

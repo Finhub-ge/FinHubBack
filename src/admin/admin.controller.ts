@@ -27,4 +27,11 @@ export class AdminController {
   getDebtorContactLabels() {
     return this.adminService.getDebtorContactLabels();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('attributes')
+  getAttributes() {
+    return this.adminService.getAttributes();
+  }
 }

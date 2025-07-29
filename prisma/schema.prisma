@@ -8,114 +8,112 @@ datasource db {
 }
 
 model Role {
-  id        Int    @id @default(autoincrement())
-  name      String @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
-  
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @updatedAt @db.DateTime(0)
   users     User[]
-  
+
   @@index([name])
   @@index([deletedAt])
 }
 
 model User {
-  id                  Int      @id @default(autoincrement())
-  accountId           String   @unique
-  email               String   @unique
-  firstName           String
-  lastName            String
-  hash                String
-  roleId              Int
-  mustChangePassword  Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  deletedAt           DateTime?
-  
-  role                Role     @relation(fields: [roleId], references: [id])
-  debtorContacts      DebtorContact[]
-  loanStatusHistories LoanStatusHistory[] @relation("LoanStatusChanges")
+  id                    Int                   @id @default(autoincrement())
+  email                 String                @unique
+  hash                  String
+  accountId             String                @unique
+  createdAt             DateTime              @default(now()) @db.DateTime(0)
+  deletedAt             DateTime?             @db.DateTime(0)
+  firstName             String
+  lastName              String
+  mustChangePassword    Boolean               @default(true)
+  roleId                Int
+  updatedAt             DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  debtorContacts        DebtorContact[]
   debtorStatusHistories DebtorStatusHistory[] @relation("DebtorStatusChanges")
-  
+  loanStatusHistories   LoanStatusHistory[]   @relation("LoanStatusChanges")
+  Transactions          Transactions[]
+  role                  Role                  @relation(fields: [roleId], references: [id])
+
   @@index([email])
   @@index([accountId])
   @@index([deletedAt])
+  @@index([roleId], map: "User_roleId_fkey")
 }
 
 model Portfolio {
-  id            Int      @id @default(autoincrement())
-  name          String
-  purchasePrice Decimal  @db.Decimal(12, 2)
-  purchaseDate  DateTime
-  bankName      String
+  id            Int       @id @default(autoincrement())
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
-  
+  bankName      String
+  createdAt     DateTime  @default(now()) @db.DateTime(0)
+  deletedAt     DateTime? @db.DateTime(0)
+  name          String
+  purchaseDate  DateTime  @db.Date
+  purchasePrice Decimal   @db.Decimal(12, 2)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.DateTime(0)
   loans         Loan[]
-  
+
   @@index([name])
   @@index([purchaseDate])
   @@index([deletedAt])
 }
 
 model LoanStatus {
-  id          Int @id @default(autoincrement())
-  name        String @unique
-  description String?
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
-  loans       Loan[]
-  loanStatusHistoriesOld  LoanStatusHistory[] @relation("OldLoanStatus")
-  loanStatusHistoriesNew  LoanStatusHistory[] @relation("NewLoanStatus")
-  
+  id                     Int                 @id @default(autoincrement())
+  name                   String              @unique
+  description            String?
+  isActive               Boolean             @default(true)
+  createdAt              DateTime            @default(now()) @db.DateTime(0)
+  updatedAt              DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt              DateTime?           @db.DateTime(0)
+  loans                  Loan[]
+  loanStatusHistoriesNew LoanStatusHistory[] @relation("NewLoanStatus")
+  loanStatusHistoriesOld LoanStatusHistory[] @relation("OldLoanStatus")
+
   @@index([name])
   @@index([isActive])
   @@index([deletedAt])
 }
 
 model DebtorStatus {
-  id          Int @id @default(autoincrement())
-  name        String @unique
-  description String?
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
-  debtors     Debtor[]
-  debtorStatusHistoriesOld  DebtorStatusHistory[] @relation("OldDebtorStatus")
-  debtorStatusHistoriesNew  DebtorStatusHistory[] @relation("NewDebtorStatus")
-  
+  id                       Int                   @id @default(autoincrement())
+  name                     String                @unique
+  description              String?
+  isActive                 Boolean               @default(true)
+  createdAt                DateTime              @default(now()) @db.DateTime(0)
+  updatedAt                DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt                DateTime?             @db.DateTime(0)
+  debtors                  Debtor[]
+  debtorStatusHistoriesNew DebtorStatusHistory[] @relation("NewDebtorStatus")
+  debtorStatusHistoriesOld DebtorStatusHistory[] @relation("OldDebtorStatus")
+
   @@index([name])
   @@index([isActive])
   @@index([deletedAt])
 }
 
 model Loan {
-  id                Int      @id @default(autoincrement())
-  portfolioId       Int
-  debtorId          Int
-  caseId            Int?
-  originalPrincipal Decimal  @db.Decimal(12, 2)
-  purchasedAmount   Decimal  @db.Decimal(12, 2)
-  loanStartDate     DateTime
-  loanDueDate       DateTime
-  statusId          Int
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  deletedAt         DateTime?
-  
-  portfolio         Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  debtor            Debtor @relation(fields: [debtorId], references: [id], onDelete: Cascade)
-  status            LoanStatus @relation(fields: [statusId], references: [id])
+  id                  Int                 @id @default(autoincrement())
+  portfolioId         Int
+  debtorId            Int
+  caseId              Int?
+  originalPrincipal   Decimal             @db.Decimal(12, 2)
+  purchasedAmount     Decimal             @db.Decimal(12, 2)
+  loanStartDate       DateTime            @db.Date
+  loanDueDate         DateTime            @db.Date
+  statusId            Int
+  createdAt           DateTime            @default(now()) @db.DateTime(0)
+  updatedAt           DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt           DateTime?           @db.DateTime(0)
+  debtor              Debtor              @relation(fields: [debtorId], references: [id], onDelete: Cascade)
+  portfolio           Portfolio           @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  status              LoanStatus          @relation(fields: [statusId], references: [id])
+  loanAttributes      LoanAttribute[]
   loanStatusHistories LoanStatusHistory[]
-  
+  Transactions        Transactions[]
+
   @@index([portfolioId])
   @@index([debtorId])
   @@index([statusId])
@@ -125,23 +123,22 @@ model Loan {
 }
 
 model Debtor {
-  id          Int      @id @default(autoincrement())
-  firstName   String
-  lastName    String
-  birthdate   DateTime?
-  mainEmail   String?
-  mainPhone   String?
-  mainAddress String?
-  statusId    Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
-  loans       Loan[]
-  contacts    DebtorContact[]
-  status      DebtorStatus @relation(fields: [statusId], references: [id])
+  id                    Int                   @id @default(autoincrement())
+  firstName             String
+  lastName              String
+  birthdate             DateTime?             @db.Date
+  mainEmail             String?
+  mainPhone             String?
+  mainAddress           String?
+  statusId              Int
+  createdAt             DateTime              @default(now()) @db.DateTime(0)
+  updatedAt             DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt             DateTime?             @db.DateTime(0)
+  status                DebtorStatus          @relation(fields: [statusId], references: [id])
+  contacts              DebtorContact[]
   debtorStatusHistories DebtorStatusHistory[]
-  
+  loans                 Loan[]
+
   @@index([firstName, lastName])
   @@index([mainEmail])
   @@index([mainPhone])
@@ -151,104 +148,152 @@ model Debtor {
 }
 
 model ContactType {
-  id          Int @id @default(autoincrement())
-  name        String @unique
-  description String?
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now()) @db.DateTime(0)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt      DateTime?       @db.DateTime(0)
   debtorContacts DebtorContact[]
-  
+
   @@index([name])
   @@index([isActive])
   @@index([deletedAt])
 }
 
 model ContactLabel {
-  id          Int @id @default(autoincrement())
-  name        String @unique
-  description String?
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now()) @db.DateTime(0)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt      DateTime?       @db.DateTime(0)
   debtorContacts DebtorContact[]
-  
+
   @@index([name])
   @@index([isActive])
   @@index([deletedAt])
 }
 
 model DebtorContact {
-  id        Int     @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   debtorId  Int
   typeId    Int
   value     String
   labelId   Int?
-  isPrimary Boolean @default(false)
+  isPrimary Boolean       @default(false)
   userId    Int?
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deletedAt DateTime?
-  
-  debtor    Debtor @relation(fields: [debtorId], references: [id], onDelete: Cascade)
-  type      ContactType @relation(fields: [typeId], references: [id])
+  createdAt DateTime      @default(now()) @db.DateTime(0)
+  updatedAt DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt DateTime?     @db.DateTime(0)
+  debtor    Debtor        @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   label     ContactLabel? @relation(fields: [labelId], references: [id])
-  user      User? @relation(fields: [userId], references: [id])
-  
+  type      ContactType   @relation(fields: [typeId], references: [id])
+  user      User?         @relation(fields: [userId], references: [id])
+
   @@index([debtorId])
   @@index([typeId])
   @@index([labelId])
   @@index([isPrimary])
   @@index([deletedAt])
+  @@index([userId], map: "DebtorContact_userId_fkey")
 }
 
 model LoanStatusHistory {
-  id          Int      @id @default(autoincrement())
-  loanId      Int
-  oldStatusId Int?
-  newStatusId Int
-  changedBy   Int
-  timestamp   DateTime @default(now())
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
-  loan        Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  oldStatus   LoanStatus? @relation("OldLoanStatus", fields: [oldStatusId], references: [id])
-  newStatus   LoanStatus @relation("NewLoanStatus", fields: [newStatusId], references: [id])
-  changedByUser User @relation("LoanStatusChanges", fields: [changedBy], references: [id])
-  
+  id            Int         @id @default(autoincrement())
+  loanId        Int
+  oldStatusId   Int?
+  newStatusId   Int
+  changedBy     Int
+  notes         String?
+  createdAt     DateTime    @default(now()) @db.DateTime(0)
+  updatedAt     DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt     DateTime?   @db.DateTime(0)
+  changedByUser User        @relation("LoanStatusChanges", fields: [changedBy], references: [id])
+  loan          Loan        @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  newStatus     LoanStatus  @relation("NewLoanStatus", fields: [newStatusId], references: [id])
+  oldStatus     LoanStatus? @relation("OldLoanStatus", fields: [oldStatusId], references: [id])
+
   @@index([loanId])
-  @@index([timestamp])
   @@index([changedBy])
   @@index([deletedAt])
+  @@index([newStatusId], map: "LoanStatusHistory_newStatusId_fkey")
+  @@index([oldStatusId], map: "LoanStatusHistory_oldStatusId_fkey")
 }
 
 model DebtorStatusHistory {
-  id          Int      @id @default(autoincrement())
-  debtorId    Int
-  oldStatusId Int?
-  newStatusId Int
-  changedBy   Int
-  timestamp   DateTime @default(now())
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  
-  debtor      Debtor @relation(fields: [debtorId], references: [id], onDelete: Cascade)
-  oldStatus   DebtorStatus? @relation("OldDebtorStatus", fields: [oldStatusId], references: [id])
-  newStatus   DebtorStatus @relation("NewDebtorStatus", fields: [newStatusId], references: [id])
-  changedByUser User @relation("DebtorStatusChanges", fields: [changedBy], references: [id])
-  
+  id            Int           @id @default(autoincrement())
+  debtorId      Int
+  oldStatusId   Int?
+  newStatusId   Int
+  changedBy     Int
+  notes         String?
+  createdAt     DateTime      @default(now()) @db.DateTime(0)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt     DateTime?     @db.DateTime(0)
+  changedByUser User          @relation("DebtorStatusChanges", fields: [changedBy], references: [id])
+  debtor        Debtor        @relation(fields: [debtorId], references: [id], onDelete: Cascade)
+  newStatus     DebtorStatus  @relation("NewDebtorStatus", fields: [newStatusId], references: [id])
+  oldStatus     DebtorStatus? @relation("OldDebtorStatus", fields: [oldStatusId], references: [id])
+
   @@index([debtorId])
-  @@index([timestamp])
   @@index([changedBy])
   @@index([deletedAt])
+  @@index([newStatusId], map: "DebtorStatusHistory_newStatusId_fkey")
+  @@index([oldStatusId], map: "DebtorStatusHistory_oldStatusId_fkey")
+}
+
+model Attributes {
+  id             Int             @id @default(autoincrement())
+  name           String
+  createdAt      DateTime        @default(now()) @db.DateTime(0)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt      DateTime?       @db.DateTime(0)
+  loanAttributes LoanAttribute[]
+}
+
+model LoanAttribute {
+  id          Int        @id @default(autoincrement())
+  loanId      Int
+  attributeId Int
+  value       String?
+  createdAt   DateTime   @default(now()) @db.DateTime(0)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt   DateTime?  @db.DateTime(0)
+  attribute   Attributes @relation(fields: [attributeId], references: [id])
+  loan        Loan       @relation(fields: [loanId], references: [id])
+
+  @@index([attributeId], map: "LoanAttribute_attributeId_fkey")
+  @@index([loanId], map: "LoanAttribute_loanId_fkey")
+}
+
+model Transactions {
+  id        Int       @id @default(autoincrement())
+  loanId    Int?
+  amount    Decimal?  @db.Decimal(12, 2)
+  userId    Int?
+  createdAt DateTime? @default(now()) @db.DateTime(0)
+  principal Decimal?  @db.Decimal(12, 2)
+  interest  Decimal?  @db.Decimal(12, 2)
+  penalty   Decimal?  @db.Decimal(12, 2)
+  fees      Decimal?  @db.Decimal(12, 2)
+  legal     Decimal?  @db.Decimal(12, 2)
+  currency  String?   @default("GEL") @db.VarChar(45)
+  Loan      Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
+  User      User?     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
+
+  @@index([loanId], map: "fk_Transactions_1_idx")
+  @@index([userId], map: "fk_Transactions_2_idx")
+}
+
+model portfolioSeller {
+  id        Int       @id @default(autoincrement())
+  name      String?   @db.VarChar(45)
+  active    String?   @default("1") @db.VarChar(45)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
 }
