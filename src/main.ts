@@ -33,6 +33,10 @@ async function bootstrap() {
       security: [{ 'bearer': [] }],
     },
   });
+  //Serve raw JSON at /api-json
+  app.use('/api-json', (req, res) => {
+    res.json(document);
+  });
   const reflector = app.get(Reflector)
   app.enableCors();
   await app.listen(4444);

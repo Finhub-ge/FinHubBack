@@ -14,4 +14,8 @@ export class AdminService {
   async getDebtorContactLabels() {
     return this.prisma.contactLabel.findMany();
   }
+
+  async getAttributes() {
+    return this.prisma.attributes.findMany()
+  }
 }

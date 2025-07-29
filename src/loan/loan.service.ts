@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
+import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 
 @Injectable()
 export class LoanService {
@@ -79,6 +80,16 @@ export class LoanService {
           select: {
             name: true,
             description: true
+          }
+        },
+        loanAttributes: {
+          select: {
+            value: true,
+            attribute: {
+              select: {
+                name: true
+              }
+            }
           }
         }
       }
@@ -164,5 +175,52 @@ export class LoanService {
     });
 
     return contact;
+  }
+
+  async addLoanAttributes(loanId: number, addLoanAttributesDto: AddLoanAttributesDto, userId: number) {
+    // 1. Check if loan exists
+    const loan = await this.prisma.loan.findFirst({
+      where: { id: loanId, deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // 2. Check if attribute exists
+    const attribute = await this.prisma.attributes.findFirst({
+      where: { id: addLoanAttributesDto.attributeId },
+    });
+
+    if (!attribute) {
+      throw new NotFoundException('Attribute not found');
+    }
+
+    // 3. Optional: check if this attribute already exists for this loan
+    const existing = await this.prisma.loanAttribute.findFirst({
+      where: {
+        loanId,
+        attributeId: addLoanAttributesDto.attributeId,
+        deletedAt: null,
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('This attribute is already added to the loan');
+    }
+
+    // 4. Create the loanAttribute
+    const loanAttribute = await this.prisma.loanAttribute.create({
+      data: {
+        loanId,
+        attributeId: addLoanAttributesDto.attributeId,
+        value: addLoanAttributesDto.value,
+      },
+      include: {
+        attribute: { select: { id: true, name: true } },
+      },
+    });
+
+    return loanAttribute;
   }
 }

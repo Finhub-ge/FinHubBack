@@ -78,9 +78,19 @@ export class UserService {
 
   async getAllUsers() {
     return await this.prisma.user.findMany({
-      include: { 
-        role: true 
-      },
+      select: {
+        id: true,
+        email: true,
+        accountId: true,
+        createdAt: true,
+        deletedAt: true,
+        firstName: true,
+        lastName: true,
+        mustChangePassword: true,
+        roleId: true,
+        updatedAt: true,
+        role: true
+      }
     })
   }
 
@@ -89,9 +99,19 @@ export class UserService {
       where: { 
         roleId: Number(roleId) 
       },
-      include: { 
-        role: true 
-      },
+      select: {
+        id: true,
+        email: true,
+        accountId: true,
+        createdAt: true,
+        deletedAt: true,
+        firstName: true,
+        lastName: true,
+        mustChangePassword: true,
+        roleId: true,
+        updatedAt: true,
+        role: true
+      }
     })
   }
 }
