@@ -34,7 +34,7 @@ export class AuthService {
       where: { id: 1 }
     })
 
-    if(!role) {
+    if (!role) {
       throw new BadRequestException('invalid_role_id');
     }
     // save the new user in the db
