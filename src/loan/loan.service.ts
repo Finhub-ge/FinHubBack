@@ -7,25 +7,25 @@ import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 export class LoanService {
   constructor(
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
   async getAll() {
     const loans = await this.prisma.loan.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       include: {
-        portfolio: {
+        Portfolio: {
           select: {
             name: true,
           }
         },
-        debtor: {
+        Debtor: {
           select: {
             firstName: true,
             lastName: true,
           }
         },
-        status: {
+        LoanStatus: {
           select: {
             name: true,
           }
@@ -38,12 +38,12 @@ export class LoanService {
 
   async getOne(id: number) {
     const loan = await this.prisma.loan.findUnique({
-      where: { 
+      where: {
         id,
-        deletedAt: null 
+        deletedAt: null
       },
       include: {
-        portfolio: {
+        Portfolio: {
           select: {
             id: true,
             name: true,
@@ -53,7 +53,7 @@ export class LoanService {
             notes: true
           }
         },
-        debtor: {
+        Debtor: {
           select: {
             id: true,
             firstName: true,
@@ -62,30 +62,30 @@ export class LoanService {
             mainEmail: true,
             mainPhone: true,
             mainAddress: true,
-            status: {
+            DebtorStatus: {
               select: { name: true }
             },
-            contacts: {
-              select: { 
-                value: true, 
-                isPrimary: true, 
+            DebtorContact: {
+              select: {
+                value: true,
+                isPrimary: true,
                 notes: true,
-                type: { select: { name: true } },
-                label: { select: { name: true } },
+                ContactType: { select: { name: true } },
+                ContactLabel: { select: { name: true } },
               },
             }
           }
         },
-        status: {
+        LoanStatus: {
           select: {
             name: true,
             description: true
           }
         },
-        loanAttributes: {
+        LoanAttribute: {
           select: {
             value: true,
-            attribute: {
+            Attributes: {
               select: {
                 name: true
               }
@@ -106,17 +106,17 @@ export class LoanService {
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId, deletedAt: null },
       select: {
-        debtor: {
+        Debtor: {
           include: {
-            status: {
+            DebtorStatus: {
               select: { id: true, name: true, description: true }
             },
-            contacts: {
+            DebtorContact: {
               where: { deletedAt: null },
               include: {
-                type: { select: { id: true, name: true } },
-                label: { select: { id: true, name: true } },
-                user: { select: { id: true, firstName: true, lastName: true } }
+                ContactType: { select: { id: true, name: true } },
+                ContactLabel: { select: { id: true, name: true } },
+                User: { select: { id: true, firstName: true, lastName: true } }
               },
               orderBy: [
                 { isPrimary: 'desc' },
@@ -132,7 +132,7 @@ export class LoanService {
       throw new NotFoundException('Loan not found');
     }
 
-    return loan.debtor;
+    return loan.Debtor;
   }
 
   async addDebtorContact(debtorId: number, createContactDto: CreateContactDto, userId: number) {
@@ -148,9 +148,9 @@ export class LoanService {
     // If this is marked as primary, update other contacts to not be primary
     if (createContactDto.isPrimary) {
       await this.prisma.debtorContact.updateMany({
-        where: { 
+        where: {
           debtorId,
-          deletedAt: null 
+          deletedAt: null
         },
         data: { isPrimary: false }
       });
@@ -168,9 +168,9 @@ export class LoanService {
         userId: userId
       },
       include: {
-        type: { select: { id: true, name: true } },
-        label: { select: { id: true, name: true } },
-        user: { select: { id: true, firstName: true, lastName: true } }
+        ContactType: { select: { id: true, name: true } },
+        ContactLabel: { select: { id: true, name: true } },
+        User: { select: { id: true, firstName: true, lastName: true } }
       }
     });
 
@@ -217,7 +217,7 @@ export class LoanService {
         value: addLoanAttributesDto.value,
       },
       include: {
-        attribute: { select: { id: true, name: true } },
+        Attributes: { select: { id: true, name: true } },
       },
     });
 

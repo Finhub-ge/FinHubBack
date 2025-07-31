@@ -10,7 +10,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 export class UserService {
   constructor(
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
   async createUser(data: CreateUserDto) {
     const randomPwd = randomUUID()
@@ -64,7 +64,7 @@ export class UserService {
       select: {
         id: true,
         name: true,
-        users: {
+        User: {
           select: {
             firstName: true
           }
@@ -89,15 +89,15 @@ export class UserService {
         mustChangePassword: true,
         roleId: true,
         updatedAt: true,
-        role: true
+        Role: true
       }
     })
   }
 
   async getUsersByRoleId(roleId: string) {
     return await this.prisma.user.findMany({
-      where: { 
-        roleId: Number(roleId) 
+      where: {
+        roleId: Number(roleId)
       },
       select: {
         id: true,
@@ -110,7 +110,7 @@ export class UserService {
         mustChangePassword: true,
         roleId: true,
         updatedAt: true,
-        role: true
+        Role: true
       }
     })
   }
