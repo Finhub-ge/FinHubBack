@@ -43,6 +43,7 @@ model User {
   @@index([accountId])
   @@index([deletedAt])
   @@index([roleId], map: "User_roleId_fkey")
+  @@index([roleId], map: "User_roleId_fkey")
 }
 
 model Portfolio {
@@ -74,12 +75,34 @@ model LoanStatus {
   loanStatusHistoriesNew LoanStatusHistory[] @relation("NewLoanStatus")
   loanStatusHistoriesOld LoanStatusHistory[] @relation("OldLoanStatus")
 
+  id                     Int                 @id @default(autoincrement())
+  name                   String              @unique
+  description            String?
+  isActive               Boolean             @default(true)
+  createdAt              DateTime            @default(now()) @db.DateTime(0)
+  updatedAt              DateTime            @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt              DateTime?           @db.DateTime(0)
+  loans                  Loan[]
+  loanStatusHistoriesNew LoanStatusHistory[] @relation("NewLoanStatus")
+  loanStatusHistoriesOld LoanStatusHistory[] @relation("OldLoanStatus")
+
   @@index([name])
   @@index([isActive])
   @@index([deletedAt])
 }
 
 model DebtorStatus {
+  id                       Int                   @id @default(autoincrement())
+  name                     String                @unique
+  description              String?
+  isActive                 Boolean               @default(true)
+  createdAt                DateTime              @default(now()) @db.DateTime(0)
+  updatedAt                DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt                DateTime?             @db.DateTime(0)
+  debtors                  Debtor[]
+  debtorStatusHistoriesNew DebtorStatusHistory[] @relation("NewDebtorStatus")
+  debtorStatusHistoriesOld DebtorStatusHistory[] @relation("OldDebtorStatus")
+
   id                       Int                   @id @default(autoincrement())
   name                     String                @unique
   description              String?
@@ -143,6 +166,8 @@ model Debtor {
   debtorStatusHistories DebtorStatusHistory[]
   loans                 Loan[]
 
+  loans Loan[]
+
   @@index([firstName, lastName])
   @@index([mainEmail])
   @@index([mainPhone])
@@ -152,6 +177,13 @@ model Debtor {
 }
 
 model ContactType {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now()) @db.DateTime(0)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt      DateTime?       @db.DateTime(0)
   id             Int             @id @default(autoincrement())
   name           String          @unique
   description    String?
@@ -174,6 +206,13 @@ model ContactLabel {
   createdAt      DateTime        @default(now()) @db.DateTime(0)
   updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
   deletedAt      DateTime?       @db.DateTime(0)
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now()) @db.DateTime(0)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt      DateTime?       @db.DateTime(0)
   debtorContacts DebtorContact[]
 
   @@index([name])
@@ -183,13 +222,19 @@ model ContactLabel {
 
 model DebtorContact {
   id        Int           @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   debtorId  Int
   typeId    Int
   value     String
   labelId   Int?
   isPrimary Boolean       @default(false)
+  isPrimary Boolean       @default(false)
   userId    Int?
   notes     String?
+  createdAt DateTime      @default(now()) @db.DateTime(0)
+  updatedAt DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt DateTime?     @db.DateTime(0)
+  debtor    Debtor        @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   createdAt DateTime      @default(now()) @db.DateTime(0)
   updatedAt DateTime      @default(now()) @updatedAt @db.DateTime(0)
   deletedAt DateTime?     @db.DateTime(0)
@@ -198,15 +243,33 @@ model DebtorContact {
   type      ContactType   @relation(fields: [typeId], references: [id])
   user      User?         @relation(fields: [userId], references: [id])
 
+  type ContactType @relation(fields: [typeId], references: [id])
+  user User?       @relation(fields: [userId], references: [id])
+
   @@index([debtorId])
   @@index([typeId])
   @@index([labelId])
   @@index([isPrimary])
   @@index([deletedAt])
   @@index([userId], map: "DebtorContact_userId_fkey")
+  @@index([userId], map: "DebtorContact_userId_fkey")
 }
 
 model LoanStatusHistory {
+  id            Int         @id @default(autoincrement())
+  loanId        Int
+  oldStatusId   Int?
+  newStatusId   Int
+  changedBy     Int
+  notes         String?
+  createdAt     DateTime    @default(now()) @db.DateTime(0)
+  updatedAt     DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt     DateTime?   @db.DateTime(0)
+  changedByUser User        @relation("LoanStatusChanges", fields: [changedBy], references: [id])
+  loan          Loan        @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  newStatus     LoanStatus  @relation("NewLoanStatus", fields: [newStatusId], references: [id])
+  oldStatus     LoanStatus? @relation("OldLoanStatus", fields: [oldStatusId], references: [id])
+
   id            Int         @id @default(autoincrement())
   loanId        Int
   oldStatusId   Int?
@@ -226,9 +289,25 @@ model LoanStatusHistory {
   @@index([deletedAt])
   @@index([newStatusId], map: "LoanStatusHistory_newStatusId_fkey")
   @@index([oldStatusId], map: "LoanStatusHistory_oldStatusId_fkey")
+  @@index([newStatusId], map: "LoanStatusHistory_newStatusId_fkey")
+  @@index([oldStatusId], map: "LoanStatusHistory_oldStatusId_fkey")
 }
 
 model DebtorStatusHistory {
+  id            Int           @id @default(autoincrement())
+  debtorId      Int
+  oldStatusId   Int?
+  newStatusId   Int
+  changedBy     Int
+  notes         String?
+  createdAt     DateTime      @default(now()) @db.DateTime(0)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt     DateTime?     @db.DateTime(0)
+  changedByUser User          @relation("DebtorStatusChanges", fields: [changedBy], references: [id])
+  debtor        Debtor        @relation(fields: [debtorId], references: [id], onDelete: Cascade)
+  newStatus     DebtorStatus  @relation("NewDebtorStatus", fields: [newStatusId], references: [id])
+  oldStatus     DebtorStatus? @relation("OldDebtorStatus", fields: [oldStatusId], references: [id])
+
   id            Int           @id @default(autoincrement())
   debtorId      Int
   oldStatusId   Int?

@@ -17,6 +17,10 @@ export class AdminService {
   async getDebtorContactLabels() {
     return this.prisma.contactLabel.findMany();
   }
+
+  async getAttributes() {
+    return this.prisma.attributes.findMany()
+  }
   async getTransactionList() {
     const data = await this.prisma.transaction.findMany({
       where: {

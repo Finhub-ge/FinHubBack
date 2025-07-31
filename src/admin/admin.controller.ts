@@ -31,6 +31,13 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('attributes')
+  getAttributes() {
+    return this.adminService.getAttributes();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('transactions/get')
   async getTransactionList() {
     return await this.adminService.getTransactionList();

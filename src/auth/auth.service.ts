@@ -232,9 +232,19 @@ export class AuthService {
         where: {
           id: user.id,
         },
-        include: {
-          role: true,
-        },
+        select: {
+          id: true,
+          email: true,
+          accountId: true,
+          createdAt: true,
+          deletedAt: true,
+          firstName: true,
+          lastName: true,
+          mustChangePassword: true,
+          roleId: true,
+          updatedAt: true,
+          role: true
+        }
       });
 
     // if user does not exist throw exception
