@@ -41,7 +41,7 @@ export class AdminService {
         },
         Loan: {
           include: {
-            debtor: true
+            Debtor: true
           }
         }
       },
