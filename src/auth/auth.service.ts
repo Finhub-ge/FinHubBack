@@ -78,7 +78,7 @@ export class AuthService {
           email: dto.email,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
@@ -96,7 +96,7 @@ export class AuthService {
     }
 
     // Check if user has SUPER_ADMIN role
-    if (user.role.name !== Role.SUPER_ADMIN) {
+    if (user.Role.name !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Access denied. Not a SUPER_ADMIN.');
     }
 
@@ -111,7 +111,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -121,7 +121,7 @@ export class AuthService {
           email: dto.email,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
@@ -148,7 +148,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -158,7 +158,7 @@ export class AuthService {
           id: user.id,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
@@ -192,7 +192,7 @@ export class AuthService {
       data: { hash: newHash, mustChangePassword: false }
     })
 
-    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.role.name);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name);
   }
 
   async signToken(
@@ -243,7 +243,7 @@ export class AuthService {
           mustChangePassword: true,
           roleId: true,
           updatedAt: true,
-          role: true
+          Role: true
         }
       });
 
