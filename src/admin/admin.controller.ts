@@ -51,6 +51,13 @@ export class AdminController {
   }
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('addPayment/:publicId')
+  async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: UpdatePaymentDto) {
+    return await this.adminService.addPayment(publicId, data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post('deleteTransaction/:id')
   async deleteTransaction(@Param('id') id: string) {
     return await this.adminService.deleteTransaction(+id);

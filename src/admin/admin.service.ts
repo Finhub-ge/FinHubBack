@@ -58,9 +58,28 @@ export class AdminService {
 
   }
 
+  async addPayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
+
+    const loan = await this.prisma.loan.findUnique({
+      where: {
+        publicId: String(publicId)
+      }
+    })
+
+    if (!loan) throw new HttpException('Loan not found', 404)
+
+    await this.prisma.transaction.create({
+      data: {
+        loanId: loan.id,
+        amount: Number(data.amount || 0),
+        paymentDate: data.paymentDate,
+        transactionChannelAccountId: data.accountId
+      }
+    })
+
+    throw new HttpException('Payment added successfully', 200);
+  }
   async updatePayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
-    console.log(publicId)
-    console.log(data)
 
     const payment = await this.prisma.transaction.findUnique({
       where: {
@@ -81,11 +100,9 @@ export class AdminService {
       }
     })
 
-
-
-
-
+    throw new HttpException('Payment edited successfully', 200);
   }
+
   async deleteTransaction(id: number) {
     await this.prisma.transaction.delete({
       where: {
