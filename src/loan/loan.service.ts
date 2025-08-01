@@ -36,10 +36,10 @@ export class LoanService {
     return loans;
   }
 
-  async getOne(id: number) {
+  async getOne(publicId: string) {
     const loan = await this.prisma.loan.findUnique({
       where: {
-        id,
+        publicId: publicId,
         deletedAt: null
       },
       include: {
