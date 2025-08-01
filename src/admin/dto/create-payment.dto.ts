@@ -23,10 +23,21 @@ export class CreatePaymentDto {
 
   @Transform(({ value }) => {
     // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
-    return dayjs.utc(value).tz('Asia/Tbilisi').format('YYYY-MM-DD');
+    console.log(value)
+    const date = dayjs
+      .utc(value)
+      .tz('Asia/Tbilisi')
+      .hour(12)
+      .minute(0)
+      .second(0)
+      .utc()
+      .toISOString()
+
+    console.log(date)
+    return date;
   })
-  @IsDateString() // still checks if input is a valid ISO date string
-  paymentDate: string; // final value will be in 'YYYY-MM-DD'
+  @IsDateString()
+  paymentDate: string;
 
   @IsNumberString()
   amount: string;
