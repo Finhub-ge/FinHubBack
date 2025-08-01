@@ -6,6 +6,7 @@ import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
 import { Roles } from "src/auth/decorator/role.decorator";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
+import { CreatePaymentDto } from "./dto/create-payment.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -45,15 +46,16 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('updatePayment/:publicId')
-  async updatePayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: UpdatePaymentDto) {
-    return await this.adminService.updatePayment(publicId, data);
+  @Post('addPayment/:publicId') // Loan publicId
+  async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
+    return await this.adminService.addPayment(publicId, data);
   }
+
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('addPayment/:publicId')
-  async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: UpdatePaymentDto) {
-    return await this.adminService.addPayment(publicId, data);
+  @Post('updatePayment/:publicId') // Transaction publicId
+  async updatePayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: UpdatePaymentDto) {
+    return await this.adminService.updatePayment(publicId, data);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

@@ -46,4 +46,7 @@ export class CreatePaymentDto {
   @IsString()
   comment?: string;
 
+  @IsString()
+  publicId: string;
+
 }
