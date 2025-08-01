@@ -3,11 +3,12 @@ import { LoanService } from './loan.service';
 import { LoanController } from './loan.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from 'src/auth/strategy/jwt.strategy';
+import { PaymentsHelper } from 'src/helpers/payments.helper';
 
 @Module({
   imports: [JwtModule.register({})],
   controllers: [LoanController],
-  providers: [LoanService, JwtStrategy],
+  providers: [LoanService, JwtStrategy, PaymentsHelper],
   exports: [LoanService]
 })
 export class LoanModule {}

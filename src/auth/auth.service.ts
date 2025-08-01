@@ -221,7 +221,13 @@ export class AuthService {
   }
 
   async getRoles() {
-    return await this.prisma.role.findMany()
+    return await this.prisma.role.findMany({
+      where: {
+        name: {
+          not: 'super_admin',
+        },
+      },
+    });
   }
 
   async getCurrentUser(user: User) {

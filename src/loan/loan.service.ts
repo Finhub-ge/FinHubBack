@@ -1,12 +1,17 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
+import { AddCommentDto } from './dto/addComment.dto';
+import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
+import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
+import { PaymentsHelper } from 'src/helpers/payments.helper';
 
 @Injectable()
 export class LoanService {
   constructor(
     private prisma: PrismaService,
+    private readonly paymentsHelper: PaymentsHelper, 
   ) {}
 
   async getAll() {
@@ -36,10 +41,10 @@ export class LoanService {
     return loans;
   }
 
-  async getOne(id: number) {
+  async getOne(loanId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { 
-        id,
+        id: loanId,
         deletedAt: null 
       },
       include: {
@@ -63,7 +68,23 @@ export class LoanService {
             mainPhone: true,
             mainAddress: true,
             status: {
-              select: { name: true }
+              select: { 
+                name: true,
+              }
+            },
+            debtorStatusHistories: {
+              select: {
+                newStatus: { select: { name: true } },
+                oldStatus: { select: { name: true } },
+                notes: true,
+                createdAt: true,
+                changedByUser: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                  }
+                }
+              },
             },
             contacts: {
               select: { 
@@ -91,6 +112,36 @@ export class LoanService {
               }
             }
           }
+        },
+        Comments: {
+          select: {
+            comment: true,
+            createdAt: true,
+            User: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        PaymentCommitment: {
+          select: {
+            id: true,
+            amount: true,
+            paymentDate: true,
+            type: true,
+            comment: true,
+            isActive: true,
+            PaymentSchedule: {
+              select: {
+                id: true,
+                paymentDate: true,
+                amount: true,
+              }
+            }
+          },
         }
       }
     });
@@ -102,43 +153,16 @@ export class LoanService {
     return loan;
   }
 
-  async getLoanDebtor(loanId: number) {
+  async addDebtorContact(loanId: number, createContactDto: CreateContactDto, userId: number) {
+    // Get the debtorId from the loan
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId, deletedAt: null },
-      select: {
-        debtor: {
-          include: {
-            status: {
-              select: { id: true, name: true, description: true }
-            },
-            contacts: {
-              where: { deletedAt: null },
-              include: {
-                type: { select: { id: true, name: true } },
-                label: { select: { id: true, name: true } },
-                user: { select: { id: true, firstName: true, lastName: true } }
-              },
-              orderBy: [
-                { isPrimary: 'desc' },
-                { createdAt: 'desc' }
-              ]
-            }
-          }
-        }
-      }
+      select: { debtorId: true }
     });
-
-    if (!loan) {
-      throw new NotFoundException('Loan not found');
-    }
-
-    return loan.debtor;
-  }
-
-  async addDebtorContact(debtorId: number, createContactDto: CreateContactDto, userId: number) {
+    
     // Check if debtor exists
     const debtor = await this.prisma.debtor.findUnique({
-      where: { id: debtorId, deletedAt: null }
+      where: { id: loan.debtorId, deletedAt: null }
     });
 
     if (!debtor) {
@@ -149,7 +173,7 @@ export class LoanService {
     if (createContactDto.isPrimary) {
       await this.prisma.debtorContact.updateMany({
         where: { 
-          debtorId,
+          debtorId: debtor.id,
           deletedAt: null 
         },
         data: { isPrimary: false }
@@ -159,7 +183,7 @@ export class LoanService {
     // Create the new contact
     const contact = await this.prisma.debtorContact.create({
       data: {
-        debtorId,
+        debtorId: debtor.id,
         typeId: createContactDto.typeId,
         value: createContactDto.value,
         labelId: createContactDto.labelId,
@@ -222,5 +246,141 @@ export class LoanService {
     });
 
     return loanAttribute;
+  }
+
+  async addComment(loanId: number, addCommentDto: AddCommentDto, userId: number) {
+    // Check if loan exists
+    const loan = await this.prisma.loan.findUnique({
+      where: { id: loanId, deletedAt: null }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Create the comment
+    const comment = await this.prisma.comments.create({
+      data: {
+        loanId,
+        userId,
+        comment: addCommentDto.comment,
+      },
+      include: {
+        User: { select: { id: true, firstName: true, lastName: true } }
+      }
+    })
+    return comment;
+  }
+
+  async updateDeptorStatus(loanId: number, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {
+   // Get the debtorId from the loan
+    const loan = await this.prisma.loan.findUnique({
+      where: { id: loanId, deletedAt: null },
+      select: { debtorId: true }
+    });
+    
+    // Check if debtor exists
+    const debtor = await this.prisma.debtor.findUnique({
+      where: { id: loan.debtorId, deletedAt: null }
+    });
+
+    if (!debtor) {
+      throw new NotFoundException('Debtor not found');
+    }
+
+    // Update debtor status
+    const [_, updatedDebtor] = await this.prisma.$transaction([
+      // 1. Create history
+      this.prisma.debtorStatusHistory.create({
+        data: {
+          debtorId: debtor.id,
+          oldStatusId: debtor.statusId,
+          newStatusId: addDebtorStatusDto.statusId,
+          changedBy: userId,
+          notes: addDebtorStatusDto.notes ?? null,
+        },
+      }),
+
+      // 2. Update debtor status
+      this.prisma.debtor.update({
+        where: { id: debtor.id },
+        data: { statusId: addDebtorStatusDto.statusId },
+        include: {
+          status: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return updatedDebtor;
+  }
+
+  async updateLoanStatus(loanId: number, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
+    // Check if loan exists
+    const loan = await this.prisma.loan.findUnique({
+      where: { id: loanId, deletedAt: null }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Check if status exists
+    const status = await this.prisma.loanStatus.findUnique({
+      where: { id: updateLoanStatusDto.statusId }
+    });
+
+    if (!status) {
+      throw new NotFoundException('Status not found');
+    }
+
+    if (status.name === 'Agreement') {
+      if (!updateLoanStatusDto.agreement) {
+        throw new BadRequestException('Agreement data is required for agreement status');
+      }
+
+      await this.prisma.paymentCommitment.updateMany({
+        where: { loanId: loan.id, isActive: 1 },
+        data: { isActive: 0 },
+      });
+
+      const commitment = await this.paymentsHelper.createPaymentCommitment({
+        loanId: loanId,
+        amount: updateLoanStatusDto.agreement.agreedAmount,
+        paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+        comment: updateLoanStatusDto?.comment || null,
+        userId: userId,
+        type: 'agreement',
+      })
+      
+      await this.paymentsHelper.createPaymentSchedule({
+        commitmentId: commitment.id,
+        paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+        amount: updateLoanStatusDto.agreement.agreedAmount,
+        numberOfMonths: updateLoanStatusDto.agreement.numberOfMonths
+      })
+    }
+
+    if (status.name === 'Promised To Pay') {
+      if (!updateLoanStatusDto.promise) {
+        throw new BadRequestException('Promise data is required for promise status');
+      }
+      const commitment = await this.paymentsHelper.createPaymentCommitment({
+        loanId: loanId,
+        amount: updateLoanStatusDto.promise.agreedAmount,
+        paymentDate: updateLoanStatusDto.promise.paymentDate,
+        comment: updateLoanStatusDto?.comment || null,
+        userId: userId,
+        type: 'promise',
+      })
+    }
+
+    // 2. Update loan status
+    return await this.prisma.loan.update({
+      where: { id: loanId },
+      data: { statusId: updateLoanStatusDto.statusId },
+      include: {
+        status: { select: { name: true } },
+      },
+    })
   }
 }

@@ -34,4 +34,18 @@ export class AdminController {
   getAttributes() {
     return this.adminService.getAttributes();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('debtor-statuses')
+  getDebtorStatuses() {
+    return this.adminService.getDebtoreStatuses();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('loan-statuses')
+  getloanStatuses() {
+    return this.adminService.getloanStatuses();
+  }
 }

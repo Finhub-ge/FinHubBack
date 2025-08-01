@@ -31,9 +31,11 @@ model User {
   mustChangePassword    Boolean               @default(true)
   roleId                Int
   updatedAt             DateTime              @default(now()) @updatedAt @db.DateTime(0)
+  Comments              Comments[]
   debtorContacts        DebtorContact[]
   debtorStatusHistories DebtorStatusHistory[] @relation("DebtorStatusChanges")
   loanStatusHistories   LoanStatusHistory[]   @relation("LoanStatusChanges")
+  PaymentCommitment     PaymentCommitment[]
   Transactions          Transactions[]
   role                  Role                  @relation(fields: [roleId], references: [id])
 
@@ -107,11 +109,13 @@ model Loan {
   createdAt           DateTime            @default(now()) @db.DateTime(0)
   updatedAt           DateTime            @default(now()) @updatedAt @db.DateTime(0)
   deletedAt           DateTime?           @db.DateTime(0)
+  Comments            Comments[]
   debtor              Debtor              @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   portfolio           Portfolio           @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   status              LoanStatus          @relation(fields: [statusId], references: [id])
   loanAttributes      LoanAttribute[]
   loanStatusHistories LoanStatusHistory[]
+  PaymentCommitment   PaymentCommitment[]
   Transactions        Transactions[]
 
   @@index([portfolioId])
@@ -126,6 +130,7 @@ model Debtor {
   id                    Int                   @id @default(autoincrement())
   firstName             String
   lastName              String
+  idNumber              String?               @db.VarChar(45)
   birthdate             DateTime?             @db.Date
   mainEmail             String?
   mainPhone             String?
@@ -263,11 +268,11 @@ model LoanAttribute {
   createdAt   DateTime   @default(now()) @db.DateTime(0)
   updatedAt   DateTime   @default(now()) @updatedAt @db.DateTime(0)
   deletedAt   DateTime?  @db.DateTime(0)
-  attribute   Attributes @relation(fields: [attributeId], references: [id])
+  attribute   Attributes @relation(fields: [attributeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   loan        Loan       @relation(fields: [loanId], references: [id])
 
-  @@index([attributeId], map: "LoanAttribute_attributeId_fkey")
-  @@index([loanId], map: "LoanAttribute_loanId_fkey")
+  @@index([attributeId], map: "fk_LoanAttribute_1_idx")
+  @@index([loanId], map: "fk_LoanAttribute_2_idx")
 }
 
 model Transactions {
@@ -296,4 +301,57 @@ model portfolioSeller {
   createdAt DateTime  @default(now()) @db.DateTime(0)
   updatedAt DateTime  @default(now()) @db.DateTime(0)
   deletedAt DateTime? @db.DateTime(0)
+}
+
+model Comments {
+  id        Int       @id @default(autoincrement())
+  loanId    Int
+  userId    Int
+  comment   String?   @db.Text
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  Loan      Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
+  User      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
+
+  @@index([loanId], map: "fk_comments_1_idx")
+  @@index([userId], map: "fk_comments_2_idx")
+}
+
+model PaymentCommitment {
+  id              Int                    @id @default(autoincrement())
+  loanId          Int
+  paymentDate     DateTime               @db.Date
+  amount          Decimal                @db.Decimal(12, 2)
+  comment         String?                @db.Text
+  type            PaymentCommitment_type
+  userId          Int
+  isActive        Int                    @default(1) @db.TinyInt
+  createdAt       DateTime               @default(now()) @db.DateTime(0)
+  updatedAt       DateTime               @default(now()) @db.DateTime(0)
+  deletedAt       DateTime?              @db.DateTime(0)
+  Loan            Loan                   @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_PaymentCommitment_1")
+  User            User                   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_PaymentCommitment_2")
+  PaymentSchedule PaymentSchedule[]
+
+  @@index([loanId], map: "fk_PaymentCommitment_1_idx")
+  @@index([userId], map: "fk_PaymentCommitment_2_idx")
+}
+
+model PaymentSchedule {
+  id                Int               @id @default(autoincrement())
+  commitmentId      Int
+  paymentDate       DateTime          @db.Date
+  amount            Decimal           @db.Decimal(12, 2)
+  createdAt         DateTime          @default(now()) @db.DateTime(0)
+  updatedAt         DateTime          @default(now()) @db.DateTime(0)
+  deletedAt         DateTime?         @db.DateTime(0)
+  PaymentCommitment PaymentCommitment @relation(fields: [commitmentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_PaymentSchedule_1")
+
+  @@index([commitmentId], map: "fk_PaymentSchedule_1_idx")
+}
+
+enum PaymentCommitment_type {
+  agreement
+  promise
 }

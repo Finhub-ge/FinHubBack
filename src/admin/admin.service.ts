@@ -8,14 +8,22 @@ export class AdminService {
   ) {}
 
   async getDebtorContactTypes() {
-    return this.prisma.contactType.findMany();
+    return await this.prisma.contactType.findMany();
   }
 
   async getDebtorContactLabels() {
-    return this.prisma.contactLabel.findMany();
+    return await this.prisma.contactLabel.findMany();
   }
 
   async getAttributes() {
-    return this.prisma.attributes.findMany()
+    return await this.prisma.attributes.findMany()
+  }
+
+  async getDebtoreStatuses() {
+    return await this.prisma.debtorStatus.findMany()
+  }
+
+  async getloanStatuses() {
+    return await this.prisma.loanStatus.findMany()
   }
 }
