@@ -2,6 +2,7 @@ import { HttpException, Injectable, ParseUUIDPipe } from "@nestjs/common";
 import { PaymentsHelper } from "src/helpers/payments.helper";
 import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
+import { CreatePaymentDto } from "./dto/create-payment.dto";
 
 @Injectable()
 export class AdminService {
@@ -79,7 +80,7 @@ export class AdminService {
 
     throw new HttpException('Payment added successfully', 200);
   }
-  async updatePayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
+  async updatePayment(publicId: ParseUUIDPipe, data: CreatePaymentDto) {
 
     const payment = await this.prisma.transaction.findUnique({
       where: {
