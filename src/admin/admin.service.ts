@@ -3,6 +3,7 @@ import { PaymentsHelper } from "src/helpers/payments.helper";
 import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class AdminService {
@@ -82,7 +83,8 @@ export class AdminService {
         loanId: loan.id,
         amount: Number(data.amount || 0),
         paymentDate: data.paymentDate,
-        transactionChannelAccountId: data.accountId
+        transactionChannelAccountId: data.accountId,
+        publicId: randomUUID(),
       }
     })
 

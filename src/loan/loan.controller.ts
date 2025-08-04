@@ -35,56 +35,56 @@ export class LoanController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post(':loanId/debtor/contacts')
+  @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
-    @Param('loanId', ParseIntPipe) loanId: number, 
+    @Param('publicId') publicId: string, 
     @Body() createContactDto: CreateContactDto
   ) {
-    return this.loanService.addDebtorContact(loanId, createContactDto, user.id);
+    return this.loanService.addDebtorContact(publicId, createContactDto, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('/:loanId/loan-attributes')
+  @Post('/:publicId/loan-attributes')
   addLoanAttributes(
     @GetUser() user: User,
-    @Param('loanId', ParseIntPipe) loanId: number, 
+    @Param('publicId') publicId: string, 
     @Body() addLoanAttributesDto: AddLoanAttributesDto
   ) {
-    return this.loanService.addLoanAttributes(loanId, addLoanAttributesDto, user.id);
+    return this.loanService.addLoanAttributes(publicId, addLoanAttributesDto, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('/:loanId/comment')
+  @Post('/:publicId/comment')
   addComment(
     @GetUser() user: User,
-    @Param('loanId', ParseIntPipe) loanId: number, 
+    @Param('publicId') publicId: string, 
     @Body() addCommentDto: AddCommentDto
   ) {
-    return this.loanService.addComment(loanId, addCommentDto, user.id);
+    return this.loanService.addComment(publicId, addCommentDto, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Patch(':loanId/debtor/status')
+  @Patch(':publicId/debtor/status')
   updateDeptorStatus(
     @GetUser() user: User,
-    @Param('loanId', ParseIntPipe) loanId: number, 
+    @Param('publicId') publicId: string, 
     @Body() addDebtorStatusDto: AddDebtorStatusDto
   ) {
-    return this.loanService.updateDeptorStatus(loanId, addDebtorStatusDto, user.id);
+    return this.loanService.updateDeptorStatus(publicId, addDebtorStatusDto, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Patch(':loanId/status')
+  @Patch(':publicId/status')
   updateLoanStatus(
     @GetUser() user: User,
-    @Param('loanId', ParseIntPipe) loanId: number, 
+    @Param('publicId') publicId: string, 
     @Body() updateLoanStatusDto: UpdateLoanStatusDto
   ) {
-    return this.loanService.updateLoanStatus(loanId, updateLoanStatusDto, user.id);
+    return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user.id);
   }
 }

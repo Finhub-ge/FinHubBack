@@ -33,7 +33,8 @@ export class UserService {
             firstName: data.first_name,
             lastName: data.last_name,
             hash,
-            roleId: role.id
+            roleId: role.id,
+            publicId: randomUUID(),
           },
         },
       );

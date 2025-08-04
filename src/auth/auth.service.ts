@@ -11,6 +11,8 @@ import { UserSigninDto } from "./dto/userSignin.dto";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { Role } from "src/enums/role.enum";
 import { User } from "@prisma/client";
+import { randomUUID } from "crypto"
+
 
 @Injectable()
 export class AuthService {
@@ -48,7 +50,8 @@ export class AuthService {
             lastName: dto.last_name,
             hash,
             roleId: role.id,
-            mustChangePassword: false
+            mustChangePassword: false,
+            publicId: randomUUID()
           },
         },
       );
