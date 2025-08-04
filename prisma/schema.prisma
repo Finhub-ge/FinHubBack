@@ -11,8 +11,8 @@ model Role {
   id        Int       @id @default(autoincrement())
   name      String    @unique
   createdAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
   updatedAt DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
   users     User[]
 
   @@index([name])
@@ -21,22 +21,24 @@ model Role {
 
 model User {
   id                    Int                   @id @default(autoincrement())
-  email                 String                @unique
-  hash                  String
+  publicId              String                @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
   accountId             String                @unique
-  createdAt             DateTime              @default(now()) @db.DateTime(0)
-  deletedAt             DateTime?             @db.DateTime(0)
+  email                 String                @unique
   firstName             String
   lastName              String
-  mustChangePassword    Boolean               @default(true)
+  hash                  String
   roleId                Int
+  mustChangePassword    Boolean               @default(true)
+  createdAt             DateTime              @default(now()) @db.DateTime(0)
   updatedAt             DateTime              @default(now()) @updatedAt @db.DateTime(0)
-  Comments              Comments[]
+  deletedAt             DateTime?             @db.DateTime(0)
   debtorContacts        DebtorContact[]
   debtorStatusHistories DebtorStatusHistory[] @relation("DebtorStatusChanges")
   loanStatusHistories   LoanStatusHistory[]   @relation("LoanStatusChanges")
+  Transaction           Transaction[]
+  TransactionDeleted    TransactionDeleted[]
+  Comments              Comments[]
   PaymentCommitment     PaymentCommitment[]
-  Transactions          Transactions[]
   role                  Role                  @relation(fields: [roleId], references: [id])
 
   @@index([email])
@@ -47,14 +49,14 @@ model User {
 
 model Portfolio {
   id            Int       @id @default(autoincrement())
-  notes         String?
-  bankName      String
-  createdAt     DateTime  @default(now()) @db.DateTime(0)
-  deletedAt     DateTime? @db.DateTime(0)
   name          String
-  purchaseDate  DateTime  @db.Date
   purchasePrice Decimal   @db.Decimal(12, 2)
+  purchaseDate  DateTime  @db.Date
+  bankName      String
+  notes         String?
+  createdAt     DateTime  @default(now()) @db.DateTime(0)
   updatedAt     DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  deletedAt     DateTime? @db.DateTime(0)
   loans         Loan[]
 
   @@index([name])
@@ -98,6 +100,7 @@ model DebtorStatus {
 
 model Loan {
   id                  Int                 @id @default(autoincrement())
+  publicId            String              @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
   portfolioId         Int
   debtorId            Int
   caseId              Int?
@@ -109,14 +112,14 @@ model Loan {
   createdAt           DateTime            @default(now()) @db.DateTime(0)
   updatedAt           DateTime            @default(now()) @updatedAt @db.DateTime(0)
   deletedAt           DateTime?           @db.DateTime(0)
-  Comments            Comments[]
   debtor              Debtor              @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   portfolio           Portfolio           @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   status              LoanStatus          @relation(fields: [statusId], references: [id])
   loanAttributes      LoanAttribute[]
   loanStatusHistories LoanStatusHistory[]
+  Transaction         Transaction[]
+  Comments            Comments[]
   PaymentCommitment   PaymentCommitment[]
-  Transactions        Transactions[]
 
   @@index([portfolioId])
   @@index([debtorId])
@@ -128,6 +131,7 @@ model Loan {
 
 model Debtor {
   id                    Int                   @id @default(autoincrement())
+  publicId              String                @default(dbgenerated("(uuid())")) @db.Char(36)
   firstName             String
   lastName              String
   idNumber              String?               @db.VarChar(45)
@@ -275,25 +279,6 @@ model LoanAttribute {
   @@index([loanId], map: "fk_LoanAttribute_2_idx")
 }
 
-model Transactions {
-  id        Int       @id @default(autoincrement())
-  loanId    Int?
-  amount    Decimal?  @db.Decimal(12, 2)
-  userId    Int?
-  createdAt DateTime? @default(now()) @db.DateTime(0)
-  principal Decimal?  @db.Decimal(12, 2)
-  interest  Decimal?  @db.Decimal(12, 2)
-  penalty   Decimal?  @db.Decimal(12, 2)
-  fees      Decimal?  @db.Decimal(12, 2)
-  legal     Decimal?  @db.Decimal(12, 2)
-  currency  String?   @default("GEL") @db.VarChar(45)
-  Loan      Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
-  User      User?     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
-
-  @@index([loanId], map: "fk_Transactions_1_idx")
-  @@index([userId], map: "fk_Transactions_2_idx")
-}
-
 model portfolioSeller {
   id        Int       @id @default(autoincrement())
   name      String?   @db.VarChar(45)
@@ -301,6 +286,66 @@ model portfolioSeller {
   createdAt DateTime  @default(now()) @db.DateTime(0)
   updatedAt DateTime  @default(now()) @db.DateTime(0)
   deletedAt DateTime? @db.DateTime(0)
+}
+
+model Transaction {
+  id                          Int                         @id @default(autoincrement())
+  publicId                    String                      @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  loanId                      Int?
+  amount                      Decimal?                    @db.Decimal(12, 2)
+  userId                      Int?
+  paymentDate                 DateTime?                   @db.Date
+  principal                   Decimal?                    @db.Decimal(12, 2)
+  interest                    Decimal?                    @db.Decimal(12, 2)
+  penalty                     Decimal?                    @db.Decimal(12, 2)
+  fees                        Decimal?                    @db.Decimal(12, 2)
+  legal                       Decimal?                    @db.Decimal(12, 2)
+  transactionChannelAccountId Int?
+  currency                    String?                     @default("GEL") @db.VarChar(45)
+  createdAt                   DateTime?                   @default(now()) @db.DateTime(0)
+  deleted                     Int?                        @default(0) @db.TinyInt
+  Loan                        Loan?                       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
+  User                        User?                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
+  TransactionChannelAccounts  TransactionChannelAccounts? @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_3")
+  TransactionDeleted          TransactionDeleted[]
+
+  @@index([loanId], map: "fk_Transactions_1_idx")
+  @@index([userId], map: "fk_Transactions_2_idx")
+  @@index([transactionChannelAccountId], map: "fk_Transactions_3_idx")
+}
+
+model TransactionChannelAccounts {
+  id                   Int                  @id @default(autoincrement())
+  transactionChannelId Int?
+  name                 String?              @db.VarChar(100)
+  active               Int?                 @default(1) @db.TinyInt
+  createdAt            DateTime?            @default(now()) @db.DateTime(0)
+  updatedAt            DateTime?            @default(now()) @db.DateTime(0)
+  Transaction          Transaction[]
+  TransactionChannels  TransactionChannels? @relation(fields: [transactionChannelId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_TransactionChannelAccounts_1")
+
+  @@index([transactionChannelId], map: "fk_TransactionChannelAccounts_1_idx")
+}
+
+model TransactionChannels {
+  id                         Int                          @id @default(autoincrement())
+  name                       String                       @db.VarChar(255)
+  active                     Int?                         @default(1) @db.TinyInt
+  createdAt                  DateTime?                    @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime?                    @default(now()) @db.DateTime(0)
+  TransactionChannelAccounts TransactionChannelAccounts[]
+}
+
+model TransactionDeleted {
+  id            Int          @id @default(autoincrement())
+  transactionId Int?
+  userId        Int?
+  deletedAt     DateTime?    @default(now()) @db.DateTime(0)
+  Transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_TransactionDeleted_1")
+  User          User?        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_TransactionDeleted_2")
+
+  @@index([transactionId], map: "fk_TransactionDeleted_1_idx")
+  @@index([userId], map: "fk_TransactionDeleted_2_idx")
 }
 
 model Comments {
