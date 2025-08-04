@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -9,6 +9,9 @@ import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { User } from '@prisma/client';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
+import { AddCommentDto } from './dto/addComment.dto';
+import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
+import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -32,30 +35,56 @@ export class LoanController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Get(':id/debtor')
-  getLoanDebtor(@Param('id', ParseIntPipe) id: number) {
-    return this.loanService.getLoanDebtor(id);
-  }
-
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('debtors/:id/contacts')
+  @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
-    @Param('id', ParseIntPipe) id: number, 
+    @Param('publicId') publicId: string, 
     @Body() createContactDto: CreateContactDto
   ) {
-    return this.loanService.addDebtorContact(id, createContactDto, user.id);
+    return this.loanService.addDebtorContact(publicId, createContactDto, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Post('/:id/loan-attributes')
+  @Post('/:publicId/loan-attributes')
   addLoanAttributes(
     @GetUser() user: User,
-    @Param('id', ParseIntPipe) id: number, 
+    @Param('publicId') publicId: string, 
     @Body() addLoanAttributesDto: AddLoanAttributesDto
   ) {
-    return this.loanService.addLoanAttributes(id, addLoanAttributesDto, user.id);
+    return this.loanService.addLoanAttributes(publicId, addLoanAttributesDto, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('/:publicId/comment')
+  addComment(
+    @GetUser() user: User,
+    @Param('publicId') publicId: string, 
+    @Body() addCommentDto: AddCommentDto
+  ) {
+    return this.loanService.addComment(publicId, addCommentDto, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Patch(':publicId/debtor/status')
+  updateDeptorStatus(
+    @GetUser() user: User,
+    @Param('publicId') publicId: string, 
+    @Body() addDebtorStatusDto: AddDebtorStatusDto
+  ) {
+    return this.loanService.updateDeptorStatus(publicId, addDebtorStatusDto, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Patch(':publicId/status')
+  updateLoanStatus(
+    @GetUser() user: User,
+    @Param('publicId') publicId: string, 
+    @Body() updateLoanStatusDto: UpdateLoanStatusDto
+  ) {
+    return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user.id);
   }
 }

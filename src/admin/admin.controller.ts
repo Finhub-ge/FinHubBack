@@ -39,6 +39,11 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('debtor-statuses')
+  getDebtorStatuses() {
+    return this.adminService.getDebtoreStatuses();
+  }
+
   @Get('transactions/get')
   async getTransactionList() {
     return await this.adminService.getTransactionList();
@@ -46,6 +51,11 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('loan-statuses')
+  getloanStatuses() {
+    return this.adminService.getloanStatuses();
+  }
+
   @Post('addPayment/:publicId') // Loan publicId
   async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
     return await this.adminService.addPayment(publicId, data);
