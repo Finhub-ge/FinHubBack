@@ -103,6 +103,20 @@ export class LoanService {
             description: true
           }
         },
+        loanStatusHistories: {
+          select: {
+            newStatus: { select: { name: true } },
+            oldStatus: { select: { name: true } },
+            notes: true,
+            createdAt: true,
+            changedByUser: {
+              select: {
+                firstName: true,
+                lastName: true,
+              }
+            }
+          },
+        },
         loanAttributes: {
           select: {
             value: true,
@@ -126,29 +140,52 @@ export class LoanService {
           },
           orderBy: { createdAt: 'desc' }
         },
-        PaymentCommitment: {
-          select: {
-            id: true,
-            amount: true,
-            paymentDate: true,
-            type: true,
-            comment: true,
-            isActive: true,
-            PaymentSchedule: {
-              select: {
-                id: true,
-                paymentDate: true,
-                amount: true,
-              }
-            }
-          },
-        }
+        // PaymentCommitment: {
+        //   select: {
+        //     id: true,
+        //     amount: true,
+        //     paymentDate: true,
+        //     type: true,
+        //     comment: true,
+        //     isActive: true,
+        //     PaymentSchedule: {
+        //       select: {
+        //         id: true,
+        //         paymentDate: true,
+        //         amount: true,
+        //       }
+        //     }
+        //   },
+        // }
       }
     });
 
     if (!loan) {
       throw new NotFoundException('Loan not found');
     }
+    const activeCommitments = await this.prisma.paymentCommitment.findMany({
+    where: { loanId, isActive: 1 },
+    select: {
+      id: true,
+      amount: true,
+      paymentDate: true,
+      type: true,
+      comment: true,
+      isActive: true,
+      PaymentSchedule: {
+        select: {
+          id: true,
+          paymentDate: true,
+          amount: true,
+        },
+      },
+    },
+  });
+
+  return {
+    ...loan,
+    activeCommitments,
+  };
 
     return loan;
   }
@@ -315,72 +352,94 @@ export class LoanService {
   }
 
   async updateLoanStatus(loanId: number, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
-    // Check if loan exists
-    const loan = await this.prisma.loan.findUnique({
-      where: { id: loanId, deletedAt: null }
-    });
-
-    if (!loan) {
-      throw new NotFoundException('Loan not found');
-    }
-
-    // Check if status exists
-    const status = await this.prisma.loanStatus.findUnique({
-      where: { id: updateLoanStatusDto.statusId }
-    });
-
-    if (!status) {
-      throw new NotFoundException('Status not found');
-    }
-
-    if (status.name === 'Agreement') {
-      if (!updateLoanStatusDto.agreement) {
-        throw new BadRequestException('Agreement data is required for agreement status');
-      }
-
-      await this.prisma.paymentCommitment.updateMany({
-        where: { loanId: loan.id, isActive: 1 },
-        data: { isActive: 0 },
+    return await this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loan.findUnique({
+        where: { id: loanId, deletedAt: null },
       });
 
-      const commitment = await this.paymentsHelper.createPaymentCommitment({
-        loanId: loanId,
-        amount: updateLoanStatusDto.agreement.agreedAmount,
-        paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
-        comment: updateLoanStatusDto?.comment || null,
-        userId: userId,
-        type: 'agreement',
-      })
-      
-      await this.paymentsHelper.createPaymentSchedule({
-        commitmentId: commitment.id,
-        paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
-        amount: updateLoanStatusDto.agreement.agreedAmount,
-        numberOfMonths: updateLoanStatusDto.agreement.numberOfMonths
-      })
-    }
-
-    if (status.name === 'Promised To Pay') {
-      if (!updateLoanStatusDto.promise) {
-        throw new BadRequestException('Promise data is required for promise status');
+      if (!loan) {
+        throw new NotFoundException('Loan not found');
       }
-      const commitment = await this.paymentsHelper.createPaymentCommitment({
-        loanId: loanId,
-        amount: updateLoanStatusDto.promise.agreedAmount,
-        paymentDate: updateLoanStatusDto.promise.paymentDate,
-        comment: updateLoanStatusDto?.comment || null,
-        userId: userId,
-        type: 'promise',
-      })
-    }
 
-    // 2. Update loan status
-    return await this.prisma.loan.update({
-      where: { id: loanId },
-      data: { statusId: updateLoanStatusDto.statusId },
-      include: {
-        status: { select: { name: true } },
-      },
-    })
+      const status = await tx.loanStatus.findUnique({
+        where: { id: updateLoanStatusDto.statusId },
+      });
+
+      if (!status) {
+        throw new NotFoundException('Status not found');
+      }
+
+      await tx.loanStatusHistory.create({
+        data: {
+          loanId: loan.id,
+          oldStatusId: loan.statusId,
+          newStatusId: updateLoanStatusDto.statusId,
+          changedBy: userId,
+          notes: updateLoanStatusDto.comment ?? null,
+        },
+      });
+
+      if (status.name === 'Agreement') {
+        if (!updateLoanStatusDto.agreement) {
+          throw new BadRequestException('Agreement data is required for agreement status');
+        }
+
+        await tx.paymentCommitment.updateMany({
+          where: { loanId: loan.id, isActive: 1 },
+          data: { isActive: 0 },
+        });
+
+        const commitment = await this.paymentsHelper.createPaymentCommitment(
+          {
+            loanId: loanId,
+            amount: updateLoanStatusDto.agreement.agreedAmount,
+            paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+            comment: updateLoanStatusDto?.comment || null,
+            userId: userId,
+            type: 'agreement',
+          },
+          tx // pass the transaction client
+        );
+        await this.paymentsHelper.createPaymentSchedule(
+          {
+            commitmentId: commitment.id,
+            paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+            amount: updateLoanStatusDto.agreement.agreedAmount,
+            numberOfMonths: updateLoanStatusDto.agreement.numberOfMonths,
+          },
+          tx // pass the transaction client
+        );
+      }
+
+      if (status.name === 'Promised To Pay') {
+        if (!updateLoanStatusDto.promise) {
+          throw new BadRequestException('Promise data is required for promise status');
+        }
+
+        await tx.paymentCommitment.updateMany({
+          where: { loanId: loan.id, isActive: 1 },
+          data: { isActive: 0 },
+        });
+
+        await this.paymentsHelper.createPaymentCommitment(
+          {
+            loanId: loanId,
+            amount: updateLoanStatusDto.promise.agreedAmount,
+            paymentDate: updateLoanStatusDto.promise.paymentDate,
+            comment: updateLoanStatusDto?.comment || null,
+            userId: userId,
+            type: 'promise',
+          },tx // pass the transaction client
+        ) 
+      }
+
+      return await tx.loan.update({
+        where: { id: loanId },
+        data: { statusId: updateLoanStatusDto.statusId },
+        include: {
+          status: { select: { name: true } },
+        },
+      });
+    });
   }
 }

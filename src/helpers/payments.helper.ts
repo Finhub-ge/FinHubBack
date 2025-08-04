@@ -2,6 +2,14 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { CreatePaymentCommitment } from "src/interface/createPaymentCommitment";
 import { CreatePaymentSchedule } from "src/interface/createPaymentSchedule";
 import { PrismaService } from "src/prisma/prisma.service";
+import { PrismaClient, Prisma } from '@prisma/client';
+import * as dayjs from "dayjs";
+import * as utc from "dayjs/plugin/utc";
+import * as timezone from "dayjs/plugin/timezone";
+
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Injectable()
 export class PaymentsHelper {
@@ -18,21 +26,21 @@ export class PaymentsHelper {
   //   })
   // }
 
-  async createPaymentCommitment(data: CreatePaymentCommitment) {
-    return await this.prisma.paymentCommitment.create({
+  async createPaymentCommitment(data: CreatePaymentCommitment, prisma: Prisma.TransactionClient | PrismaClient = this.prisma) {
+    return await prisma.paymentCommitment.create({
       data: {
         loanId: data.loanId,
         amount: data.amount,
-        paymentDate: new Date(data.paymentDate),
+        paymentDate: data.paymentDate,
         comment: data.comment || null,
-        type: data.type, 
+        type: data.type,
         userId: data.userId,
-        isActive: 1, 
-      }
-    })
+        isActive: 1,
+      },
+    });
   }
 
-  async createPaymentSchedule(data: CreatePaymentSchedule) {
+  async createPaymentSchedule(data: CreatePaymentSchedule, prisma: Prisma.TransactionClient | PrismaClient = this.prisma) {
     const { commitmentId, paymentDate, amount, numberOfMonths } = data;
 
     if (numberOfMonths <= 0) {
@@ -42,11 +50,11 @@ export class PaymentsHelper {
     const monthlyAmount = Number((amount / numberOfMonths).toFixed(2));
     const schedules = [];
 
-    let currentDate = new Date(paymentDate);
+    let currentDate = dayjs.utc(paymentDate);;
 
     for (let i = 0; i < numberOfMonths; i++) {
-      const dueDate = new Date(currentDate);
-      dueDate.setMonth(currentDate.getMonth() + i); // add i months to original date
+      const dueDate = currentDate.add(i, 'month').toDate();
+      // dueDate.setMonth(currentDate.getMonth() + i); // add i months to original date
 
       schedules.push({
         commitmentId,
@@ -55,7 +63,7 @@ export class PaymentsHelper {
       });
     }
 
-    await this.prisma.paymentSchedule.createMany({
+    await prisma.paymentSchedule.createMany({
       data: schedules,
     });
   }
