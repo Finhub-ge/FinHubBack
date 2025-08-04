@@ -19,18 +19,18 @@ export class LoanService {
       where: { deletedAt: null },
       orderBy: { createdAt: 'desc' },
       include: {
-        portfolio: {
+        Portfolio: {
           select: {
             name: true,
           }
         },
-        debtor: {
+        Debtor: {
           select: {
             firstName: true,
             lastName: true,
           }
         },
-        status: {
+        LoanStatus: {
           select: {
             name: true,
           }
@@ -41,14 +41,14 @@ export class LoanService {
     return loans;
   }
 
-  async getOne(loanId: number) {
+  async getOne(publicId: string) {
     const loan = await this.prisma.loan.findUnique({
-      where: { 
-        id: loanId,
-        deletedAt: null 
+      where: {
+        publicId: publicId,
+        deletedAt: null
       },
       include: {
-        portfolio: {
+        Portfolio: {
           select: {
             id: true,
             name: true,
@@ -58,7 +58,7 @@ export class LoanService {
             notes: true
           }
         },
-        debtor: {
+        Debtor: {
           select: {
             id: true,
             firstName: true,
@@ -86,18 +86,18 @@ export class LoanService {
                 }
               },
             },
-            contacts: {
-              select: { 
-                value: true, 
-                isPrimary: true, 
+            DebtorContact: {
+              select: {
+                value: true,
+                isPrimary: true,
                 notes: true,
-                type: { select: { name: true } },
-                label: { select: { name: true } },
+                ContactType: { select: { name: true } },
+                ContactLabel: { select: { name: true } },
               },
             }
           }
         },
-        status: {
+        LoanStatus: {
           select: {
             name: true,
             description: true
@@ -120,7 +120,7 @@ export class LoanService {
         loanAttributes: {
           select: {
             value: true,
-            attribute: {
+            Attributes: {
               select: {
                 name: true
               }
@@ -139,64 +139,74 @@ export class LoanService {
             }
           },
           orderBy: { createdAt: 'desc' }
-        },
-        // PaymentCommitment: {
-        //   select: {
-        //     id: true,
-        //     amount: true,
-        //     paymentDate: true,
-        //     type: true,
-        //     comment: true,
-        //     isActive: true,
-        //     PaymentSchedule: {
-        //       select: {
-        //         id: true,
-        //         paymentDate: true,
-        //         amount: true,
-        //       }
-        //     }
-        //   },
-        // }
+        }
       }
     });
 
     if (!loan) {
       throw new NotFoundException('Loan not found');
     }
+
     const activeCommitments = await this.prisma.paymentCommitment.findMany({
-    where: { loanId, isActive: 1 },
-    select: {
-      id: true,
-      amount: true,
-      paymentDate: true,
-      type: true,
-      comment: true,
-      isActive: true,
-      PaymentSchedule: {
-        select: {
-          id: true,
-          paymentDate: true,
-          amount: true,
+      where: { loanId, isActive: 1 },
+      select: {
+        id: true,
+        amount: true,
+        paymentDate: true,
+        type: true,
+        comment: true,
+        isActive: true,
+        PaymentSchedule: {
+          select: {
+            id: true,
+            paymentDate: true,
+            amount: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  return {
-    ...loan,
-    activeCommitments,
-  };
-
-    return loan;
+    return {
+      ...loan,
+      activeCommitments,
+    };
   }
 
   async addDebtorContact(loanId: number, createContactDto: CreateContactDto, userId: number) {
     // Get the debtorId from the loan
     const loan = await this.prisma.loan.findUnique({
       where: { id: loanId, deletedAt: null },
-      select: { debtorId: true }
+      select: {
+        Debtor: {
+          include: {
+            DebtorStatus: {
+              select: { id: true, name: true, description: true }
+            },
+            DebtorContact: {
+              where: { deletedAt: null },
+              include: {
+                ContactType: { select: { id: true, name: true } },
+                ContactLabel: { select: { id: true, name: true } },
+                User: { select: { id: true, firstName: true, lastName: true } }
+              },
+              orderBy: [
+                { isPrimary: 'desc' },
+                { createdAt: 'desc' }
+              ]
+            }
+          }
+        }
+      }
     });
-    
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    return loan.Debtor;
+  }
+
+  async addDebtorContact(debtorId: number, createContactDto: CreateContactDto, userId: number) {
     // Check if debtor exists
     const debtor = await this.prisma.debtor.findUnique({
       where: { id: loan.debtorId, deletedAt: null }
@@ -229,9 +239,9 @@ export class LoanService {
         userId: userId
       },
       include: {
-        type: { select: { id: true, name: true } },
-        label: { select: { id: true, name: true } },
-        user: { select: { id: true, firstName: true, lastName: true } }
+        ContactType: { select: { id: true, name: true } },
+        ContactLabel: { select: { id: true, name: true } },
+        User: { select: { id: true, firstName: true, lastName: true } }
       }
     });
 
@@ -278,7 +288,7 @@ export class LoanService {
         value: addLoanAttributesDto.value,
       },
       include: {
-        attribute: { select: { id: true, name: true } },
+        Attributes: { select: { id: true, name: true } },
       },
     });
 

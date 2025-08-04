@@ -28,9 +28,9 @@ export class LoanController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
-  @Get(':loanId')
-  getOne(@Param('loanId', ParseIntPipe) loanId: number) {
-    return this.loanService.getOne(loanId);
+  @Get(':publicId')
+  getOne(@Param('publicId') publicId: string) {
+    return this.loanService.getOne(publicId);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

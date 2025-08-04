@@ -17,15 +17,6 @@ export class PaymentsHelper {
     private prisma: PrismaService,
   ) { }
 
-
-  // async gettransactionChannels() {
-  //   return await this.prisma.transactionChannels.findMany({
-  //     include: {
-  //       TransactionChannelAccounts: true
-  //     }
-  //   })
-  // }
-
   async createPaymentCommitment(data: CreatePaymentCommitment, prisma: Prisma.TransactionClient | PrismaClient = this.prisma) {
     return await prisma.paymentCommitment.create({
       data: {
@@ -66,5 +57,13 @@ export class PaymentsHelper {
     await prisma.paymentSchedule.createMany({
       data: schedules,
     });
+  }       
+
+  async gettransactionChannels() {
+    return await this.prisma.transactionChannels.findMany({
+      include: {
+        TransactionChannelAccounts: true
+      }
+    })
   }
-}         
+}

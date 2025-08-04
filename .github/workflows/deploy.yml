@@ -24,6 +24,9 @@ jobs:
           rm -rf node_modules
           npm install
 
+          echo "Pulling DB schema..."
+          npx prisma db pull
+
           echo "Generating Prisma client..."
           npx prisma generate
 

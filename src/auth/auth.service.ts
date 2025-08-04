@@ -20,7 +20,7 @@ export class AuthService {
     private jwt: JwtService,
 
 
-  ) {}
+  ) { }
 
   async signupSuperAdmin(dto: SignUpSuperAdminDto) {
     // generate the password hash
@@ -34,7 +34,7 @@ export class AuthService {
       where: { id: 1 }
     })
 
-    if(!role) {
+    if (!role) {
       throw new BadRequestException('invalid_role_id');
     }
     // save the new user in the db
@@ -69,19 +69,21 @@ export class AuthService {
     }
   }
 
+
   async signinSuperAdmin(dto: AuthDto) {
+
     const user =
       await this.prisma.user.findFirst({
         where: {
           email: dto.email,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
     // if user does not exist throw exception
-    if(!user) {
+    if (!user) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
@@ -94,7 +96,7 @@ export class AuthService {
     }
 
     // Check if user has SUPER_ADMIN role
-    if (user.role.name !== Role.SUPER_ADMIN) {
+    if (user.Role.name !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Access denied. Not a SUPER_ADMIN.');
     }
 
@@ -108,8 +110,8 @@ export class AuthService {
       throw new ForbiddenException(
         'The email or password is incorrect.',
       );
-    
-    return this.signToken(user.id, user.email, user.accountId, user.role.name);
+
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -119,12 +121,12 @@ export class AuthService {
           email: dto.email,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
     // if user does not exist throw exception
-    if(!user) {
+    if (!user) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
@@ -146,7 +148,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -156,12 +158,12 @@ export class AuthService {
           id: user.id,
         },
         include: {
-          role: true,
+          Role: true,
         },
       });
 
     // if user does not exist throw exception
-    if(!userHash) {
+    if (!userHash) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
@@ -172,7 +174,7 @@ export class AuthService {
         {},
       );
     }
-    
+
     // compare password
     const pwMatches = await argon.verify(
       userHash.hash,
@@ -186,11 +188,11 @@ export class AuthService {
 
     const newHash = await argon.hash(dto.newPassword);
     await this.prisma.user.update({
-      where: { id: userHash.id},
+      where: { id: userHash.id },
       data: { hash: newHash, mustChangePassword: false }
     })
 
-    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.role.name);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name);
   }
 
   async signToken(
@@ -247,12 +249,12 @@ export class AuthService {
           mustChangePassword: true,
           roleId: true,
           updatedAt: true,
-          role: true
+          Role: true
         }
       });
 
     // if user does not exist throw exception
-    if(!currentUser) {
+    if (!currentUser) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
