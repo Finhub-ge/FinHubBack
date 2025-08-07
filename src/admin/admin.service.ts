@@ -4,6 +4,8 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
+import { CreateTaskDto } from "./dto/createTask.dto";
+import { Tasks_status } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -123,5 +125,41 @@ export class AdminService {
 
     throw new HttpException('User deleted successfully', 200);
 
+  }
+
+  async createTask(data: CreateTaskDto, userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.toUserId, deletedAt: null }
+    });
+
+    if (!user) {
+      throw new Error(`User not found: ${data.toUserId}`);
+    }
+
+    const newTask = {
+      fromUser: userId,
+      toUserId: data.toUserId,
+      task: data.task,
+      deadline: data.deadline,
+      status: Tasks_status.pending
+    }
+    
+    if (data.publicId) {
+      const loan = await this.prisma.loan.findUnique({
+        where: { publicId: data.publicId, deletedAt: null }
+      });
+
+      if (!loan) {
+        throw new Error(`Loan not found for publicId: ${data.publicId}`);
+      }
+
+      newTask['loanId'] = loan.id;
+    }
+
+    await this.prisma.tasks.create({
+      data: newTask
+    })
+
+    throw new HttpException('Task created successfully', 200);
   }
 }

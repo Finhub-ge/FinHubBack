@@ -173,6 +173,7 @@ model Loan {
   LoanAttribute     LoanAttribute[]
   LoanStatusHistory LoanStatusHistory[]
   PaymentCommitment PaymentCommitment[]
+  Tasks             Tasks[]
   Transaction       Transaction[]
 
   @@index([createdAt])
@@ -360,26 +361,28 @@ model TransactionDeleted {
 }
 
 model User {
-  id                  Int                   @id @default(autoincrement())
-  publicId            String                @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
-  accountId           String                @unique
-  email               String                @unique
-  firstName           String
-  lastName            String
-  hash                String
-  roleId              Int
-  mustChangePassword  Boolean               @default(true)
-  createdAt           DateTime              @default(now()) @db.DateTime(0)
-  updatedAt           DateTime              @default(now()) @db.DateTime(0)
-  deletedAt           DateTime?             @db.DateTime(0)
-  Comments            Comments[]
-  DebtorContact       DebtorContact[]
-  DebtorStatusHistory DebtorStatusHistory[]
-  LoanStatusHistory   LoanStatusHistory[]
-  PaymentCommitment   PaymentCommitment[]
-  Transaction         Transaction[]
-  TransactionDeleted  TransactionDeleted[]
-  Role                Role                  @relation(fields: [roleId], references: [id])
+  id                         Int                   @id @default(autoincrement())
+  publicId                   String                @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  accountId                  String                @unique
+  email                      String                @unique
+  firstName                  String
+  lastName                   String
+  hash                       String
+  roleId                     Int
+  mustChangePassword         Boolean               @default(true)
+  createdAt                  DateTime              @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime              @default(now()) @db.DateTime(0)
+  deletedAt                  DateTime?             @db.DateTime(0)
+  Comments                   Comments[]
+  DebtorContact              DebtorContact[]
+  DebtorStatusHistory        DebtorStatusHistory[]
+  LoanStatusHistory          LoanStatusHistory[]
+  PaymentCommitment          PaymentCommitment[]
+  Tasks_Tasks_fromUserToUser Tasks[]               @relation("Tasks_fromUserToUser")
+  Tasks_Tasks_toUserIdToUser Tasks[]               @relation("Tasks_toUserIdToUser")
+  Transaction                Transaction[]
+  TransactionDeleted         TransactionDeleted[]
+  Role                       Role                  @relation(fields: [roleId], references: [id])
 
   @@index([accountId])
   @@index([deletedAt])
@@ -396,7 +399,33 @@ model portfolioSeller {
   deletedAt DateTime? @db.DateTime(0)
 }
 
+model Tasks {
+  id                        Int          @id @default(autoincrement())
+  loanId                    Int?
+  task                      String?      @db.VarChar(255)
+  response                  String?      @db.VarChar(255)
+  fromUser                  Int
+  toUserId                  Int
+  deadline                  DateTime     @db.Date
+  status                    Tasks_status @default(pending)
+  createdAt                 DateTime     @default(now()) @db.DateTime(0)
+  updatedAt                 DateTime     @default(now()) @db.DateTime(0)
+  deletedAt                 DateTime?    @db.DateTime(0)
+  Loan                      Loan?        @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_1")
+  User_Tasks_fromUserToUser User         @relation("Tasks_fromUserToUser", fields: [fromUser], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_2")
+  User_Tasks_toUserIdToUser User         @relation("Tasks_toUserIdToUser", fields: [toUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_3")
+
+  @@index([loanId], map: "fk_Tasks_1_idx")
+  @@index([fromUser], map: "fk_Tasks_2")
+  @@index([toUserId], map: "fk_Tasks_3")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
+}
+
+enum Tasks_status {
+  pending
+  complete
 }
