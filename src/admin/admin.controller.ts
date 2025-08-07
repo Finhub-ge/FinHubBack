@@ -7,6 +7,9 @@ import { Role } from "src/enums/role.enum";
 import { Roles } from "src/auth/decorator/role.decorator";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
+import { GetUser } from "src/auth/decorator/get-user.decorator";
+import { User } from "@prisma/client";
+import { CreateTaskDto } from "./dto/createTask.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -73,5 +76,12 @@ export class AdminController {
   @Post('deleteTransaction/:id')
   async deleteTransaction(@Param('id') id: string) {
     return await this.adminService.deleteTransaction(+id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('createTask')
+  async createTask(@GetUser() user: User, @Body() data: CreateTaskDto) {
+    return await this.adminService.createTask(data, user.id);
   }
 }
