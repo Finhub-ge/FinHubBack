@@ -128,6 +128,12 @@ export class AdminService {
             firstName: true,
             lastName: true
           }
+        },
+        Loan: {
+          select: {
+            caseId: true,
+            publicId: true,
+          }
         }
       }
     })
