@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -29,7 +29,7 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get(':publicId')
-  getOne(@Param('publicId') publicId: string) {
+  getOne(@Param('publicId') publicId: ParseUUIDPipe) {
     return this.loanService.getOne(publicId);
   }
 
@@ -38,7 +38,7 @@ export class LoanController {
   @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
-    @Param('publicId') publicId: string, 
+    @Param('publicId') publicId: ParseUUIDPipe, 
     @Body() createContactDto: CreateContactDto
   ) {
     return this.loanService.addDebtorContact(publicId, createContactDto, user.id);
@@ -49,7 +49,7 @@ export class LoanController {
   @Post('/:publicId/loan-attributes')
   addLoanAttributes(
     @GetUser() user: User,
-    @Param('publicId') publicId: string, 
+    @Param('publicId') publicId: ParseUUIDPipe, 
     @Body() addLoanAttributesDto: AddLoanAttributesDto
   ) {
     return this.loanService.addLoanAttributes(publicId, addLoanAttributesDto, user.id);
@@ -60,7 +60,7 @@ export class LoanController {
   @Post('/:publicId/comment')
   addComment(
     @GetUser() user: User,
-    @Param('publicId') publicId: string, 
+    @Param('publicId') publicId: ParseUUIDPipe, 
     @Body() addCommentDto: AddCommentDto
   ) {
     return this.loanService.addComment(publicId, addCommentDto, user.id);
@@ -71,7 +71,7 @@ export class LoanController {
   @Patch(':publicId/debtor/status')
   updateDeptorStatus(
     @GetUser() user: User,
-    @Param('publicId') publicId: string, 
+    @Param('publicId') publicId: ParseUUIDPipe, 
     @Body() addDebtorStatusDto: AddDebtorStatusDto
   ) {
     return this.loanService.updateDeptorStatus(publicId, addDebtorStatusDto, user.id);
@@ -82,7 +82,7 @@ export class LoanController {
   @Patch(':publicId/status')
   updateLoanStatus(
     @GetUser() user: User,
-    @Param('publicId') publicId: string, 
+    @Param('publicId') publicId: ParseUUIDPipe, 
     @Body() updateLoanStatusDto: UpdateLoanStatusDto
   ) {
     return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user.id);

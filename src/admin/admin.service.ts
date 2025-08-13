@@ -1,11 +1,19 @@
-import { HttpException, Injectable, ParseUUIDPipe } from "@nestjs/common";
+import { BadRequestException, HttpException, Injectable, ParseUUIDPipe } from "@nestjs/common";
 import { PaymentsHelper } from "src/helpers/payments.helper";
 import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { Tasks_status } from '@prisma/client';
+import { Tasks_status, User } from '@prisma/client';
+import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
+import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import * as dayjs from "dayjs";
+import * as utc from "dayjs/plugin/utc";
+import * as timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Injectable()
 export class AdminService {
@@ -33,6 +41,98 @@ export class AdminService {
   async getloanStatuses() {
     return await this.prisma.loanStatus.findMany()
   }
+
+  async getTasks(user: User, filters: GetTasksFilterDto) {
+    const {
+      type,
+      status,
+      employeeId,
+      createdDateStart,
+      createdDateEnd,
+      deadlineDateStart,
+      deadlineDateEnd,
+      completeDateStart,
+      completeDateEnd
+    } = filters
+
+    const conditions = [];
+
+    // Type filter
+    if (type === 'ASSIGNED_TO_ME') {
+      conditions.push({ toUserId: user.id });
+    } else if (type === 'ASSIGNED_BY_ME') {
+      conditions.push({ fromUser: user.id });
+    }
+
+    // Status filter
+    if (status) {
+      conditions.push({ status: status });
+    }
+
+    // Employee filter
+    if (employeeId) {
+      conditions.push({ toUserId: Number(employeeId) });
+    }
+
+    // Created date range
+    if (createdDateStart || createdDateEnd) {
+      const createdDateCondition: any = {};
+      if (createdDateStart) {
+        // Set to start of day to include all records from that date
+        createdDateCondition.gte = dayjs(createdDateStart).startOf('day').toDate();
+      }
+      if (createdDateEnd) {
+        // Set to end of day to include all records from that date
+        createdDateCondition.lte = dayjs(createdDateEnd).endOf('day').toDate();
+      }
+      conditions.push({ createdAt: createdDateCondition });
+    }
+
+    // Deadline range
+    if (deadlineDateStart || deadlineDateEnd) {
+      const deadlineCondition: any = {};
+      if (deadlineDateStart) {
+        deadlineCondition.gte = dayjs(deadlineDateStart).startOf('day').toDate();
+      }
+      if (deadlineDateEnd) {
+        deadlineCondition.lte = dayjs(deadlineDateEnd).endOf('day').toDate();
+      }
+      conditions.push({ deadline: deadlineCondition });
+    }
+
+    // Completed date range
+    if (completeDateStart || completeDateEnd) {
+      const completeDateCondition: any = {};
+      if (completeDateStart) {
+        completeDateCondition.gte = dayjs(completeDateStart).startOf('day').toDate();
+      }
+      if (completeDateEnd) {
+        completeDateCondition.lte = dayjs(completeDateEnd).endOf('day').toDate();
+      }
+      conditions.push({ updatedAt: completeDateCondition });
+    }
+
+    const whereClause = conditions.length > 0 ? { AND: conditions } : {};
+
+    return await this.prisma.tasks.findMany({
+      where: whereClause,
+      include: {
+        User_Tasks_fromUserToUser: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_Tasks_toUserIdToUser: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    })
+  }
+
   async getTransactionList() {
     const data = await this.prisma.transaction.findMany({
       where: {
@@ -143,7 +243,7 @@ export class AdminService {
       deadline: data.deadline,
       status: Tasks_status.pending
     }
-    
+
     if (data.publicId) {
       const loan = await this.prisma.loan.findUnique({
         where: { publicId: data.publicId, deletedAt: null }
@@ -161,5 +261,30 @@ export class AdminService {
     })
 
     throw new HttpException('Task created successfully', 200);
+  }
+
+  async createTaskResponse(taskId: number, data: CreateTaskResponseDto, userId: number) {
+    const task = await this.prisma.tasks.findUnique({
+      where: {
+        id: taskId,
+        status: Tasks_status.pending
+      },
+      include: {
+        User_Tasks_toUserIdToUser: true
+      }
+    })
+    if (task.User_Tasks_toUserIdToUser.id !== userId) {
+      throw new BadRequestException('Task does not belong to you');
+    }
+
+    await this.prisma.tasks.update({
+      where: { id: taskId },
+      data: {
+        response: data.response,
+        status: Tasks_status.complete
+      }
+    })
+
+    throw new HttpException('Task completed successfully', 200);
   }
 }
