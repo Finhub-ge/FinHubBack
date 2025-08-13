@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -10,6 +10,8 @@ import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { GetUser } from "src/auth/decorator/get-user.decorator";
 import { User } from "@prisma/client";
 import { CreateTaskDto } from "./dto/createTask.dto";
+import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
+import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -59,6 +61,12 @@ export class AdminController {
     return this.adminService.getloanStatuses();
   }
 
+  @UseGuards(JwtGuard)
+  @Get('tasks')
+  getTasks(@GetUser() user: User, @Query() getTasksFilterDto: GetTasksFilterDto) {
+    return this.adminService.getTasks(user, getTasksFilterDto);
+  }
+
   @Post('addPayment/:publicId') // Loan publicId
   async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
     return await this.adminService.addPayment(publicId, data);
@@ -83,5 +91,15 @@ export class AdminController {
   @Post('createTask')
   async createTask(@GetUser() user: User, @Body() data: CreateTaskDto) {
     return await this.adminService.createTask(data, user.id);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('taskResponse/:id')
+  async createTaskResponse(
+    @GetUser() user: User,
+    @Body() data: CreateTaskResponseDto,
+    @Param('id') id: number
+  ) {
+    return await this.adminService.createTaskResponse(id, data, user.id);
   }
 }

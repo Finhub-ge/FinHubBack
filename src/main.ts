@@ -33,6 +33,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
       security: [{ 'bearer': [] }],
+      persistAuthorization: true,
     },
   });
   //Serve raw JSON at /api-json

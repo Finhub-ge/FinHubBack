@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
@@ -41,10 +41,10 @@ export class LoanService {
     return loans;
   }
 
-  async getOne(publicId: string) {
+  async getOne(publicId: ParseUUIDPipe) {
     const loan = await this.prisma.loan.findUnique({
       where: {
-        publicId: publicId,
+        publicId: String(publicId),
         deletedAt: null
       },
       include: {
@@ -139,7 +139,8 @@ export class LoanService {
             }
           },
           orderBy: { createdAt: 'desc' }
-        }
+        },
+        Tasks: true
       }
     });
 
@@ -205,10 +206,10 @@ export class LoanService {
     return loan.Debtor;
   }
 
-  async addDebtorContact(publicId: string, createContactDto: CreateContactDto, userId: number) {
+  async addDebtorContact(publicId: ParseUUIDPipe, createContactDto: CreateContactDto, userId: number) {
     // Check if loan exists
     const loan = await this.prisma.loan.findUnique({
-      where: { publicId: publicId, deletedAt: null }
+      where: { publicId: String(publicId), deletedAt: null }
     });
 
     if (!loan) {
@@ -256,10 +257,10 @@ export class LoanService {
     throw new HttpException('Debtor contact added successfully', 200);
   }
 
-  async addLoanAttributes(publicId: string, addLoanAttributesDto: AddLoanAttributesDto, userId: number) {
+  async addLoanAttributes(publicId: ParseUUIDPipe, addLoanAttributesDto: AddLoanAttributesDto, userId: number) {
     // 1. Check if loan exists
     const loan = await this.prisma.loan.findFirst({
-      where: { publicId: publicId, deletedAt: null },
+      where: { publicId: String(publicId), deletedAt: null },
     });
 
     if (!loan) {
@@ -303,10 +304,10 @@ export class LoanService {
     throw new HttpException('Loan attribute added successfully', 200);
   }
 
-  async addComment(publicId: string, addCommentDto: AddCommentDto, userId: number) {
+  async addComment(publicId: ParseUUIDPipe, addCommentDto: AddCommentDto, userId: number) {
     // Check if loan exists
     const loan = await this.prisma.loan.findUnique({
-      where: { publicId: publicId, deletedAt: null }
+      where: { publicId: String(publicId), deletedAt: null }
     });
 
     if (!loan) {
@@ -327,10 +328,10 @@ export class LoanService {
     throw new HttpException('Comment added successfully', 200);
   }
 
-  async updateDeptorStatus(publicId: string, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {
+  async updateDeptorStatus(publicId: ParseUUIDPipe, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {
    // Get the debtorId from the loan
     const loan = await this.prisma.loan.findUnique({
-      where: { publicId: publicId, deletedAt: null },
+      where: { publicId: String(publicId), deletedAt: null },
       select: { debtorId: true }
     });
     
@@ -369,10 +370,10 @@ export class LoanService {
     throw new HttpException('Debtor status updated successfully', 200);
   }
 
-  async updateLoanStatus(publicId: string, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
+  async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
     await this.prisma.$transaction(async (tx) => {
       const loan = await tx.loan.findUnique({
-        where: { publicId: publicId, deletedAt: null },
+        where: { publicId: String(publicId), deletedAt: null },
       });
 
       if (!loan) {
@@ -452,7 +453,7 @@ export class LoanService {
       }
 
       await tx.loan.update({
-        where: { publicId: publicId },
+        where: { publicId: String(publicId) },
         data: { statusId: updateLoanStatusDto.statusId },
         include: {
           LoanStatus: { select: { name: true } },
