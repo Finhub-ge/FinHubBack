@@ -6,13 +6,17 @@ import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
 import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
+import { SendSmsDto } from './dto/sendSms.dto';
+import { UtilsHelper } from 'src/helpers/utils.helper';
+import { SmsHistory_status } from '@prisma/client';
 
 @Injectable()
 export class LoanService {
   constructor(
     private prisma: PrismaService,
-    private readonly paymentsHelper: PaymentsHelper, 
-  ) {}
+    private readonly paymentsHelper: PaymentsHelper,
+    private readonly utilsHelper: UtilsHelper
+  ) { }
 
   async getAll() {
     const loans = await this.prisma.loan.findMany({
@@ -68,7 +72,7 @@ export class LoanService {
             mainPhone: true,
             mainAddress: true,
             DebtorStatus: {
-              select: { 
+              select: {
                 name: true,
               }
             },
@@ -88,6 +92,7 @@ export class LoanService {
             },
             DebtorContact: {
               select: {
+                id: true,
                 value: true,
                 isPrimary: true,
                 notes: true,
@@ -140,7 +145,20 @@ export class LoanService {
           },
           orderBy: { createdAt: 'desc' }
         },
-        Tasks: true
+        Tasks: true,
+        SmsHistory: {
+          select: {
+            id: true,
+            message: true,
+            status: true,
+            createdAt: true,
+            DebtorContact: {
+              select: {
+                value: true,
+              }
+            }
+          }
+        }
       }
     });
 
@@ -228,9 +246,9 @@ export class LoanService {
     // If this is marked as primary, update other contacts to not be primary
     if (createContactDto.isPrimary) {
       await this.prisma.debtorContact.updateMany({
-        where: { 
+        where: {
           debtorId: debtor.id,
-          deletedAt: null 
+          deletedAt: null
         },
         data: { isPrimary: false }
       });
@@ -329,12 +347,12 @@ export class LoanService {
   }
 
   async updateDeptorStatus(publicId: ParseUUIDPipe, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {
-   // Get the debtorId from the loan
+    // Get the debtorId from the loan
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
       select: { debtorId: true }
     });
-    
+
     // Check if debtor exists
     const debtor = await this.prisma.debtor.findUnique({
       where: { id: loan.debtorId, deletedAt: null }
@@ -448,8 +466,8 @@ export class LoanService {
             comment: updateLoanStatusDto?.comment || null,
             userId: userId,
             type: 'promise',
-          },tx // pass the transaction client
-        ) 
+          }, tx // pass the transaction client
+        )
       }
 
       await tx.loan.update({
@@ -461,5 +479,41 @@ export class LoanService {
       });
     });
     throw new HttpException('Loan status updated successfully', 200);
+  }
+
+
+  async sendSms(publicId: ParseUUIDPipe, sendSmsDto: SendSmsDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+    const contact = await this.prisma.debtorContact.findFirst({
+      where: { id: sendSmsDto.contactId, deletedAt: null },
+    });
+
+    if (!contact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    const smsResult = await this.utilsHelper.sendSms(contact.value, sendSmsDto.message);
+
+    await this.prisma.smsHistory.create({
+      data: {
+        loanId: loan.id,
+        contactId: contact.id,
+        phone: contact.value,
+        message: sendSmsDto.message,
+        status: smsResult.success ? SmsHistory_status.success : SmsHistory_status.failed,
+      },
+    });
+
+    if (!smsResult.success) {
+      throw new BadRequestException(`SMS sending failed`);
+    }
+
+    throw new HttpException('SMS sent successfully', 200);
   }
 }

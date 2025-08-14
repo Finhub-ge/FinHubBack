@@ -104,6 +104,7 @@ model DebtorContact {
   ContactLabel ContactLabel? @relation(fields: [labelId], references: [id])
   ContactType  ContactType   @relation(fields: [typeId], references: [id])
   User         User?         @relation(fields: [userId], references: [id])
+  SmsHistory   SmsHistory[]
 
   @@index([debtorId])
   @@index([deletedAt])
@@ -173,6 +174,7 @@ model Loan {
   LoanAttribute     LoanAttribute[]
   LoanStatusHistory LoanStatusHistory[]
   PaymentCommitment PaymentCommitment[]
+  SmsHistory        SmsHistory[]
   Tasks             Tasks[]
   Transaction       Transaction[]
 
@@ -420,6 +422,23 @@ model Tasks {
   @@index([toUserId], map: "fk_Tasks_3")
 }
 
+model SmsHistory {
+  id            Int               @id @default(autoincrement())
+  loanId        Int
+  contactId     Int
+  phone         String            @db.VarChar(45)
+  message       String            @db.VarChar(500)
+  status        SmsHistory_status
+  createdAt     DateTime          @default(now()) @db.DateTime(0)
+  updatedAt     DateTime          @default(now()) @db.DateTime(0)
+  deletedAt     DateTime?         @db.DateTime(0)
+  Loan          Loan              @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_SmsHistory_1")
+  DebtorContact DebtorContact     @relation(fields: [contactId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_SmsHistory_2")
+
+  @@index([loanId], map: "fk_SmsHistory_1")
+  @@index([contactId], map: "fk_SmsHistory_2")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -428,4 +447,9 @@ enum PaymentCommitment_type {
 enum Tasks_status {
   pending
   complete
+}
+
+enum SmsHistory_status {
+  success
+  failed
 }

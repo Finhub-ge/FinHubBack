@@ -4,7 +4,7 @@ import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { User } from '@prisma/client';
@@ -12,12 +12,13 @@ import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
 import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
+import { SendSmsDto } from './dto/sendSms.dto';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
 @Controller('loans')
 export class LoanController {
-  constructor(private readonly loanService: LoanService) {}
+  constructor(private readonly loanService: LoanService) { }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
@@ -26,6 +27,7 @@ export class LoanController {
     return this.loanService.getAll();
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get(':publicId')
@@ -33,58 +35,75 @@ export class LoanController {
     return this.loanService.getOne(publicId);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
-    @Param('publicId') publicId: ParseUUIDPipe, 
+    @Param('publicId') publicId: ParseUUIDPipe,
     @Body() createContactDto: CreateContactDto
   ) {
     return this.loanService.addDebtorContact(publicId, createContactDto, user.id);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post('/:publicId/loan-attributes')
   addLoanAttributes(
     @GetUser() user: User,
-    @Param('publicId') publicId: ParseUUIDPipe, 
+    @Param('publicId') publicId: ParseUUIDPipe,
     @Body() addLoanAttributesDto: AddLoanAttributesDto
   ) {
     return this.loanService.addLoanAttributes(publicId, addLoanAttributesDto, user.id);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post('/:publicId/comment')
   addComment(
     @GetUser() user: User,
-    @Param('publicId') publicId: ParseUUIDPipe, 
+    @Param('publicId') publicId: ParseUUIDPipe,
     @Body() addCommentDto: AddCommentDto
   ) {
     return this.loanService.addComment(publicId, addCommentDto, user.id);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Patch(':publicId/debtor/status')
   updateDeptorStatus(
     @GetUser() user: User,
-    @Param('publicId') publicId: ParseUUIDPipe, 
+    @Param('publicId') publicId: ParseUUIDPipe,
     @Body() addDebtorStatusDto: AddDebtorStatusDto
   ) {
     return this.loanService.updateDeptorStatus(publicId, addDebtorStatusDto, user.id);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Patch(':publicId/status')
   updateLoanStatus(
     @GetUser() user: User,
-    @Param('publicId') publicId: ParseUUIDPipe, 
+    @Param('publicId') publicId: ParseUUIDPipe,
     @Body() updateLoanStatusDto: UpdateLoanStatusDto
   ) {
     return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post(':publicId/sendSms')
+  async sendSms(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() sendSmsDto: SendSmsDto
+  ) {
+    return await this.loanService.sendSms(publicId, sendSmsDto, user.id);
   }
 }
