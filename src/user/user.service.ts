@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import * as argon from 'argon2';
 import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { GetUsersFilterDto } from "./dto/getUsersFilter.dto";
 
 @Injectable()
 export class UserService {
@@ -77,8 +78,27 @@ export class UserService {
     })
   }
 
-  async getAllUsers() {
+  async getAllUsers(filters: GetUsersFilterDto) {
+    const { role } = filters
+
+    const conditions = [];
+    const roleId = await this.prisma.role.findFirst({
+      where: {
+        name: role
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (roleId) {
+      conditions.push({ roleId: roleId.id })
+    }
+
     return await this.prisma.user.findMany({
+      where: {
+        OR: conditions
+      },
       select: {
         id: true,
         email: true,

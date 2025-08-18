@@ -13,6 +13,7 @@ import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
 import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { SendSmsDto } from './dto/sendSms.dto';
+import { AssignLoanDto } from './dto/assignLoan.dto';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -105,5 +106,17 @@ export class LoanController {
     @Body() sendSmsDto: SendSmsDto
   ) {
     return await this.loanService.sendSms(publicId, sendSmsDto, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post(':publicId/assignment')
+  assignLoan(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() sssignLoanDto: AssignLoanDto
+  ) {
+    return this.loanService.assignLoanToUser(publicId, sssignLoanDto, user.id);
   }
 }
