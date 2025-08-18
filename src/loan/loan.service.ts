@@ -9,6 +9,8 @@ import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { SmsHistory_status } from '@prisma/client';
+import { AssignLoanDto } from './dto/assignLoan.dto';
+import { logAssignmentHistory } from 'src/helpers/loan.helper';
 
 @Injectable()
 export class LoanService {
@@ -32,12 +34,34 @@ export class LoanService {
           select: {
             firstName: true,
             lastName: true,
+            idNumber: true,
+            DebtorStatus: {
+              select: {
+                name: true,
+              }
+            }
           }
         },
         LoanStatus: {
           select: {
             name: true,
           }
+        },
+        LoanAssignment: {
+          where: { isActive: true },
+          select: {
+            User: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+            Role: {
+              select: {
+                name: true,
+              }
+            }
+          },
         }
       }
     });
@@ -515,5 +539,93 @@ export class LoanService {
     }
 
     throw new HttpException('SMS sent successfully', 200);
+  }
+
+  async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // If no userId provided → unassign
+    if (!assignLoanDto.userId) {
+      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: userId, });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: assignLoanDto.userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    //Check role matches
+    if (user.roleId !== assignLoanDto.roleId) {
+      throw new BadRequestException('User role does not match roleId provided');
+    }
+
+    return this.assign({
+      loanId: loan.id,
+      userId: user.id,
+      roleId: assignLoanDto.roleId,
+      assignedBy: userId,
+    });
+
+  }
+
+  private async assign({ loanId, userId, roleId, assignedBy }) {
+    // Find current active assignment for this role
+    const currentAssignment = await this.prisma.loanAssignment.findFirst({
+      where: { loanId, roleId, isActive: true },
+    });
+
+    // If the same user is already assigned → nothing to do
+    if (currentAssignment?.userId === userId) {
+      throw new BadRequestException('User already assigned to this loan');
+    }
+
+    // If there is a current assignment → unassign old user
+    if (currentAssignment) {
+      await this.unassign({ loanId, roleId, assignedBy });
+    }
+
+    // Assign new user
+    return this.assignNew({ loanId, userId: userId, roleId, assignedBy });
+  }
+
+  private async assignNew({ loanId, userId, roleId, assignedBy }) {
+    await this.prisma.loanAssignment.create({
+      data: { loanId, userId, roleId, isActive: true },
+    });
+
+    await logAssignmentHistory({ prisma: this.prisma, loanId, userId, roleId, action: 'assigned', assignedBy });
+
+    return { loanId, userId, roleId, action: 'assigned' };
+  }
+
+
+  private async unassign({
+    loanId,
+    roleId,
+    assignedBy,
+  }: {
+    loanId: number;
+    roleId: number;
+    assignedBy: number;
+  }) {
+    // Find current active assignment
+    const currentAssignment = await this.prisma.loanAssignment.findFirst({
+      where: { loanId, roleId, isActive: true },
+    });
+    if (!currentAssignment) throw new BadRequestException('No active assignment found');
+
+    // Deactivate
+    await this.prisma.loanAssignment.update({
+      where: { id: currentAssignment.id },
+      data: { isActive: false, unassignedAt: new Date() },
+    });
+
+    // Log history
+    await logAssignmentHistory({ prisma: this.prisma, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
+    return { loanId, userId: currentAssignment.userId, roleId, action: 'unassigned' };
   }
 }
