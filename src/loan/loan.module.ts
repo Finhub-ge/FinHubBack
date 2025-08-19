@@ -5,9 +5,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from 'src/auth/strategy/jwt.strategy';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { UtilsHelper } from 'src/helpers/utils.helper';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), HttpModule],
   controllers: [LoanController],
   providers: [LoanService, JwtStrategy, PaymentsHelper, UtilsHelper],
   exports: [LoanService]
