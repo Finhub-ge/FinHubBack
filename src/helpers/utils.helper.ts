@@ -4,7 +4,9 @@ import { HttpService } from "@nestjs/axios";
 
 @Injectable()
 export class UtilsHelper {
-    constructor(private readonly httpService: HttpService) { }
+    constructor(
+        private readonly httpService: HttpService
+    ) { }
 
     async sendSms(number: string, message: string) {
         const apiKey = process.env.GOSMS_KEY;
