@@ -30,7 +30,6 @@ export class UtilsHelper {
             );
 
             return data;
-
         } catch (error) {
             return error.response.data;
         }
