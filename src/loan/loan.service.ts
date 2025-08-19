@@ -531,14 +531,19 @@ export class LoanService {
         phone: contact.value,
         message: sendSmsDto.message,
         status: smsResult.success ? SmsHistory_status.success : SmsHistory_status.failed,
+        smsJson: JSON.stringify(smsResult),
+        messageId: smsResult.messageId,
+        errorCode: smsResult.errorCode,
+        balance: smsResult.balance,
       },
     });
 
-    if (!smsResult.success) {
-      throw new BadRequestException(`SMS sending failed`);
-    }
-
-    throw new HttpException('SMS sent successfully', 200);
+    return {
+      success: smsResult.success,
+      message: smsResult.success
+        ? 'SMS sent successfully'
+        : `SMS sending failed: ${smsResult.message || 'Unknown error'}`
+    };
   }
 
   async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, userId: number) {

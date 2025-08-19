@@ -5,4 +5,5 @@ export enum Role {
   LAWYER = 'lawyer',
   ACCOUNTANT = 'accountant',
   COURIER = 'courier',
+  JUNIOR_LAWYER = 'junior_lawyer',
 }
