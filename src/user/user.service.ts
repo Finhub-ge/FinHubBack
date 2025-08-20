@@ -79,26 +79,23 @@ export class UserService {
   }
 
   async getAllUsers(filters: GetUsersFilterDto) {
-    const { role } = filters
+    const { role } = filters;
 
-    const conditions = [];
-    const roleId = await this.prisma.role.findFirst({
-      where: {
-        name: role
-      },
-      select: {
-        id: true
+    let where: any = {};
+
+    if (role) {
+      const roleId = await this.prisma.role.findFirst({
+        where: { name: role },
+        select: { id: true }
+      });
+
+      if (roleId) {
+        where.roleId = roleId.id;
       }
-    });
-
-    if (roleId) {
-      conditions.push({ roleId: roleId.id })
     }
 
-    return await this.prisma.user.findMany({
-      where: {
-        OR: conditions
-      },
+    return this.prisma.user.findMany({
+      where,
       select: {
         id: true,
         email: true,
@@ -112,7 +109,7 @@ export class UserService {
         updatedAt: true,
         Role: true
       }
-    })
+    });
   }
 
   async getUsersByRoleId(roleId: string) {
