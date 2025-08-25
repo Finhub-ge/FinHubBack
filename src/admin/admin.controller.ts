@@ -121,4 +121,5 @@ export class AdminController {
   async getAllCommittees() {
     return await this.adminService.getAllCommittees();
   }
+  //for test 
 }
