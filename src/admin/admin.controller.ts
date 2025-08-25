@@ -12,6 +12,7 @@ import { User } from "@prisma/client";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -101,5 +102,23 @@ export class AdminController {
     @Param('id') id: number
   ) {
     return await this.adminService.createTaskResponse(id, data, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('committee/:id/response')
+  async responseCommittee(
+    @GetUser() user: User,
+    @Body() data: ResponseCommitteeDto,
+    @Param('id') id: number
+  ) {
+    return await this.adminService.responseCommittee(id, data, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('committees')
+  async getAllCommittees() {
+    return await this.adminService.getAllCommittees();
   }
 }

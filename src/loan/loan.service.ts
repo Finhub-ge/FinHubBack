@@ -8,16 +8,19 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { SmsHistory_status } from '@prisma/client';
+import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { logAssignmentHistory } from 'src/helpers/loan.helper';
+import { CreateCommitteeDto } from './dto/createCommittee.dto';
+import { S3Helper } from 'src/helpers/s3.helper';
 
 @Injectable()
 export class LoanService {
   constructor(
     private prisma: PrismaService,
     private readonly paymentsHelper: PaymentsHelper,
-    private readonly utilsHelper: UtilsHelper
+    private readonly utilsHelper: UtilsHelper,
+    private readonly s3Helper: S3Helper
   ) { }
 
   async getAll() {
@@ -181,6 +184,29 @@ export class LoanService {
                 value: true,
               }
             }
+          }
+        },
+        Committee: {
+          select: {
+            requestDate: true,
+            User_Committee_requesterIdToUser: {
+              select: {
+                firstName: true,
+                lastName: true,
+              }
+            },
+            requestText: true,
+            User_Committee_responderIdToUser: {
+              select: {
+                firstName: true,
+                lastName: true,
+              }
+            },
+            responseText: true,
+            responseDate: true,
+            agreementMinAmount: true,
+            attachmentPath: true,
+            status: true,
           }
         }
       }
@@ -607,7 +633,6 @@ export class LoanService {
     return { loanId, userId, roleId, action: 'assigned' };
   }
 
-
   private async unassign({
     loanId,
     roleId,
@@ -632,5 +657,43 @@ export class LoanService {
     // Log history
     await logAssignmentHistory({ prisma: this.prisma, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
     return { loanId, userId: currentAssignment.userId, roleId, action: 'unassigned' };
+  }
+
+  async requestCommittee(publicId: ParseUUIDPipe, createCommitteeDto: CreateCommitteeDto, userId: number, file?: Express.Multer.File) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    let fileUrl: string | undefined;
+    // TODO: Uncomment this when we have a way to upload files to S3
+    // if (file) {
+    //   fileUrl = await this.s3Helper.upload(
+    //     file.buffer,
+    //     `loans/${loan.id}/committee/${file.originalname}`,
+    //     undefined,
+    //     file.mimetype
+    //   );
+    // }
+
+    await this.prisma.committee.create({
+      data: {
+        loanId: loan.id,
+        requesterId: userId,
+        principalAmount: loan.originalPrincipal,
+        requestText: createCommitteeDto.requestText,
+        requestDate: new Date(),
+        agreementMinAmount: createCommitteeDto.agreementMinAmount,
+        type: Committee_type.none,
+        status: Committee_status.pending,
+        attachmentPath: fileUrl,
+      },
+    });
+
+    return {
+      message: 'Committee request created successfully',
+    };
   }
 }
