@@ -5,9 +5,10 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { Tasks_status, User } from '@prisma/client';
+import { Tasks_status, User, Committee_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
@@ -292,5 +293,69 @@ export class AdminService {
     })
 
     throw new HttpException('Task completed successfully', 200);
+  }
+
+  async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {
+    const committee = await this.prisma.committee.findUnique({
+      where: {
+        id: committeeId,
+        status: Committee_status.pending
+      }
+    });
+
+    if (!committee) {
+      throw new BadRequestException('Committee request not found or already processed');
+    }
+
+    await this.prisma.committee.update({
+      where: { id: committeeId },
+      data: {
+        responseText: data.responseText,
+        status: Committee_status.complete,
+        type: data.type || committee.type,
+        responderId: userId,
+        responseDate: new Date(),
+        agreementMinAmount: data.agreementMinAmount
+      }
+    });
+
+    throw new HttpException('Committee response submitted successfully', 200);
+  }
+
+  async getAllCommittees() {
+    const committees = await this.prisma.committee.findMany({
+      where: {
+        deletedAt: null
+      },
+      include: {
+        Loan: {
+          select: {
+            Debtor: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+        User_Committee_requesterIdToUser: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_Committee_responderIdToUser: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return committees;
   }
 }
