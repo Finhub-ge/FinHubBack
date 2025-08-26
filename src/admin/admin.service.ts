@@ -360,4 +360,95 @@ export class AdminService {
 
     return committees;
   }
+
+  async createMarks(title: string) {
+    await this.prisma.marks.create({
+      data: { title }
+    });
+    return {
+      message: 'Marks created successfully'
+    }
+  }
+
+  async updateMarks(id: number, title: string) {
+    await this.prisma.marks.update({
+      where: { id },
+      data: { title }
+    });
+    return {
+      message: 'Marks updated successfully'
+    }
+  }
+
+  async deleteMarks(id: number) {
+    await this.prisma.marks.update({
+      where: { id },
+      data: {
+        deletedAt: new Date()
+      }
+    });
+    return {
+      message: 'Marks deleted successfully'
+    }
+  }
+
+  async getMarks() {
+    return await this.prisma.marks.findMany({
+      where: {
+        deletedAt: null
+      }
+    });
+  }
+
+  async getLoanMarks() {
+    return await this.prisma.loanMarks.findMany({
+      where: {
+        deletedAt: null
+      },
+      include: {
+        Marks: {
+          select: {
+            title: true
+          }
+        },
+        Loan: {
+          select: {
+            publicId: true,
+            caseId: true,
+            originalPrincipal: true,
+            Debtor: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            },
+            Portfolio: {
+              select: {
+                name: true
+              }
+            },
+            LoanAssignment: {
+              where: {
+                isActive: true,
+                unassignedAt: null
+              },
+              select: {
+                User: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    Role: {
+                      select: {
+                        name: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 }

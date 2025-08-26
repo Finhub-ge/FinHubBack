@@ -13,6 +13,8 @@ import { AssignLoanDto } from './dto/assignLoan.dto';
 import { logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { S3Helper } from 'src/helpers/s3.helper';
+import { CreateMarksDto } from '../admin/dto/createMarks.dto';
+import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 
 @Injectable()
 export class LoanService {
@@ -207,6 +209,22 @@ export class LoanService {
             agreementMinAmount: true,
             attachmentPath: true,
             status: true,
+          }
+        },
+        LoanMarks: {
+          where: {
+            deletedAt: null
+          },
+          select: {
+            id: true,
+            comment: true,
+            deadline: true,
+            createdAt: true,
+            Marks: {
+              select: {
+                title: true,
+              }
+            }
           }
         }
       }
@@ -694,6 +712,68 @@ export class LoanService {
 
     return {
       message: 'Committee request created successfully',
+    };
+  }
+
+  async addLoanMarks(publicId: ParseUUIDPipe, data: AddLoanMarksDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the mark exists
+    const mark = await this.prisma.marks.findUnique({
+      where: { id: data.markId },
+    });
+    if (!mark) {
+      throw new NotFoundException('Mark not found');
+    }
+
+    // Create the relationship between loan and mark
+    const loanMark = await this.prisma.loanMarks.create({
+      data: {
+        loanId: loan.id,
+        markId: data.markId,
+        comment: data.comment,
+        deadline: data.deadline ? new Date(data.deadline) : null,
+      },
+    });
+
+    return {
+      message: 'Loan mark added successfully'
+    };
+  }
+
+  async deleteLoanMark(publicId: ParseUUIDPipe, markId: number, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Find the loan mark relationship
+    const loanMark = await this.prisma.loanMarks.findFirst({
+      where: {
+        loanId: loan.id,
+        markId: markId,
+        deletedAt: null,
+      },
+    });
+    if (!loanMark) {
+      throw new NotFoundException('Loan mark not found');
+    }
+
+    // Soft delete the loan mark relationship
+    await this.prisma.loanMarks.update({
+      where: { id: loanMark.id },
+      data: { deletedAt: new Date() },
+    });
+
+    return {
+      message: 'Loan mark deleted successfully'
     };
   }
 }
