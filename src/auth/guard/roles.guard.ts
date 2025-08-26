@@ -6,7 +6,7 @@ import { IS_PUBLIC_KEY } from "../decorator/public.decorator";
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(
@@ -28,9 +28,24 @@ export class RolesGuard implements CanActivate {
     }
 
     if (!requiredRoles || requiredRoles.length === 0) {
-      return true; 
+      return true;
     }
 
-    return requiredRoles.includes(user.role_name);
+    // Check if user's role is allowed
+    const hasRequiredRole = Array.isArray(requiredRoles)
+      ? requiredRoles.includes(user.role_name)
+      : requiredRoles === user.role_name;
+
+    if (!hasRequiredRole) {
+      const rolesList = Array.isArray(requiredRoles)
+        ? requiredRoles.join(', ')
+        : requiredRoles;
+
+      throw new ForbiddenException(
+        `Access denied. Required role(s): ${rolesList}.`
+      );
+    }
+
+    return true;
   }
 }

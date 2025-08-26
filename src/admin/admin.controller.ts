@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query } from "@nestjs/common";
 import { AdminService } from "./admin.service";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
@@ -68,11 +68,13 @@ export class AdminController {
     return this.adminService.getTasks(user, getTasksFilterDto);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @Post('addPayment/:publicId') // Loan publicId
   async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
     return await this.adminService.addPayment(publicId, data);
   }
 
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post('updatePayment/:publicId') // Transaction publicId
@@ -121,5 +123,4 @@ export class AdminController {
   async getAllCommittees() {
     return await this.adminService.getAllCommittees();
   }
-  //for test 
 }
