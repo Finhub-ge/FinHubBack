@@ -177,7 +177,7 @@ export class AdminService {
 
   }
 
-  async addPayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
+  async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto) {
 
     const loan = await this.prisma.loan.findUnique({
       where: {
@@ -199,7 +199,7 @@ export class AdminService {
 
     throw new HttpException('Payment added successfully', 200);
   }
-  async updatePayment(publicId: ParseUUIDPipe, data: CreatePaymentDto) {
+  async updatePayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
 
     const payment = await this.prisma.transaction.findUnique({
       where: {
@@ -330,6 +330,8 @@ export class AdminService {
       include: {
         Loan: {
           select: {
+            publicId: true,
+            caseId: true,
             Debtor: {
               select: {
                 firstName: true,
