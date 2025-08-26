@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query, Delete } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -13,6 +13,7 @@ import { CreateTaskDto } from "./dto/createTask.dto";
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
+import { CreateMarksDto } from "./dto/createMarks.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -122,5 +123,47 @@ export class AdminController {
   @Get('committees')
   async getAllCommittees() {
     return await this.adminService.getAllCommittees();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('createMarks')
+  async createMarks(
+    @GetUser() user: User,
+    @Body() data: CreateMarksDto
+  ) {
+    return await this.adminService.createMarks(data.title);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('updateMarks/:id')
+  async updateMarks(
+    @GetUser() user: User,
+    @Body() data: CreateMarksDto,
+    @Param('id') id: number
+  ) {
+    return await this.adminService.updateMarks(id, data.title);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Delete('deleteMarks/:id')
+  async deleteMarks(@Param('id') id: number) {
+    return await this.adminService.deleteMarks(id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('marks')
+  async getMarks() {
+    return await this.adminService.getMarks();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('loanMarks')
+  async getLoanMarks() {
+    return await this.adminService.getLoanMarks();
   }
 }

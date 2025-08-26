@@ -176,6 +176,7 @@ model Loan {
   LoanAssignment        LoanAssignment[]
   LoanAssignmentHistory LoanAssignmentHistory[]
   LoanAttribute         LoanAttribute[]
+  LoanMarks             LoanMarks[]
   LoanStatusHistory     LoanStatusHistory[]
   PaymentCommitment     PaymentCommitment[]
   SmsHistory            SmsHistory[]
@@ -518,6 +519,34 @@ model Committee {
   @@index([loanId], map: "idx_committee_1")
   @@index([requesterId], map: "idx_committee_2")
   @@index([responderId], map: "idx_committee_3")
+}
+
+model Marks {
+  id        Int         @id @default(autoincrement())
+  title     String      @db.VarChar(500)
+  createdAt DateTime    @default(now()) @db.DateTime(0)
+  updatedAt DateTime    @default(now()) @db.DateTime(0)
+  deletedAt DateTime?   @db.DateTime(0)
+  LoanMarks LoanMarks[]
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LoanMarks {
+  id        Int       @id @default(autoincrement())
+  loanId    Int
+  markId    Int
+  comment   String?   @db.VarChar(500)
+  deadline  DateTime? @db.DateTime(0)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  Loan      Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanMarks_1")
+  Marks     Marks     @relation(fields: [markId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanMarks_2")
+
+  @@index([loanId], map: "idx_LoanMarks_1")
+  @@index([markId], map: "idx_LoanMarks_2")
+  @@index([deletedAt], map: "idx_deletedAt")
 }
 
 enum PaymentCommitment_type {

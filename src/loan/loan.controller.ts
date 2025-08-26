@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -16,6 +16,8 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
+import { CreateMarksDto } from '../admin/dto/createMarks.dto';
+import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 
 
 @ApiTags('Loans')
@@ -136,5 +138,29 @@ export class LoanController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.loanService.requestCommittee(publicId, createCommitteeDto, user.id, file);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post(':publicId/loanMarks')
+  addLoanMarks(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddLoanMarksDto
+  ) {
+    return this.loanService.addLoanMarks(publicId, data, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Delete(':publicId/loanMarks/:markId')
+  deleteLoanMark(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Param('markId') markId: number
+  ) {
+    return this.loanService.deleteLoanMark(publicId, markId, user.id);
   }
 }
