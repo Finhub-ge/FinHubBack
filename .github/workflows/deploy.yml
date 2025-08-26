@@ -20,8 +20,14 @@ jobs:
           echo "Pulling latest code from main..."
           git pull origin main
 
+          echo "Cleaning build cache..."
+          rm -rf dist/
+          rm -rf node_modules/
+          rm -rf .tsbuildinfo
+          rm -rf node_modules/.cache/
+          rm -rf ~/.npm/_cacache/
+
           echo "Installing dependencies..."
-          rm -rf node_modules
           npm install
 
           echo "Pulling DB schema..."
@@ -30,11 +36,11 @@ jobs:
           echo "Generating Prisma client..."
           npx prisma generate
 
-          echo "Building app..."
-          npm run build
+          echo "Building app with adequate memory..."
+          NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
           echo "Restarting with PM2..."
           pm2 delete finhub-back || true
-          pm2 start dist/main.js --name finhub-back
+          pm2 start dist/main.js --name finhub-back --node-args="--max-old-space-size=1024"
 
           echo "Deployment completed successfully."
