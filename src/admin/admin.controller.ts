@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query, Delete } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query, Delete, Res } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -14,6 +14,7 @@ import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
+import { GetBodyDto } from "./dto/get-body.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -165,5 +166,18 @@ export class AdminController {
   @Get('loanMarks')
   async getLoanMarks() {
     return await this.adminService.getLoanMarks();
+  }
+
+  @Post('fillPdf')
+  async getBody(@Body() data: GetBodyDto, @Res() res) {
+    const pdfBuffer = await this.adminService.fillPdf(data);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="filled-document.pdf"',
+      'Content-Length': pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
   }
 }
