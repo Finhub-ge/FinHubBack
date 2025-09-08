@@ -451,4 +451,12 @@ export class AdminService {
       }
     });
   }
+
+  async getLegalStages() {
+    return await this.prisma.legalStage.findMany({
+      where: {
+        deletedAt: null
+      }
+    });
+  }
 }

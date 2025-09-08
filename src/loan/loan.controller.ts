@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
+import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 
 
 @ApiTags('Loans')
@@ -37,8 +38,8 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Get(':publicId')
-  getOne(@Param('publicId') publicId: ParseUUIDPipe) {
-    return this.loanService.getOne(publicId);
+  getOne(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe) {
+    return this.loanService.getOne(publicId, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -70,6 +71,18 @@ export class LoanController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Post('/:publicId/comment')
   addComment(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() addCommentDto: AddCommentDto
+  ) {
+    return this.loanService.addComment(publicId, addCommentDto, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post('/:publicId/lawyer-comment')
+  addLawyerComment(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() addCommentDto: AddCommentDto
@@ -162,5 +175,17 @@ export class LoanController {
     @Param('markId') markId: number
   ) {
     return this.loanService.deleteLoanMark(publicId, markId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post(':publicId/loanLegalStage')
+  addLoanLegalStage(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddLoanLegalStageDto
+  ) {
+    return this.loanService.addLoanLegalStage(publicId, data, user.id);
   }
 }
