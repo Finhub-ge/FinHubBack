@@ -176,6 +176,7 @@ model Loan {
   LoanAssignment        LoanAssignment[]
   LoanAssignmentHistory LoanAssignmentHistory[]
   LoanAttribute         LoanAttribute[]
+  LoanLegalStage        LoanLegalStage[]
   LoanMarks             LoanMarks[]
   LoanStatusHistory     LoanStatusHistory[]
   PaymentCommitment     PaymentCommitment[]
@@ -390,6 +391,7 @@ model User {
   LoanAssignment                                              LoanAssignment[]
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[] @relation("LoanAssignmentHistory_userIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[] @relation("LoanAssignmentHistory_createdByToUser")
+  LoanLegalStage                                              LoanLegalStage[]
   LoanStatusHistory                                           LoanStatusHistory[]
   PaymentCommitment                                           PaymentCommitment[]
   Tasks_Tasks_fromUserToUser                                  Tasks[]                 @relation("Tasks_fromUserToUser")
@@ -546,6 +548,36 @@ model LoanMarks {
 
   @@index([loanId], map: "idx_LoanMarks_1")
   @@index([markId], map: "idx_LoanMarks_2")
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LegalStage {
+  id             Int              @id @default(autoincrement())
+  title          String           @db.VarChar(500)
+  createdAt      DateTime         @default(now()) @db.DateTime(0)
+  updatedAt      DateTime         @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?        @db.DateTime(0)
+  LoanLegalStage LoanLegalStage[]
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LoanLegalStage {
+  id           Int        @id @default(autoincrement())
+  loanId       Int
+  legalStageId Int
+  comment      String?    @db.VarChar(500)
+  userId       Int
+  createdAt    DateTime   @default(now()) @db.DateTime(0)
+  updatedAt    DateTime   @default(now()) @db.DateTime(0)
+  deletedAt    DateTime?  @db.DateTime(0)
+  Loan         Loan       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLegalStage_1")
+  LegalStage   LegalStage @relation(fields: [legalStageId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLegalStage_2")
+  User         User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLegalStage_3")
+
+  @@index([loanId], map: "idx_LoanLegalStage_1")
+  @@index([legalStageId], map: "idx_LoanLegalStage_2")
+  @@index([userId], map: "idx_LoanLegalStage_3")
   @@index([deletedAt], map: "idx_deletedAt")
 }
 

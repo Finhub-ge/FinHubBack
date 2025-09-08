@@ -8,13 +8,15 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
+import { Committee_status, Committee_type, SmsHistory_status, User } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { S3Helper } from 'src/helpers/s3.helper';
 import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
+import { Role } from 'src/enums/role.enum';
+import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 
 @Injectable()
 export class LoanService {
@@ -55,6 +57,7 @@ export class LoanService {
         LoanAssignment: {
           where: { isActive: true },
           select: {
+            createdAt: true,
             User: {
               select: {
                 firstName: true,
@@ -74,7 +77,7 @@ export class LoanService {
     return loans;
   }
 
-  async getOne(publicId: ParseUUIDPipe) {
+  async getOne(publicId: ParseUUIDPipe, user: any) {
     const loan = await this.prisma.loan.findUnique({
       where: {
         publicId: String(publicId),
@@ -168,7 +171,8 @@ export class LoanService {
             User: {
               select: {
                 firstName: true,
-                lastName: true
+                lastName: true,
+                Role: true
               }
             }
           },
@@ -226,6 +230,14 @@ export class LoanService {
               }
             }
           }
+        },
+        LoanLegalStage: {
+          select: {
+            comment: true,
+            createdAt: true,
+            LegalStage: { select: { title: true } },
+            User: { select: { firstName: true, lastName: true } },
+          }
         }
       }
     });
@@ -253,8 +265,20 @@ export class LoanService {
       },
     });
 
+    let comments = loan.Comments;
+    let lawyerComments = [];
+
+    if (user.role_name === Role.LAWYER) {
+      lawyerComments = comments.filter(c => c.User.Role.name === Role.LAWYER);
+      comments = comments.filter(c => c.User.Role.name !== Role.LAWYER);
+    }
+
+    const { Comments, ...loanData } = loan;
+
     return {
-      ...loan,
+      ...loanData,
+      comments,
+      lawyerComments,
       activeCommitments,
     };
   }
@@ -774,6 +798,38 @@ export class LoanService {
 
     return {
       message: 'Loan mark deleted successfully'
+    };
+  }
+
+  async addLoanLegalStage(publicId: ParseUUIDPipe, data: AddLoanLegalStageDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the legal stage exists
+    const legalStage = await this.prisma.legalStage.findUnique({
+      where: { id: data.stageId },
+    });
+    if (!legalStage) {
+      throw new NotFoundException('Legal stage not found');
+    }
+
+    // Create the relationship between loan and legal stage
+    await this.prisma.loanLegalStage.create({
+      data: {
+        loanId: loan.id,
+        legalStageId: data.stageId,
+        comment: data.comment,
+        userId: userId,
+      },
+    });
+
+    return {
+      message: 'Loan legal stage added successfully'
     };
   }
 }

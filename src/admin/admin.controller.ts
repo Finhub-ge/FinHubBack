@@ -166,4 +166,11 @@ export class AdminController {
   async getLoanMarks() {
     return await this.adminService.getLoanMarks();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('legalStages')
+  async getLegalStages() {
+    return await this.adminService.getLegalStages();
+  }
 }
