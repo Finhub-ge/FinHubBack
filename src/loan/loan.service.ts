@@ -17,6 +17,8 @@ import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
+import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
+import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 
 @Injectable()
 export class LoanService {
@@ -236,6 +238,22 @@ export class LoanService {
             comment: true,
             createdAt: true,
             LegalStage: { select: { title: true } },
+            User: { select: { firstName: true, lastName: true } },
+          }
+        },
+        LoanCollateralStatus: {
+          select: {
+            comment: true,
+            createdAt: true,
+            CollateralStatus: { select: { title: true } },
+            User: { select: { firstName: true, lastName: true } },
+          }
+        },
+        LoanLitigationStage: {
+          select: {
+            comment: true,
+            createdAt: true,
+            LitigationStage: { select: { title: true } },
             User: { select: { firstName: true, lastName: true } },
           }
         }
@@ -830,6 +848,84 @@ export class LoanService {
 
     return {
       message: 'Loan legal stage added successfully'
+    };
+  }
+
+  async addLoanCollateralStatus(publicId: ParseUUIDPipe, data: AddLoanCollateralStatusDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the collateral status exists
+    const collateralStatus = await this.prisma.collateralStatus.findUnique({
+      where: { id: data.collateralStatusId },
+    });
+
+
+    if (!collateralStatus) {
+      throw new NotFoundException('Collateral status not found');
+    }
+
+    // Create the relationship between loan and collateral status
+    await this.prisma.loanCollateralStatus.create({
+      data: {
+        loanId: loan.id,
+        collateralStatusId: data.collateralStatusId,
+        comment: data.comment,
+        userId: userId,
+      },
+    });
+
+    return {
+      message: 'Loan collateral status added successfully'
+    };
+  }
+
+  async addLoanLitigationStage(publicId: ParseUUIDPipe, data: AddLoanLitigationStageDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the litigation stage exists
+    const litigationStage = await this.prisma.litigationStage.findUnique({
+      where: { id: data.litigationStageId },
+    });
+
+    if (!litigationStage) {
+      throw new NotFoundException('Litigation stage not found');
+    }
+    // Check if loan has a collateral status
+    const existingCollateralStatus = await this.prisma.loanCollateralStatus.findFirst({
+      where: { loanId: loan.id }
+    });
+
+    if (!existingCollateralStatus) {
+      throw new BadRequestException('Loan must have a collateral status before adding litigation stage');
+    }
+
+
+    // Create the relationship between loan and litigation stage
+    await this.prisma.loanLitigationStage.create({
+      data: {
+        loanId: loan.id,
+        litigationStageId: data.litigationStageId,
+        comment: data.comment,
+        userId: userId,
+      },
+    });
+
+
+    return {
+      message: 'Loan litigation stage added successfully'
     };
   }
 }
