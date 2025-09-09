@@ -19,6 +19,8 @@ import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
+import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
+import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 
 
 @ApiTags('Loans')
@@ -187,5 +189,29 @@ export class LoanController {
     @Body() data: AddLoanLegalStageDto
   ) {
     return this.loanService.addLoanLegalStage(publicId, data, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post(':publicId/loanCollateralStatus')
+  addLoanCollateralStatus(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddLoanCollateralStatusDto
+  ) {
+    return this.loanService.addLoanCollateralStatus(publicId, data, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post(':publicId/loanLitigationStage')
+  addLoanLitigationStage(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddLoanLitigationStageDto
+  ) {
+    return this.loanService.addLoanLitigationStage(publicId, data, user.id);
   }
 }

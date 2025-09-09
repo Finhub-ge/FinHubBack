@@ -459,4 +459,20 @@ export class AdminService {
       }
     });
   }
+
+  async getCollateralStatuses() {
+    return await this.prisma.collateralStatus.findMany({
+      where: {
+        deletedAt: null
+      }
+    });
+  }
+
+  async getLitigationStages() {
+    return await this.prisma.litigationStage.findMany({
+      where: {
+        deletedAt: null
+      }
+    });
+  }
 }

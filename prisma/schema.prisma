@@ -176,7 +176,9 @@ model Loan {
   LoanAssignment        LoanAssignment[]
   LoanAssignmentHistory LoanAssignmentHistory[]
   LoanAttribute         LoanAttribute[]
+  LoanCollateralStatus  LoanCollateralStatus[]
   LoanLegalStage        LoanLegalStage[]
+  LoanLitigationStage   LoanLitigationStage[]
   LoanMarks             LoanMarks[]
   LoanStatusHistory     LoanStatusHistory[]
   PaymentCommitment     PaymentCommitment[]
@@ -391,7 +393,9 @@ model User {
   LoanAssignment                                              LoanAssignment[]
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[] @relation("LoanAssignmentHistory_userIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[] @relation("LoanAssignmentHistory_createdByToUser")
+  LoanCollateralStatus                                        LoanCollateralStatus[]
   LoanLegalStage                                              LoanLegalStage[]
+  LoanLitigationStage                                         LoanLitigationStage[]
   LoanStatusHistory                                           LoanStatusHistory[]
   PaymentCommitment                                           PaymentCommitment[]
   Tasks_Tasks_fromUserToUser                                  Tasks[]                 @relation("Tasks_fromUserToUser")
@@ -578,6 +582,66 @@ model LoanLegalStage {
   @@index([loanId], map: "idx_LoanLegalStage_1")
   @@index([legalStageId], map: "idx_LoanLegalStage_2")
   @@index([userId], map: "idx_LoanLegalStage_3")
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model CollateralStatus {
+  id                   Int                    @id @default(autoincrement())
+  title                String                 @db.VarChar(500)
+  createdAt            DateTime               @default(now()) @db.DateTime(0)
+  updatedAt            DateTime               @default(now()) @db.DateTime(0)
+  deletedAt            DateTime?              @db.DateTime(0)
+  LoanCollateralStatus LoanCollateralStatus[]
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LoanCollateralStatus {
+  id                 Int              @id @default(autoincrement())
+  loanId             Int
+  collateralStatusId Int
+  comment            String?          @db.VarChar(500)
+  userId             Int
+  createdAt          DateTime         @default(now()) @db.DateTime(0)
+  updatedAt          DateTime         @default(now()) @db.DateTime(0)
+  deletedAt          DateTime?        @db.DateTime(0)
+  Loan               Loan             @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanCollateralStatus_1")
+  CollateralStatus   CollateralStatus @relation(fields: [collateralStatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanCollateralStatus_2")
+  User               User             @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanCollateralStatus_3")
+
+  @@index([loanId], map: "idx_LoanCollateralStatus_1")
+  @@index([collateralStatusId], map: "idx_LoanCollateralStatus_2")
+  @@index([userId], map: "idx_LoanCollateralStatus_3")
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LitigationStage {
+  id                  Int                   @id @default(autoincrement())
+  title               String                @db.VarChar(500)
+  createdAt           DateTime              @default(now()) @db.DateTime(0)
+  updatedAt           DateTime              @default(now()) @db.DateTime(0)
+  deletedAt           DateTime?             @db.DateTime(0)
+  LoanLitigationStage LoanLitigationStage[]
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LoanLitigationStage {
+  id                Int             @id @default(autoincrement())
+  loanId            Int
+  litigationStageId Int
+  comment           String?         @db.VarChar(500)
+  userId            Int
+  createdAt         DateTime        @default(now()) @db.DateTime(0)
+  updatedAt         DateTime        @default(now()) @db.DateTime(0)
+  deletedAt         DateTime?       @db.DateTime(0)
+  Loan              Loan            @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLitigationStage_1")
+  LitigationStage   LitigationStage @relation(fields: [litigationStageId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLitigationStage_2")
+  User              User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanLitigationStage_3")
+
+  @@index([loanId], map: "idx_LoanLitigationStage_1")
+  @@index([litigationStageId], map: "idx_LoanLitigationStage_2")
+  @@index([userId], map: "idx_LoanLitigationStage_3")
   @@index([deletedAt], map: "idx_deletedAt")
 }
 

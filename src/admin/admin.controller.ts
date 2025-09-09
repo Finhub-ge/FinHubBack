@@ -173,4 +173,18 @@ export class AdminController {
   async getLegalStages() {
     return await this.adminService.getLegalStages();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('collateralStatuses')
+  async getCollateralStatuses() {
+    return await this.adminService.getCollateralStatuses();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('litigationStages')
+  async getLitigationStages() {
+    return await this.adminService.getLitigationStages();
+  }
 }
