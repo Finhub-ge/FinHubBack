@@ -72,6 +72,26 @@ export class LoanService {
               }
             }
           },
+        },
+        LoanCollateralStatus: {
+          select: {
+            CollateralStatus: { select: { title: true } },
+          }
+        },
+        LoanLitigationStage: {
+          select: {
+            LitigationStage: { select: { title: true } },
+          }
+        },
+        LoanLegalStage: {
+          select: {
+            LegalStage: { select: { title: true } },
+          }
+        },
+        LoanMarks: {
+          select: {
+            Marks: { select: { title: true } },
+          }
         }
       }
     });
