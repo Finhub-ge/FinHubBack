@@ -167,17 +167,4 @@ export class AdminController {
   async getLoanMarks() {
     return await this.adminService.getLoanMarks();
   }
-
-  @Post('fillPdf')
-  async getBody(@Body() data: GetBodyDto, @Res() res) {
-    const pdfBuffer = await this.adminService.fillPdf(data);
-
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="filled-document.pdf"',
-      'Content-Length': pdfBuffer.length,
-    });
-
-    res.send(pdfBuffer);
-  }
 }

@@ -15,6 +15,8 @@ import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { S3Helper } from 'src/helpers/s3.helper';
 import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
+import { PdfHelper } from 'src/helpers/pdf.helper';
+import { GeneratePdfDto } from './dto/generatePdf.dto';
 
 @Injectable()
 export class LoanService {
@@ -22,7 +24,8 @@ export class LoanService {
     private prisma: PrismaService,
     private readonly paymentsHelper: PaymentsHelper,
     private readonly utilsHelper: UtilsHelper,
-    private readonly s3Helper: S3Helper
+    private readonly s3Helper: S3Helper,
+    private readonly pdfHelper: PdfHelper
   ) { }
 
   async getAll() {
@@ -774,6 +777,64 @@ export class LoanService {
 
     return {
       message: 'Loan mark deleted successfully'
+    };
+  }
+
+  async generatePdf(publicId: ParseUUIDPipe, data: GeneratePdfDto) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        Debtor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            idNumber: true
+          }
+        },
+        LoanAttribute: {
+          select: {
+            value: true,
+            Attributes: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const replacedData = {
+      fullName: `${loan.Debtor.firstName} ${loan.Debtor.lastName}`,
+      personalId: loan.Debtor.idNumber,
+      loanId: loan.id,
+      originalPrincipal: loan.originalPrincipal,
+      effectiveInterestRate: loan.LoanAttribute.find(attribute => attribute.Attributes.name === 'Effective interest rate')?.value,
+    };
+
+    const template = await this.prisma.templates.findUnique({
+      where: {
+        id: data.templateId,
+        deletedAt: null
+      },
+      select: {
+        filePath: true,
+        title: true
+      }
+    });
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    const filePath = template.filePath;
+
+    const fileName = `${loan.id}_${template.title}`;
+    const pdfBuffer = await this.pdfHelper.renderDocxToPdf(filePath, replacedData);
+
+    return {
+      buffer: pdfBuffer,
+      fileName: fileName
     };
   }
 }

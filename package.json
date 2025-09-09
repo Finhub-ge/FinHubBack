@@ -39,10 +39,13 @@
     "class-validator": "^0.14.2",
     "crypto": "^1.0.1",
     "dayjs": "^1.11.13",
+    "docxtemplater": "^3.66.2",
+    "libreoffice-convert": "^1.7.0",
     "multer": "^2.0.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdf-lib": "^1.17.1",
+    "pizzip": "^3.2.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"
   },
