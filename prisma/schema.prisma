@@ -159,7 +159,12 @@ model Loan {
   portfolioId           Int
   debtorId              Int
   caseId                Int?
-  originalPrincipal     Decimal                 @db.Decimal(12, 2)
+  principal             Decimal                 @db.Decimal(12, 2)
+  interest              Decimal?                @default(0.00) @db.Decimal(12, 2)
+  penalty               Decimal?                @default(0.00) @db.Decimal(12, 2)
+  otherFee              Decimal?                @default(0.00) @db.Decimal(12, 2)
+  legalCharges          Decimal?                @default(0.00) @db.Decimal(12, 2)
+  totalDebt             Decimal?                @default(0.00) @db.Decimal(12, 2)
   purchasedAmount       Decimal                 @db.Decimal(12, 2)
   loanStartDate         DateTime                @db.Date
   loanDueDate           DateTime                @db.Date
@@ -180,6 +185,7 @@ model Loan {
   LoanLegalStage        LoanLegalStage[]
   LoanLitigationStage   LoanLitigationStage[]
   LoanMarks             LoanMarks[]
+  LoanRemaining         LoanRemaining[]
   LoanStatusHistory     LoanStatusHistory[]
   PaymentCommitment     PaymentCommitment[]
   SmsHistory            SmsHistory[]
@@ -645,6 +651,39 @@ model LoanLitigationStage {
   @@index([deletedAt], map: "idx_deletedAt")
 }
 
+model Templates {
+  id          Int            @id @default(autoincrement())
+  title       String         @db.VarChar(50)
+  filePath    String         @db.VarChar(50)
+  description String?        @db.VarChar(500)
+  isActive    Boolean        @default(true)
+  type        Templates_type @default(court)
+  createdAt   DateTime       @default(now()) @db.DateTime(0)
+  updatedAt   DateTime       @default(now()) @db.DateTime(0)
+  deletedAt   DateTime?      @db.DateTime(0)
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model LoanRemaining {
+  id           Int       @id @default(autoincrement())
+  loanId       Int?
+  principal    Decimal?  @db.Decimal(12, 2)
+  interest     Decimal?  @db.Decimal(12, 2)
+  penalty      Decimal?  @db.Decimal(12, 2)
+  otherFee     Decimal?  @db.Decimal(12, 2)
+  legalCharges Decimal?  @db.Decimal(12, 2)
+  currentDebt  Decimal?  @db.Decimal(12, 2)
+  agreementMin Decimal?  @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now()) @db.DateTime(0)
+  updatedAt    DateTime  @default(now()) @db.DateTime(0)
+  deletedAt    DateTime? @db.DateTime(0)
+  Loan         Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanRemaining_1")
+
+  @@index([loanId], map: "fk_LoanRemaining_1")
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -677,4 +716,9 @@ enum Committee_type {
 enum Committee_status {
   pending
   complete
+}
+
+enum Templates_type {
+  court
+  email
 }
