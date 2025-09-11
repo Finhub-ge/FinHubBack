@@ -276,7 +276,10 @@ export class LoanService {
             LitigationStage: { select: { title: true } },
             User: { select: { firstName: true, lastName: true } },
           }
-        }
+        },
+        LoanRemaining: {
+          where: { deletedAt: null },
+        },
       }
     });
 
@@ -313,11 +316,21 @@ export class LoanService {
 
     const { Comments, ...loanData } = loan;
 
+    const initialClaimBreakdown = {
+      initPrincipal: loan.principal,
+      initInterest: loan.interest,
+      initPenalty: loan.penalty,
+      initOtherFee: loan.otherFee,
+      initLegalCharges: loan.legalCharges,
+      initDebt: loan.totalDebt,
+    };
+
     return {
       ...loanData,
       comments,
       lawyerComments,
       activeCommitments,
+      initialClaimBreakdown
     };
   }
 
@@ -762,7 +775,7 @@ export class LoanService {
       data: {
         loanId: loan.id,
         requesterId: userId,
-        principalAmount: loan.originalPrincipal,
+        principalAmount: loan.principal,
         requestText: createCommitteeDto.requestText,
         requestDate: new Date(),
         agreementMinAmount: createCommitteeDto.agreementMinAmount,

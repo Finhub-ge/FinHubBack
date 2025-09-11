@@ -296,30 +296,75 @@ export class AdminService {
   }
 
   async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {
-    const committee = await this.prisma.committee.findUnique({
-      where: {
-        id: committeeId,
-        status: Committee_status.pending
+    return await this.prisma.$transaction(async (tx) => {
+      const committee = await tx.committee.findUnique({
+        where: {
+          id: committeeId,
+          status: Committee_status.pending
+        },
+        include: {
+          Loan: true
+        }
+      });
+
+      if (!committee) {
+        throw new BadRequestException('Committee request not found or already processed');
       }
-    });
 
-    if (!committee) {
-      throw new BadRequestException('Committee request not found or already processed');
-    }
+      await tx.committee.update({
+        where: { id: committeeId },
+        data: {
+          responseText: data.responseText,
+          status: Committee_status.complete,
+          type: data.type || committee.type,
+          responderId: userId,
+          responseDate: new Date(),
+          agreementMinAmount: data.agreementMinAmount
+        }
+      });
 
-    await this.prisma.committee.update({
-      where: { id: committeeId },
-      data: {
-        responseText: data.responseText,
-        status: Committee_status.complete,
-        type: data.type || committee.type,
-        responderId: userId,
-        responseDate: new Date(),
-        agreementMinAmount: data.agreementMinAmount
+      const currentRemaining = await tx.loanRemaining.findFirst({
+        where: {
+          loanId: committee.loanId,
+          deletedAt: null,
+        }
+      });
+
+      if (!currentRemaining) {
+        await tx.loanRemaining.create({
+          data: {
+            loanId: committee.loanId,
+            principal: committee.Loan.principal,
+            interest: committee.Loan.interest,
+            penalty: committee.Loan.penalty,
+            otherFee: committee.Loan.otherFee,
+            legalCharges: committee.Loan.legalCharges,
+            currentDebt: committee.Loan.totalDebt,
+            agreementMin: data.agreementMinAmount,
+          }
+        });
+      } else {
+        await tx.loanRemaining.update({
+          where: { id: currentRemaining.id },
+          data: { deletedAt: new Date() },
+        });
+
+        await tx.loanRemaining.create({
+          data: {
+            loanId: currentRemaining.loanId,
+            principal: currentRemaining.principal,
+            interest: currentRemaining.interest,
+            penalty: currentRemaining.penalty,
+            otherFee: currentRemaining.otherFee,
+            legalCharges: currentRemaining.legalCharges,
+            currentDebt: currentRemaining.currentDebt,
+            agreementMin: data.agreementMinAmount,
+          },
+        });
       }
-    });
 
-    throw new HttpException('Committee response submitted successfully', 200);
+      return { message: 'Committee response submitted successfully' };
+    });
   }
 
   async getAllCommittees() {
@@ -415,7 +460,7 @@ export class AdminService {
           select: {
             publicId: true,
             caseId: true,
-            originalPrincipal: true,
+            principal: true,
             Debtor: {
               select: {
                 firstName: true,
