@@ -57,7 +57,7 @@ export class PaymentsHelper {
     await prisma.paymentSchedule.createMany({
       data: schedules,
     });
-  }       
+  }
 
   async gettransactionChannels() {
     return await this.prisma.transactionChannels.findMany({
@@ -65,5 +65,39 @@ export class PaymentsHelper {
         TransactionChannelAccounts: true
       }
     })
+  }
+
+  async getTotalPaymentsByPublicId(publicId) {
+    const totals = await this.prisma.transaction.aggregate({
+      where: {
+        Loan: {
+          publicId: publicId
+        },
+        // Add any additional filters if needed (e.g., transaction status, date range)
+        // status: 'COMPLETED',
+        // deletedAt: null,
+      },
+      _sum: {
+        amount: true,
+        principal: true,
+        interest: true,
+        penalty: true,
+        fees: true,
+        legal: true,
+      }
+    });
+
+    const paymentTotals = {
+      totalPayments: totals._sum.amount || 0,
+      paidInterest: totals._sum.interest || 0,
+      paidPenalty: totals._sum.penalty || 0,
+      paidOtherFee: totals._sum.fees || 0,
+      paidLegalCharges: totals._sum.legal || 0,
+    };
+
+    // Calculate total payments
+    // paymentTotals.totalPayments = Object.values(paymentTotals).reduce((sum, value) => sum + value, 0);
+
+    return paymentTotals;
   }
 }

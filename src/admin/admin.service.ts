@@ -12,6 +12,7 @@ import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
+import { CreateChargeDto } from "./dto/create-charge.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -519,5 +520,104 @@ export class AdminService {
         deletedAt: null
       }
     });
+  }
+
+  async getChargeTypes() {
+    return await this.prisma.chargeType.findMany({
+      where: {
+        deletedAt: null
+      }
+    });
+  }
+
+  async addCharge(publicId: ParseUUIDPipe, data: CreateChargeDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId) }
+    });
+    if (!loan) throw new HttpException('Loan not found', 404)
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.charges.create({
+        data: {
+          loanId: loan.id,
+          chargeTypeId: data.chargeTypeId,
+          amount: Number(data.amount),
+          paymentDate: data.chargeDate,
+          comment: data.comment,
+          currency: loan.currency,
+          transactionChannelAccountId: data.accountId,
+          userId: userId,
+          channelId: data.channel,
+        }
+      });
+
+      await tx.loan.update({
+        where: { id: loan.id },
+        data: {
+          legalCharges: {
+            increment: Number(data.amount)
+          },
+          totalDebt: {
+            increment: Number(data.amount)
+          }
+        }
+      });
+    });
+
+    return {
+      message: 'Charge added successfully'
+    }
+  }
+
+  async getCharges() {
+    return await this.prisma.charges.findMany({
+      where: {
+        deletedAt: null
+      },
+      include: {
+        Loan: {
+          select: {
+            caseId: true,
+            Debtor: {
+              select: {
+                firstName: true,
+                lastName: true,
+                idNumber: true
+              }
+            },
+            LoanAssignment: {
+              select: {
+                User: {
+                  select: {
+                    firstName: true,
+                    lastName: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        ChargeType: {
+          select: {
+            title: true
+          }
+        },
+        User: {
+          select: {
+            firstName: true,
+            lastName: true
+          }
+        },
+        TransactionChannelAccounts: {
+          select: {
+            TransactionChannels: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      }
+    })
   }
 }
