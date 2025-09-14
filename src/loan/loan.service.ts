@@ -280,6 +280,7 @@ export class LoanService {
         LoanRemaining: {
           where: { deletedAt: null },
         },
+        Transaction: true
       }
     });
 
@@ -325,12 +326,15 @@ export class LoanService {
       initDebt: loan.totalDebt,
     };
 
+    const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(publicId);
+
     return {
       ...loanData,
       comments,
       lawyerComments,
       activeCommitments,
-      initialClaimBreakdown
+      initialClaimBreakdown,
+      totalPayments
     };
   }
 
@@ -623,7 +627,6 @@ export class LoanService {
     });
     throw new HttpException('Loan status updated successfully', 200);
   }
-
 
   async sendSms(publicId: ParseUUIDPipe, sendSmsDto: SendSmsDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({

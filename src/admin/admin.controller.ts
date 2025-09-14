@@ -14,6 +14,7 @@ import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
+import { CreateChargeDto } from "./dto/create-charge.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -186,5 +187,27 @@ export class AdminController {
   @Get('litigationStages')
   async getLitigationStages() {
     return await this.adminService.getLitigationStages();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('chargeTypes')
+  async getChargeTypes() {
+    return await this.adminService.getChargeTypes();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @Post('addCharge/:publicId')
+  async addCharge(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreateChargeDto) {
+    return await this.adminService.addCharge(publicId, data, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('getCharges')
+  async getCharges() {
+    return await this.adminService.getCharges();
   }
 }
