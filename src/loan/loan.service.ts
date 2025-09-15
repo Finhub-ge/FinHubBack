@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, InternalServerErrorException, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
@@ -962,14 +962,22 @@ export class LoanService {
 
     let fileUrl: string | undefined;
     // TODO: Uncomment this when we have a way to upload files to S3
-    // if (file) {
-    //   fileUrl = await this.s3Helper.upload(
-    //     file.buffer,
-    //     `loans/${loan.id}/committee/${file.originalname}`,
-    //     undefined,
-    //     file.mimetype
-    //   );
-    // }
+    if (file) {
+      const fileKey = `loans/${loan.id}/committee/${file.originalname}`;
+      const contentType = file.mimetype || 'application/octet-stream';
+
+      try {
+        fileUrl = await this.s3Helper.upload(
+          file.buffer,
+          fileKey,
+          process.env.AWS_S3_BUCKET,
+          contentType
+        );
+      } catch (err) {
+        console.log(`S3 upload failed for loan ${loan.id}`, err);
+        throw new InternalServerErrorException('File upload failed');
+      }
+    }
 
     await this.prisma.committee.create({
       data: {
