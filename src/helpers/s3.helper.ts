@@ -10,7 +10,7 @@ export class S3Helper {
             region: process.env.AWS_REGION || 'us-east-1',
             credentials: {
                 accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
             },
         });
     }
@@ -27,7 +27,6 @@ export class S3Helper {
                 Key: fileName,
                 Body: file,
                 ContentType: contentType,
-                ACL: 'public-read',
             });
 
             await this.s3Client.send(command);
