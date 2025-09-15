@@ -71,6 +71,19 @@ export class LoanController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Delete(':publicId/debtor/contacts/:contactId')
+  deleteDebtorContact(
+    @GetUser() user: User,
+    @Param('publicId', ParseUUIDPipe) publicId: string,
+    @Param('contactId', ParseIntPipe) contactId: number
+  ) {
+    return this.loanService.deleteDebtorContact(publicId, contactId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Post('/:publicId/loan-attributes')

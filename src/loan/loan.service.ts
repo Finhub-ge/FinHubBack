@@ -145,6 +145,7 @@ export class LoanService {
               },
             },
             DebtorContact: {
+              where: { deletedAt: null },
               select: {
                 id: true,
                 value: true,
@@ -489,6 +490,82 @@ export class LoanService {
     });
 
     return { message: 'Debtor contact updated successfully' };
+  }
+
+  async deleteDebtorContact(publicId: string, contactId: number, userId: number) {
+    // Check if loan exists
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: publicId, deletedAt: null }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Check if debtor exists
+    const debtor = await this.prisma.debtor.findUnique({
+      where: { id: loan.debtorId, deletedAt: null }
+    });
+
+    if (!debtor) {
+      throw new NotFoundException('Debtor not found');
+    }
+
+    // Check if the contact exists and belongs to this debtor
+    const existingContact = await this.prisma.debtorContact.findUnique({
+      where: {
+        id: contactId,
+        debtorId: debtor.id,
+        deletedAt: null
+      }
+    });
+
+    if (!existingContact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    // Check if this is the only contact - prevent deletion if it's the last one
+    const contactCount = await this.prisma.debtorContact.count({
+      where: {
+        debtorId: debtor.id,
+        deletedAt: null
+      }
+    });
+
+    if (contactCount === 1) {
+      throw new BadRequestException('Cannot delete the last contact. Debtor must have at least one contact.');
+    }
+
+    // If deleting a primary contact, set another contact as primary
+    if (existingContact.isPrimary) {
+      const nextContact = await this.prisma.debtorContact.findFirst({
+        where: {
+          debtorId: debtor.id,
+          id: { not: contactId },
+          deletedAt: null
+        },
+        orderBy: { createdAt: 'asc' } // Set the oldest remaining contact as primary
+      });
+
+      if (nextContact) {
+        await this.prisma.debtorContact.update({
+          where: { id: nextContact.id },
+          data: { isPrimary: true }
+        });
+      }
+    }
+
+    // Soft delete the contact
+    await this.prisma.debtorContact.update({
+      where: { id: contactId },
+      data: {
+        deletedAt: new Date(),
+      }
+    });
+
+    return {
+      message: 'Debtor contact deleted successfully'
+    };
   }
 
   async addLoanAttributes(publicId: ParseUUIDPipe, addLoanAttributesDto: AddLoanAttributesDto, userId: number) {
