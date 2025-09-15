@@ -19,6 +19,7 @@ import { Role } from 'src/enums/role.enum';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
+import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 
 @Injectable()
 export class LoanService {
@@ -29,16 +30,49 @@ export class LoanService {
     private readonly s3Helper: S3Helper
   ) { }
 
-  async getAll() {
+  async getAll(filters: GetLoansFilterDto) {
+    const where: any = { deletedAt: null };
+
+    if (filters.portfolio?.length) where.portfolioId = { in: filters.portfolio };
+    if (filters.loanstatus?.length) where.statusId = { in: filters.loanstatus };
+
+    if (filters.portfolioseller?.length) {
+      where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
+    }
+
+    if (filters.assigneduser?.length) {
+      where.LoanAssignment = {
+        some: {
+          isActive: true,
+          User: { id: { in: filters.assigneduser } }
+        }
+      };
+    }
+
+    if (filters.collateralstatus?.length) {
+      where.LoanCollateralStatus = { some: { CollateralStatus: { id: { in: filters.collateralstatus } } } };
+    }
+    if (filters.litigationstage?.length) {
+      where.LoanLitigationStage = { some: { LitigationStage: { id: { in: filters.litigationstage } } } };
+    }
+    if (filters.legalstage?.length) {
+      where.LoanLegalStage = { some: { LegalStage: { id: { in: filters.legalstage } } } };
+    }
+    if (filters.marks?.length) {
+      where.LoanMarks = { some: { Marks: { id: { in: filters.marks } } } };
+    }
+
     const loans = await this.prisma.loan.findMany({
-      where: { deletedAt: null },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         Portfolio: {
           select: {
+            id: true,
             name: true,
             portfolioSeller: {
               select: {
+                id: true,
                 name: true,
               }
             }
@@ -51,6 +85,7 @@ export class LoanService {
             idNumber: true,
             DebtorStatus: {
               select: {
+                id: true,
                 name: true,
               }
             }
@@ -58,6 +93,7 @@ export class LoanService {
         },
         LoanStatus: {
           select: {
+            id: true,
             name: true,
           }
         },
@@ -67,6 +103,7 @@ export class LoanService {
             createdAt: true,
             User: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
               },
@@ -79,23 +116,31 @@ export class LoanService {
           },
         },
         LoanCollateralStatus: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           select: {
-            CollateralStatus: { select: { title: true } },
+            CollateralStatus: { select: { id: true, title: true } },
           }
         },
         LoanLitigationStage: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           select: {
-            LitigationStage: { select: { title: true } },
+            LitigationStage: { select: { id: true, title: true } },
           }
         },
         LoanLegalStage: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           select: {
-            LegalStage: { select: { title: true } },
+            LegalStage: { select: { id: true, title: true } },
           }
         },
         LoanMarks: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           select: {
-            Marks: { select: { title: true } },
+            Marks: { select: { id: true, title: true } },
           }
         }
       }
