@@ -425,6 +425,72 @@ export class LoanService {
     throw new HttpException('Debtor contact added successfully', 200);
   }
 
+  async editDebtorContact(publicId: ParseUUIDPipe, contactId: number, createContactDto: CreateContactDto, userId: number) {
+    // Check if loan exists
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Check if debtor exists
+    const debtor = await this.prisma.debtor.findUnique({
+      where: { id: loan.debtorId, deletedAt: null }
+    });
+
+    if (!debtor) {
+      throw new NotFoundException('Debtor not found');
+    }
+
+    // Check if the contact exists and belongs to this debtor
+    const existingContact = await this.prisma.debtorContact.findUnique({
+      where: {
+        id: contactId,
+        debtorId: debtor.id,
+        deletedAt: null
+      }
+    });
+
+    if (!existingContact) {
+      throw new NotFoundException('Contact not found');
+    }
+
+    // If this is marked as primary, update other contacts to not be primary
+    if (createContactDto.isPrimary) {
+      await this.prisma.debtorContact.updateMany({
+        where: {
+          debtorId: debtor.id,
+          id: { not: contactId },
+          deletedAt: null
+        },
+        data: { isPrimary: false }
+      });
+    }
+
+    // Update the existing contact
+    await this.prisma.debtorContact.update({
+      where: { id: contactId },
+      data: {
+        typeId: createContactDto.typeId,
+        value: createContactDto.value,
+        labelId: createContactDto.labelId,
+        isPrimary: createContactDto.isPrimary || false,
+        notes: createContactDto.notes,
+        updatedAt: new Date(),
+        // Don't update userId - keep the original creator, or add updatedBy field if you have one
+      },
+      include: {
+        ContactType: { select: { id: true, name: true } },
+        ContactLabel: { select: { id: true, name: true } },
+        User: { select: { id: true, firstName: true, lastName: true } }
+      }
+    });
+
+    return { message: 'Debtor contact updated successfully' };
+  }
+
   async addLoanAttributes(publicId: ParseUUIDPipe, addLoanAttributesDto: AddLoanAttributesDto, userId: number) {
     // 1. Check if loan exists
     const loan = await this.prisma.loan.findFirst({

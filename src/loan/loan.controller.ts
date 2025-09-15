@@ -57,6 +57,20 @@ export class LoanController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Patch(':publicId/debtor/contacts/:contactId')
+  editDebtorContact(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Param('contactId', ParseIntPipe) contactId: number,
+    @Body() createContactDto: CreateContactDto
+  ) {
+    return this.loanService.editDebtorContact(publicId, contactId, createContactDto, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Post('/:publicId/loan-attributes')
@@ -215,4 +229,3 @@ export class LoanController {
     return this.loanService.addLoanLitigationStage(publicId, data, user.id);
   }
 }
-//for testing
