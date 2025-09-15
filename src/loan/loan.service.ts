@@ -153,7 +153,9 @@ export class LoanService {
                 ContactType: { select: { name: true } },
                 ContactLabel: { select: { name: true } },
               },
-            }
+            },
+            DebtorRealEstate: true,
+            DebtorGuarantors: true,
           }
         },
         LoanStatus: {
@@ -280,7 +282,8 @@ export class LoanService {
         LoanRemaining: {
           where: { deletedAt: null },
         },
-        Transaction: true
+        Transaction: true,
+        PaymentCommitment: true
       }
     });
 
