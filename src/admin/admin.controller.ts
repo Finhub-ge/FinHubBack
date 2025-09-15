@@ -210,4 +210,18 @@ export class AdminController {
   async getCharges() {
     return await this.adminService.getCharges();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('portfolios')
+  async getPortfolios() {
+    return await this.adminService.getPortfolios();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('portfolioSellers')
+  async getPortfolioSellers() {
+    return await this.adminService.getPortfolioSellers();
+  }
 }

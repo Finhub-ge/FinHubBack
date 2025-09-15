@@ -620,4 +620,16 @@ export class AdminService {
       }
     })
   }
+
+  async getPortfolios() {
+    return await this.prisma.portfolio.findMany({
+      where: { deletedAt: null }
+    });
+  }
+
+  async getPortfolioSellers() {
+    return await this.prisma.portfolioSeller.findMany({
+      where: { deletedAt: null, active: '1' }
+    });
+  }
 }

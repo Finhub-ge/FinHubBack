@@ -37,6 +37,11 @@ export class LoanService {
         Portfolio: {
           select: {
             name: true,
+            portfolioSeller: {
+              select: {
+                name: true,
+              }
+            }
           }
         },
         Debtor: {

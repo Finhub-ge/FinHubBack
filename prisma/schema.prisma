@@ -292,20 +292,23 @@ model PaymentSchedule {
 }
 
 model Portfolio {
-  id            Int       @id @default(autoincrement())
-  name          String
-  purchasePrice Decimal   @db.Decimal(12, 2)
-  purchaseDate  DateTime  @db.Date
-  bankName      String
-  notes         String?
-  createdAt     DateTime  @default(now()) @db.DateTime(0)
-  updatedAt     DateTime  @default(now()) @db.DateTime(0)
-  deletedAt     DateTime? @db.DateTime(0)
-  Loan          Loan[]
+  id              Int              @id @default(autoincrement())
+  name            String
+  purchasePrice   Decimal          @db.Decimal(12, 2)
+  purchaseDate    DateTime         @db.Date
+  bankName        String
+  sellerId        Int?
+  notes           String?
+  createdAt       DateTime         @default(now()) @db.DateTime(0)
+  updatedAt       DateTime         @default(now()) @db.DateTime(0)
+  deletedAt       DateTime?        @db.DateTime(0)
+  Loan            Loan[]
+  portfolioSeller portfolioSeller? @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
 
   @@index([deletedAt])
   @@index([name])
   @@index([purchaseDate])
+  @@index([sellerId], map: "fk_Portfolio_sellerId_1_idx")
 }
 
 model Role {
@@ -424,12 +427,13 @@ model User {
 }
 
 model portfolioSeller {
-  id        Int       @id @default(autoincrement())
-  name      String?   @db.VarChar(45)
-  active    String?   @default("1") @db.VarChar(45)
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
+  id        Int         @id @default(autoincrement())
+  name      String?     @db.VarChar(45)
+  active    String?     @default("1") @db.VarChar(45)
+  createdAt DateTime    @default(now()) @db.DateTime(0)
+  updatedAt DateTime    @default(now()) @db.DateTime(0)
+  deletedAt DateTime?   @db.DateTime(0)
+  Portfolio Portfolio[]
 }
 
 model Tasks {
