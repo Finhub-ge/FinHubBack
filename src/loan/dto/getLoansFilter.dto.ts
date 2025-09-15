@@ -4,6 +4,16 @@ import { IsOptional } from "class-validator";
 
 export class GetLoansFilterDto {
     @ApiProperty({
+        description: 'Search by case ID',
+        example: '213123',
+        required: false,
+        type: Number
+    })
+    @IsOptional()
+    @Transform(({ value }) => value ? Number(value) : undefined)
+    caseId?: number;
+
+    @ApiProperty({
         description: 'Filter by portfolio IDs',
         example: '1,2,3',
         required: false,
