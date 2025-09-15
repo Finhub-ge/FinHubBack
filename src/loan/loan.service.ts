@@ -33,6 +33,7 @@ export class LoanService {
   async getAll(filters: GetLoansFilterDto) {
     const where: any = { deletedAt: null };
 
+    if (filters.caseId) where.caseId = filters.caseId;
     if (filters.portfolio?.length) where.portfolioId = { in: filters.portfolio };
     if (filters.loanstatus?.length) where.statusId = { in: filters.loanstatus };
 
