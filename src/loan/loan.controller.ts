@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -21,6 +21,7 @@ import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
+import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 
 
 @ApiTags('Loans')
@@ -32,8 +33,8 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Get()
-  getAll() {
-    return this.loanService.getAll();
+  getAll(@Query() filters: GetLoansFilterDto) {
+    return this.loanService.getAll(filters);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
