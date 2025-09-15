@@ -73,9 +73,6 @@ export class PaymentsHelper {
         Loan: {
           publicId: publicId
         },
-        // Add any additional filters if needed (e.g., transaction status, date range)
-        // status: 'COMPLETED',
-        // deletedAt: null,
       },
       _sum: {
         amount: true,
@@ -89,14 +86,12 @@ export class PaymentsHelper {
 
     const paymentTotals = {
       totalPayments: totals._sum.amount || 0,
+      paidPrincipal: totals._sum.principal || 0,
       paidInterest: totals._sum.interest || 0,
       paidPenalty: totals._sum.penalty || 0,
       paidOtherFee: totals._sum.fees || 0,
       paidLegalCharges: totals._sum.legal || 0,
     };
-
-    // Calculate total payments
-    // paymentTotals.totalPayments = Object.values(paymentTotals).reduce((sum, value) => sum + value, 0);
 
     return paymentTotals;
   }
