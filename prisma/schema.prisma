@@ -77,6 +77,8 @@ model Debtor {
   idNumber            String?               @db.VarChar(45)
   DebtorStatus        DebtorStatus          @relation(fields: [statusId], references: [id])
   DebtorContact       DebtorContact[]
+  DebtorGuarantors    DebtorGuarantors[]
+  DebtorRealEstate    DebtorRealEstate[]
   DebtorStatusHistory DebtorStatusHistory[]
   Loan                Loan[]
 
@@ -188,6 +190,7 @@ model Loan {
   LoanMarks             LoanMarks[]
   LoanRemaining         LoanRemaining[]
   LoanStatusHistory     LoanStatusHistory[]
+  PastPayments          PastPayments[]
   PaymentCommitment     PaymentCommitment[]
   SmsHistory            SmsHistory[]
   Tasks                 Tasks[]
@@ -726,6 +729,57 @@ model Charges {
   @@index([chargeTypeId], map: "fk_Charges_4_idx")
   @@index([deletedAt], map: "idx_deletedAt")
   @@index([channelId], map: "fk_Charges_5_idx")
+}
+
+model PastPayments {
+  id          Int       @id @default(autoincrement())
+  loanId      Int?
+  paymentDate DateTime? @db.DateTime(0)
+  payment     Decimal?  @db.Decimal(12, 2)
+  principal   Decimal?  @db.Decimal(12, 2)
+  interest    Decimal?  @db.Decimal(12, 2)
+  penalty     Decimal?  @db.Decimal(12, 2)
+  otherFee    Decimal?  @db.Decimal(12, 2)
+  currency    String?   @db.VarChar(45)
+  comment     String?   @db.VarChar(500)
+  createdAt   DateTime  @default(now()) @db.DateTime(0)
+  updatedAt   DateTime  @default(now()) @db.DateTime(0)
+  deletedAt   DateTime? @db.DateTime(0)
+  Loan        Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_PastPayments_1")
+
+  @@index([loanId], map: "fk_PastPayments_1_idx")
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
+model DebtorRealEstate {
+  id            Int       @id @default(autoincrement())
+  debtorId      Int
+  address       String?
+  cadastralCode String?   @db.VarChar(50)
+  description   String?
+  createdAt     DateTime  @default(now()) @db.DateTime(0)
+  updatedAt     DateTime  @default(now()) @db.DateTime(0)
+  deletedAt     DateTime? @db.DateTime(0)
+  Debtor        Debtor    @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorRealEstate_1")
+
+  @@index([debtorId], map: "fk_DebtorRealEstate_1")
+}
+
+model DebtorGuarantors {
+  id        Int       @id @default(autoincrement())
+  debtorId  Int
+  firstName String
+  lastName  String
+  phone     String?
+  mobile    String?
+  address   String?
+  idNumber  String?   @db.VarChar(45)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  Debtor    Debtor    @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorGuarantors_1")
+
+  @@index([debtorId], map: "fk_DebtorGuarantors_1")
 }
 
 enum PaymentCommitment_type {
