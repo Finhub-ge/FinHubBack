@@ -5,5 +5,15 @@ export enum Role {
   LAWYER = 'lawyer',
   ACCOUNTANT = 'accountant',
   COURIER = 'courier',
-  JUNIOR_LAWYER = 'junior_lawyer',
+
+  AML_OFFICER = 'AML Officer',
+  ANALYTICS = 'Analytics',
+  HR = 'HR',
+  GENERAL_MANAGER = 'general manager',
+  PERSONAL_DATA_PROTECTION_OFFICER = 'Personal Data Protection Officer',
+  SUPER_LAWYER = 'Super Lawyer',
+  JUNIOR_LAWYER = 'Junior Lawyer',
+  CONTROLLER = 'Controller',
+  ANALYST = 'Analyst',
+  OPERATIONAL_MANAGER = 'Operational Manager',
 }
