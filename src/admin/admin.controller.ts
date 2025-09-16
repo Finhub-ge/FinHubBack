@@ -224,4 +224,11 @@ export class AdminController {
   async getPortfolioSellers() {
     return await this.adminService.getPortfolioSellers();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('file/:id')
+  async downloadFile(@Param('id') id: number) {
+    return await this.adminService.downloadFile(id)
+  }
 }

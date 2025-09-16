@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 @Injectable()
 export class S3Helper {
@@ -18,22 +19,33 @@ export class S3Helper {
     async upload(
         file: Buffer,
         fileName: string,
-        bucketName: string = process.env.AWS_S3_BUCKET,
         contentType?: string
-    ): Promise<string> {
+    ): Promise<void> {
         try {
             const command = new PutObjectCommand({
-                Bucket: bucketName,
+                Bucket: process.env.AWS_S3_BUCKET,
                 Key: fileName,
                 Body: file,
                 ContentType: contentType,
             });
 
             await this.s3Client.send(command);
-
-            return `https://${bucketName}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${fileName}`;
         } catch (error) {
             throw new Error(`Failed to upload file to S3: ${error.message}`);
+        }
+    }
+
+    async getSignedUrl(fileKey: string, expiresIn = 60): Promise<string> {
+        try {
+            const command = new GetObjectCommand({
+                Bucket: process.env.AWS_S3_BUCKET,
+                Key: fileKey,
+            });
+
+            const url = await getSignedUrl(this.s3Client, command, { expiresIn });
+            return url;
+        } catch (error: any) {
+            throw new Error(`Failed to generate signed URL: ${error.message}`);
         }
     }
 }

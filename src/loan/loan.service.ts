@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, Injectable, InternalServerErrorException, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
@@ -8,18 +8,17 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, SmsHistory_status, User } from '@prisma/client';
+import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
-import { S3Helper } from 'src/helpers/s3.helper';
-import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
+import { UploadsHelper } from 'src/helpers/upload.helper';
 
 @Injectable()
 export class LoanService {
@@ -27,7 +26,7 @@ export class LoanService {
     private prisma: PrismaService,
     private readonly paymentsHelper: PaymentsHelper,
     private readonly utilsHelper: UtilsHelper,
-    private readonly s3Helper: S3Helper
+    private readonly uploadsHelper: UploadsHelper
   ) { }
 
   async getAll(filters: GetLoansFilterDto) {
@@ -250,6 +249,12 @@ export class LoanService {
                 lastName: true,
                 Role: true
               }
+            },
+            Uploads: {
+              select: {
+                id: true,
+                originalFileName: true,
+              }
             }
           },
           orderBy: { createdAt: 'desc' }
@@ -287,8 +292,13 @@ export class LoanService {
             responseText: true,
             responseDate: true,
             agreementMinAmount: true,
-            attachmentPath: true,
             status: true,
+            Uploads: {
+              select: {
+                id: true,
+                originalFileName: true,
+              }
+            }
           }
         },
         LoanMarks: {
@@ -666,7 +676,7 @@ export class LoanService {
     throw new HttpException('Loan attribute added successfully', 200);
   }
 
-  async addComment(publicId: ParseUUIDPipe, addCommentDto: AddCommentDto, userId: number) {
+  async addComment(publicId: ParseUUIDPipe, addCommentDto: AddCommentDto, userId: number, file?: Express.Multer.File) {
     // Check if loan exists
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null }
@@ -676,12 +686,19 @@ export class LoanService {
       throw new NotFoundException('Loan not found');
     }
 
+    let upload = null;
+
+    if (file) {
+      upload = await this.uploadsHelper.uploadFile(file, `loans/${loan.id}/comments`);
+    }
+
     // Create the comment
     await this.prisma.comments.create({
       data: {
         loanId: loan.id,
         userId,
         comment: addCommentDto.comment,
+        uploadId: upload?.id,
       },
       include: {
         User: { select: { id: true, firstName: true, lastName: true } }
@@ -960,23 +977,10 @@ export class LoanService {
       throw new NotFoundException('Loan not found');
     }
 
-    let fileUrl: string | undefined;
-    // TODO: Uncomment this when we have a way to upload files to S3
-    if (file) {
-      const fileKey = `loans/${loan.id}/committee/${file.originalname}`;
-      const contentType = file.mimetype || 'application/octet-stream';
+    let upload = null;
 
-      try {
-        fileUrl = await this.s3Helper.upload(
-          file.buffer,
-          fileKey,
-          process.env.AWS_S3_BUCKET,
-          contentType
-        );
-      } catch (err) {
-        console.log(`S3 upload failed for loan ${loan.id}`, err);
-        throw new InternalServerErrorException('File upload failed');
-      }
+    if (file) {
+      upload = await this.uploadsHelper.uploadFile(file, `loans/${loan.id}/committee`);
     }
 
     await this.prisma.committee.create({
@@ -989,7 +993,7 @@ export class LoanService {
         agreementMinAmount: createCommitteeDto.agreementMinAmount,
         type: Committee_type.none,
         status: Committee_status.pending,
-        attachmentPath: fileUrl,
+        uploadId: upload?.id,
       },
     });
 

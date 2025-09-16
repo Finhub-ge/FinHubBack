@@ -13,6 +13,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { CreateChargeDto } from "./dto/create-charge.dto";
+import { S3Helper } from "src/helpers/s3.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -21,7 +22,8 @@ dayjs.extend(timezone);
 export class AdminService {
   constructor(
     private prisma: PrismaService,
-    private paymentHelper: PaymentsHelper
+    private paymentHelper: PaymentsHelper,
+    private s3Helper: S3Helper
   ) { }
 
   async getDebtorContactTypes() {
@@ -631,5 +633,21 @@ export class AdminService {
     return await this.prisma.portfolioSeller.findMany({
       where: { deletedAt: null, active: '1' }
     });
+  }
+
+  async downloadFile(uploadId: number, expiresInSeconds = 3600) {
+    // 1. Fetch upload info from DB
+    const upload = await this.prisma.uploads.findUnique({
+      where: { id: uploadId },
+    });
+
+    if (!upload) {
+      throw new HttpException('File not found', 404);
+    }
+
+    // 2. Generate signed URL via S3Helper
+    const signedUrl = await this.s3Helper.getSignedUrl(upload.filePath, expiresInSeconds);
+
+    return signedUrl;
   }
 }
