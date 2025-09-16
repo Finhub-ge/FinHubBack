@@ -21,14 +21,17 @@ model Comments {
   loanId    Int
   userId    Int
   comment   String?   @db.Text
+  uploadId  Int?
   createdAt DateTime  @default(now()) @db.DateTime(0)
   updatedAt DateTime  @default(now()) @db.DateTime(0)
   deletedAt DateTime? @db.DateTime(0)
   Loan      Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
   User      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
+  Uploads   Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_3")
 
   @@index([loanId], map: "fk_comments_1_idx")
   @@index([userId], map: "fk_comments_2_idx")
+  @@index([uploadId], map: "fk_comments_3")
 }
 
 model ContactLabel {
@@ -529,7 +532,7 @@ model Committee {
   responseText                     String?          @db.VarChar(500)
   responseDate                     DateTime?        @db.DateTime(0)
   agreementMinAmount               Decimal?         @db.Decimal(12, 2)
-  attachmentPath                   String?          @db.VarChar(255)
+  uploadId                         Int?
   type                             Committee_type   @default(none)
   status                           Committee_status @default(pending)
   createdAt                        DateTime         @default(now()) @db.DateTime(0)
@@ -538,10 +541,12 @@ model Committee {
   Loan                             Loan             @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_committee_1")
   User_Committee_requesterIdToUser User             @relation("Committee_requesterIdToUser", fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_committee_2")
   User_Committee_responderIdToUser User?            @relation("Committee_responderIdToUser", fields: [responderId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_committee_3")
+  Uploads                          Uploads?         @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_committee_upload_4")
 
   @@index([loanId], map: "idx_committee_1")
   @@index([requesterId], map: "idx_committee_2")
   @@index([responderId], map: "idx_committee_3")
+  @@index([uploadId], map: "fk_committee_upload_4")
 }
 
 model Marks {
@@ -784,6 +789,20 @@ model DebtorGuarantors {
   Debtor    Debtor    @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorGuarantors_1")
 
   @@index([debtorId], map: "fk_DebtorGuarantors_1")
+}
+
+model Uploads {
+  id               Int         @id @default(autoincrement())
+  originalFileName String      @db.VarChar(255)
+  filePath         String      @db.VarChar(1024)
+  sizeBytes        BigInt?     @db.UnsignedBigInt
+  createdAt        DateTime    @default(now()) @db.DateTime(0)
+  updatedAt        DateTime    @default(now()) @db.DateTime(0)
+  deletedAt        DateTime?   @db.DateTime(0)
+  Comments         Comments[]
+  Committee        Committee[]
+
+  @@index([filePath(length: 768)], map: "idx_filePath")
 }
 
 enum PaymentCommitment_type {

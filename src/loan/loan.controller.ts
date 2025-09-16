@@ -16,7 +16,6 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
-import { CreateMarksDto } from '../admin/dto/createMarks.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
@@ -97,15 +96,18 @@ export class LoanController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiConsumes('multipart/form-data')
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
   @Post('/:publicId/comment')
+  @UseInterceptors(FileInterceptor('attachment'))
   addComment(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
-    @Body() addCommentDto: AddCommentDto
+    @Body() addCommentDto: AddCommentDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.loanService.addComment(publicId, addCommentDto, user.id);
+    return this.loanService.addComment(publicId, addCommentDto, user.id, file);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
