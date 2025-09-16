@@ -345,7 +345,25 @@ export class LoanService {
           where: { deletedAt: null },
         },
         Transaction: true,
-        PaymentCommitment: true
+        PaymentCommitment: true,
+        LoanAssignment: {
+          where: { isActive: true },
+          select: {
+            createdAt: true,
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+            Role: {
+              select: {
+                name: true,
+              }
+            }
+          },
+        },
       }
     });
 
