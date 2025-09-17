@@ -259,7 +259,32 @@ export class LoanService {
           },
           orderBy: { createdAt: 'desc' }
         },
-        Tasks: true,
+        Tasks: {
+          select: {
+            id: true,
+            loanId: true,
+            task: true,
+            response: true,
+            fromUser: true,
+            toUserId: true,
+            deadline: true,
+            status: true,
+            createdAt: true,
+            User_Tasks_fromUserToUser: {
+              select: {
+                firstName: true,
+                lastName: true,
+              }
+            },
+            User_Tasks_toUserIdToUser: {
+              select: {
+                firstName: true,
+                lastName: true,
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
         SmsHistory: {
           select: {
             id: true,
