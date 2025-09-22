@@ -254,7 +254,7 @@ export class LoanController {
 
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: `attachment; filename="schedule_${caseId}.pdf"`,
+      disposition: `inline; filename="schedule_${caseId}.pdf"`,
       length: buffer.length,
     });
   }
