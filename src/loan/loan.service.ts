@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { logAssignmentHistory } from 'src/helpers/loan.helper';
+import { getPaymentSchedule, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -19,6 +19,7 @@ import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
+import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 
 @Injectable()
 export class LoanService {
@@ -26,7 +27,7 @@ export class LoanService {
     private prisma: PrismaService,
     private readonly paymentsHelper: PaymentsHelper,
     private readonly utilsHelper: UtilsHelper,
-    private readonly uploadsHelper: UploadsHelper
+    private readonly uploadsHelper: UploadsHelper,
   ) { }
 
   async getAll(filters: GetLoansFilterDto) {
@@ -396,24 +397,7 @@ export class LoanService {
       throw new NotFoundException('Loan not found');
     }
 
-    const activeCommitments = await this.prisma.paymentCommitment.findMany({
-      where: { loanId: loan.id, isActive: 1 },
-      select: {
-        id: true,
-        amount: true,
-        paymentDate: true,
-        type: true,
-        comment: true,
-        isActive: true,
-        PaymentSchedule: {
-          select: {
-            id: true,
-            paymentDate: true,
-            amount: true,
-          },
-        },
-      },
-    });
+    const activeCommitments = await getPaymentSchedule(loan.id);
 
     let comments = loan.Comments;
     let lawyerComments = [];
@@ -1214,6 +1198,27 @@ export class LoanService {
 
     return {
       message: 'Loan litigation stage added successfully'
+    };
+  }
+
+  async downloadSchedulePdfBuffer(publicId: ParseUUIDPipe): Promise<{ buffer: Buffer, caseId: number }> {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+    //Get commitments with payment schedules & balances
+    const commitments = await getPaymentSchedule(loan.id);
+
+    //Generate HTML
+    const html = getPaymentScheduleHtml(loan.id, commitments);
+
+    //Convert HTML → PDF and return buffer
+    const pdfBuffer = await generatePdfFromHtml(html);
+    return {
+      buffer: pdfBuffer,
+      caseId: loan.caseId,
     };
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -244,6 +244,20 @@ export class LoanController {
   ) {
     return this.loanService.addLoanLitigationStage(publicId, data, user.id);
   }
-}
 
-//for testing
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Get(':publicId/schedulePdf')
+  async downloadSchedulePdf(@Param('publicId') publicId: ParseUUIDPipe,) {
+    const { buffer, caseId } = await this.loanService.downloadSchedulePdfBuffer(publicId);
+    const file = new StreamableFile(buffer);
+    file['headers'] = {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="schedule_${caseId}.pdf"`,
+      'Content-Length': buffer.length.toString(),
+    };
+
+    return file;
+  }
+}
