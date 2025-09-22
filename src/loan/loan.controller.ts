@@ -251,13 +251,11 @@ export class LoanController {
   @Get(':publicId/schedulePdf')
   async downloadSchedulePdf(@Param('publicId') publicId: ParseUUIDPipe,) {
     const { buffer, caseId } = await this.loanService.downloadSchedulePdfBuffer(publicId);
-    const file = new StreamableFile(buffer);
-    file['headers'] = {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="schedule_${caseId}.pdf"`,
-      'Content-Length': buffer.length.toString(),
-    };
 
-    return file;
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="schedule_${caseId}.pdf"`,
+      length: buffer.length,
+    });
   }
 }
