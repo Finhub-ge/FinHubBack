@@ -20,6 +20,7 @@ import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
+import { PermissionsHelper } from 'src/helpers/permissions.helper';
 
 @Injectable()
 export class LoanService {
@@ -28,6 +29,7 @@ export class LoanService {
     private readonly paymentsHelper: PaymentsHelper,
     private readonly utilsHelper: UtilsHelper,
     private readonly uploadsHelper: UploadsHelper,
+    private readonly permissionsHelper: PermissionsHelper
   ) { }
 
   async getAll(filters: GetLoansFilterDto) {
@@ -63,7 +65,7 @@ export class LoanService {
       where.LoanMarks = { some: { Marks: { id: { in: filters.marks } } } };
     }
 
-    const loans = await this.prisma.loan.findMany({
+    const loans = await this.permissionsHelper.loan.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -151,7 +153,7 @@ export class LoanService {
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
-    const loan = await this.prisma.loan.findUnique({
+    const loan = await this.permissionsHelper.loan.findUnique({
       where: {
         publicId: String(publicId),
         deletedAt: null
