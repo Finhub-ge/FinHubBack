@@ -1212,7 +1212,7 @@ export class LoanService {
     const commitments = await getPaymentSchedule(loan.id);
 
     //Generate HTML
-    const html = getPaymentScheduleHtml(loan.id, commitments);
+    const html = getPaymentScheduleHtml(loan, commitments);
 
     //Convert HTML → PDF and return buffer
     const pdfBuffer = await generatePdfFromHtml(html);
