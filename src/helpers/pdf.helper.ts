@@ -1,39 +1,61 @@
+import { Loan } from '@prisma/client';
 import * as pdf from 'html-pdf';
 
-export const getPaymentScheduleHtml = (loanId: number, commitments: any) => {
+export const getPaymentScheduleHtml = (loan: Loan, commitments: any) => {
     const html = `
       <html>
         <head>
           <style>
-            body { font-family: Arial, sans-serif; }
-            h1 { text-align: center; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-            th { background: #f2f2f2; }
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .header h1 { margin: 0; font-size: 24px; color: #333; }
+            .case-info { margin-bottom: 20px; }
+            .case-info p { margin: 5px 0; font-size: 14px; color: #555; }
+            .schedule-section { margin-bottom: 30px; }
+            .schedule-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+            th { background: #f2f2f2; font-weight: bold; }
+            .amount { text-align: right; }
           </style>
         </head>
         <body>
-          <h1>Payment Schedule for Loan #${loanId}</h1>
+          <div class="header">
+            <h2>Payment Statement</h2>
+          </div>
+          
+          <div class="case-info">
+            <p><strong>Case:</strong> ${loan.caseId}</p>
+          </div>
+
           ${commitments
             .map(
                 (c) => `
-              <h2>Commitment ID: ${c.id} (Amount: ${c.amount})</h2>
-              <table>
-                <tr>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Balance</th>
-                </tr>
-                ${c.PaymentSchedule.map(
-                    (s) => `
+              <div class="schedule-section">
+                <p><strong>Total Amount:</strong> ${parseFloat(c.amount).toFixed(2)} ${loan.currency}</p>
+                
+                <div class="schedule-title">Statement Details:</div>
+                <table>
                   <tr>
-                    <td>${new Date(s.paymentDate).toLocaleDateString()}</td>
-                    <td>${s.amount}</td>
-                    <td>${s.balance}</td>
+                    <th>Payment Date</th>
+                    <th>Payment Amount</th>
+                    <th>Remaining Balance</th>
                   </tr>
-                `,
+                    ${c.PaymentSchedule.map(
+                    (s) => {
+                        const date = new Date(s.paymentDate);
+                        const formattedDate = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
+                        return `
+                        <tr>
+                            <td>${formattedDate}</td>
+                            <td class="amount">${parseFloat(s.amount).toFixed(2)} ${c.currency || 'GEL'}</td>
+                            <td class="amount">${parseFloat(s.balance).toFixed(2)} ${c.currency || 'GEL'}</td>
+                        </tr>
+                        `;
+                    }
                 ).join('')}
-              </table>
+                </table>
+              </div>
             `,
             )
             .join('')}
