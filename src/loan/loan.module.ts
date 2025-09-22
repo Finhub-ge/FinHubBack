@@ -8,11 +8,12 @@ import { UtilsHelper } from 'src/helpers/utils.helper';
 import { HttpModule } from '@nestjs/axios';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { S3Helper } from 'src/helpers/s3.helper';
+import { PermissionsHelper } from 'src/helpers/permissions.helper';
 
 @Module({
   imports: [JwtModule.register({}), HttpModule],
   controllers: [LoanController],
-  providers: [LoanService, JwtStrategy, PaymentsHelper, UtilsHelper, UploadsHelper, S3Helper],
+  providers: [LoanService, JwtStrategy, PaymentsHelper, UtilsHelper, UploadsHelper, S3Helper, PermissionsHelper],
   exports: [LoanService]
 })
 export class LoanModule { }
