@@ -202,11 +202,12 @@ export class LoanService {
               select: {
                 id: true,
                 value: true,
-                isPrimary: true,
                 notes: true,
+                labelId: true,
                 ContactType: { select: { name: true } },
                 ContactLabel: { select: { name: true } },
               },
+              orderBy: { labelId: 'asc' }
             },
             DebtorRealEstate: true,
             DebtorGuarantors: true,
@@ -484,17 +485,6 @@ export class LoanService {
       throw new NotFoundException('Debtor not found');
     }
 
-    // If this is marked as primary, update other contacts to not be primary
-    if (createContactDto.isPrimary) {
-      await this.prisma.debtorContact.updateMany({
-        where: {
-          debtorId: debtor.id,
-          deletedAt: null
-        },
-        data: { isPrimary: false }
-      });
-    }
-
     // Create the new contact
     await this.prisma.debtorContact.create({
       data: {
@@ -502,7 +492,7 @@ export class LoanService {
         typeId: createContactDto.typeId,
         value: createContactDto.value,
         labelId: createContactDto.labelId,
-        isPrimary: createContactDto.isPrimary || false,
+        isPrimary: createContactDto.labelId === 1 ? true : createContactDto.isPrimary || false,
         notes: createContactDto.notes,
         userId: userId
       },
