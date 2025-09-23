@@ -1,30 +1,21 @@
 {
-    "workbench.editor.enablePreviewFromCodeNavigation": true,
-    "editor.codeActionsOnSave": {
-        "source.fixAll.eslint": "explicit"
-    },
-    "eslint.run": "onSave",
-    "[json]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
-    "[typescript]": {
-        "editor.defaultFormatter": "vscode.typescript-language-features"
-    },
-    "editor.bracketPairColorization.enabled": true,
-    "typescript.updateImportsOnFileMove.enabled": "always",
-    "prettier.requireConfig": true,
-    "editor.formatOnSave": true,
-    "editor.autoClosingBrackets": "always",
-    "workbench.editor.enablePreview": false,
-    "workbench.editor.splitInGroupLayout": "vertical",
-    "git.enableSmartCommit": true,
-    "git.autofetch": true,
-    "git.confirmSync": false,
-    "editor.unicodeHighlight.nonBasicASCII": false,
-    "diffEditor.ignoreTrimWhitespace": false,
-    "editor.fontSize": 12,
-    "files.watcherExclude": {
-        "**/node_modules/**": true
-    },
-    "javascript.updateImportsOnFileMove.enabled": "always"
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "[typescript]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[javascript]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[json]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  }
 }
