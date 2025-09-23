@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/createUser.dto";
+import { EditUserDto } from "./dto/editUser.dto";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
@@ -42,5 +43,13 @@ export class UserController {
   @Get(':roleId')
   getUsersByRoleId(@Param('roleId') roleId: string) {
     return this.userService.getUsersByRoleId(roleId)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiParam({ name: 'userId', type: 'number' })
+  @Patch(':userId')
+  editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
+    return this.userService.editUser(userId, data)
   }
 }

@@ -398,6 +398,7 @@ model User {
   firstName                                                   String
   lastName                                                    String
   hash                                                        String
+  isActive                                                    Boolean                 @default(true)
   roleId                                                      Int
   mustChangePassword                                          Boolean                 @default(true)
   createdAt                                                   DateTime                @default(now()) @db.DateTime(0)
@@ -419,6 +420,7 @@ model User {
   PaymentCommitment                                           PaymentCommitment[]
   Tasks_Tasks_fromUserToUser                                  Tasks[]                 @relation("Tasks_fromUserToUser")
   Tasks_Tasks_toUserIdToUser                                  Tasks[]                 @relation("Tasks_toUserIdToUser")
+  TeamMembership                                              TeamMembership[]
   Transaction                                                 Transaction[]
   TransactionDeleted                                          TransactionDeleted[]
   Role                                                        Role                    @relation(fields: [roleId], references: [id])
@@ -805,6 +807,33 @@ model Uploads {
   @@index([filePath(length: 768)], map: "idx_filePath")
 }
 
+model Team {
+  id             Int              @id @default(autoincrement())
+  name           String           @db.VarChar(255)
+  description    String?          @db.VarChar(255)
+  createdAt      DateTime         @default(now()) @db.DateTime(0)
+  updatedAt      DateTime         @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?        @db.DateTime(0)
+  TeamMembership TeamMembership[]
+}
+
+model TeamMembership {
+  id        Int                     @id @default(autoincrement())
+  teamId    Int
+  userId    Int
+  teamRole  TeamMembership_teamRole @default(member)
+  joinedAt  DateTime                @default(now()) @db.DateTime(0)
+  createdAt DateTime                @default(now()) @db.DateTime(0)
+  updatedAt DateTime                @default(now()) @db.DateTime(0)
+  deletedAt DateTime?               @db.DateTime(0)
+  Team      Team                    @relation(fields: [teamId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_TeamMemberships_1")
+  User      User                    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_TeamMemberships_2")
+
+  @@unique([teamId, userId, deletedAt], map: "unique_active_membership")
+  @@index([teamId], map: "fk_TeamMemberships_1")
+  @@index([userId], map: "fk_TeamMemberships_2")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -842,4 +871,9 @@ enum Committee_status {
 enum Templates_type {
   court
   email
+}
+
+enum TeamMembership_teamRole {
+  leader
+  member
 }
