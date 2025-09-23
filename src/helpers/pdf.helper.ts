@@ -1,5 +1,5 @@
 import { Loan } from '@prisma/client';
-import * as htmlPdf from 'html-pdf-node';
+import * as wkhtmltopdf from 'wkhtmltopdf';
 
 export const getPaymentScheduleHtml = (loan: Loan, commitments: any) => {
     const html = `
@@ -67,7 +67,17 @@ export const getPaymentScheduleHtml = (loan: Loan, commitments: any) => {
 }
 
 export const generatePdfFromHtml = async (html: string): Promise<Buffer> => {
-    const file = { content: html };
-    const pdfBuffer = await htmlPdf.generatePdf(file, { format: 'A4' });
-    return pdfBuffer;
+    try {
+        const options = {
+            pageSize: 'A4',
+            encoding: 'UTF-8',
+            disableSmartShrinking: true,
+            printMediaType: true,
+        };
+
+        const pdfBuffer = await wkhtmltopdf(html, options);
+        return pdfBuffer;
+    } catch (error) {
+        throw new Error(`PDF generation failed: ${error.message}`);
+    }
 };
