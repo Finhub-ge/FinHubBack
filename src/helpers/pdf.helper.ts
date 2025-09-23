@@ -1,5 +1,5 @@
 import { Loan } from '@prisma/client';
-import puppeteer from "puppeteer";
+import * as htmlPdf from 'html-pdf-node';
 
 export const getPaymentScheduleHtml = (loan: Loan, commitments: any) => {
     const html = `
@@ -67,27 +67,7 @@ export const getPaymentScheduleHtml = (loan: Loan, commitments: any) => {
 }
 
 export const generatePdfFromHtml = async (html: string): Promise<Buffer> => {
-    const browser = await puppeteer.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    const page = await browser.newPage();
-
-    // Set HTML content
-    await page.setContent(html, { waitUntil: "networkidle0" });
-
-    // Generate PDF
-    const buffer = await page.pdf({
-        format: "A4",
-        margin: {
-            top: "10mm",
-            right: "10mm",
-            bottom: "10mm",
-            left: "10mm",
-        },
-        printBackground: true,
-    });
-
-    await browser.close();
-    return Buffer.from(buffer);
+    const file = { content: html };
+    const pdfBuffer = await htmlPdf.generatePdf(file, { format: 'A4' });
+    return pdfBuffer;
 };
