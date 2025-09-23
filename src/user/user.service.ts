@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { PrismaService } from "src/prisma/prisma.service";
 import { CreateUserDto } from "./dto/createUser.dto";
+import { EditUserDto } from "./dto/editUser.dto";
 import { randomUUID } from "crypto";
 import * as argon from 'argon2';
 import { generateAccountId } from "src/helpers/accountId.helper";
@@ -40,6 +41,17 @@ export class UserService {
         },
       );
 
+      // Create team membership if team_id exists
+      if (data.team_id) {
+        await this.prisma.teamMembership.create({
+          data: {
+            userId: user.id,
+            teamId: data.team_id,
+            teamRole: data.team_role || 'member'
+          }
+        });
+      }
+
       // send to email
       return {
         email: user.email,
@@ -67,8 +79,26 @@ export class UserService {
         id: true,
         name: true,
         User: {
+          where: {
+            deletedAt: null,
+            isActive: true
+          },
           select: {
-            firstName: true
+            firstName: true,
+            lastName: true,
+            TeamMembership: {
+              select: {
+                id: true,
+                teamId: true,
+                teamRole: true,
+                Team: {
+                  select: {
+                    name: true,
+                    description: true
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -106,8 +136,22 @@ export class UserService {
         lastName: true,
         mustChangePassword: true,
         roleId: true,
+        isActive: true,
         updatedAt: true,
-        Role: true
+        Role: true,
+        TeamMembership: {
+          select: {
+            id: true,
+            teamId: true,
+            teamRole: true,
+            Team: {
+              select: {
+                name: true,
+                description: true
+              }
+            }
+          }
+        }
       }
     });
   }
@@ -115,7 +159,9 @@ export class UserService {
   async getUsersByRoleId(roleId: string) {
     return await this.prisma.user.findMany({
       where: {
-        roleId: Number(roleId)
+        roleId: Number(roleId),
+        isActive: true,
+        deletedAt: null
       },
       select: {
         id: true,
@@ -128,8 +174,69 @@ export class UserService {
         mustChangePassword: true,
         roleId: true,
         updatedAt: true,
-        Role: true
+        Role: true,
+        TeamMembership: {
+          select: {
+            id: true,
+            teamId: true,
+            teamRole: true,
+            Team: {
+              select: {
+                name: true,
+                description: true
+              }
+            }
+          }
+        }
       }
     })
+  }
+
+  async editUser(userId: number, data: EditUserDto) {
+    // Check if user exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!existingUser) {
+      throw new ForbiddenException('User not found');
+    }
+
+    // Update user's isActive status (if provided)
+    if (data.isActive !== undefined) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          isActive: data.isActive
+        }
+      });
+    }
+
+    // Handle team membership changes
+    if (data.team_id !== undefined || data.team_role !== undefined) {
+      // First, soft delete existing team memberships
+      await this.prisma.teamMembership.updateMany({
+        where: {
+          userId: userId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt: new Date()
+        }
+      });
+
+      // Create new team membership if team_id is provided
+      if (data.team_id !== undefined) {
+        await this.prisma.teamMembership.create({
+          data: {
+            userId: userId,
+            teamId: data.team_id,
+            teamRole: data.team_role || 'member'
+          }
+        });
+      }
+    }
+
+    return { message: 'User updated successfully' };
   }
 }

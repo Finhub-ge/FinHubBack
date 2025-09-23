@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards, Query, Delete } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, UseGuards, Query, Delete } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -15,6 +15,8 @@ import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
 import { CreateChargeDto } from "./dto/create-charge.dto";
+import { CreateTeamDto } from "./dto/createTeam.dto";
+import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -231,5 +233,34 @@ export class AdminController {
   @Get('file/:id')
   async downloadFile(@Param('id') id: number) {
     return await this.adminService.downloadFile(id)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Post('createTeam')
+  async createTeam(
+    @GetUser() user: User,
+    @Body() data: CreateTeamDto
+  ) {
+    return await this.adminService.createTeam(data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Get('getTeams')
+  async getTeams() {
+    return await this.adminService.getTeams();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiParam({ name: 'teamId', type: 'number' })
+  @Post('manageTeamUsers/:teamId')
+  async manageTeamUsers(
+    @GetUser() user: User,
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Body() data: ManageTeamUsersDto
+  ) {
+    return await this.adminService.manageTeamUsers(teamId, data);
   }
 }

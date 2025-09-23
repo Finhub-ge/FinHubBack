@@ -14,6 +14,8 @@ import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { CreateChargeDto } from "./dto/create-charge.dto";
 import { S3Helper } from "src/helpers/s3.helper";
+import { CreateTeamDto } from "./dto/createTeam.dto";
+import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -649,5 +651,89 @@ export class AdminService {
     const signedUrl = await this.s3Helper.getSignedUrl(upload.filePath, expiresInSeconds);
 
     return signedUrl;
+  }
+
+  async createTeam(data: CreateTeamDto) {
+    await this.prisma.team.create({
+      data: data
+    });
+    return {
+      message: 'Team created successfully'
+    }
+  }
+
+  async getTeams() {
+    return await this.prisma.team.findMany({
+      where: { deletedAt: null }
+    });
+  }
+
+  async manageTeamUsers(teamId: number, data: ManageTeamUsersDto) {
+    // Check if team exists
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId }
+    });
+
+    if (!team || team.deletedAt !== null) {
+      throw new BadRequestException('Team not found');
+    }
+
+    // Check if all users exist and are active
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: data.userIds },
+        isActive: true,
+        deletedAt: null
+      }
+    });
+
+    if (users.length !== data.userIds.length) {
+      throw new BadRequestException('One or more users not found or inactive');
+    }
+
+    if (data.team_role === null) {
+      // Unassign users from team
+      const result = await this.prisma.teamMembership.updateMany({
+        where: {
+          userId: { in: data.userIds },
+          teamId: teamId,
+          deletedAt: null
+        },
+        data: {
+          deletedAt: new Date()
+        }
+      });
+
+      return {
+        message: `Successfully unassigned ${result.count} users from team`
+      };
+    } else {
+      // Assign users to team
+      // Remove existing team memberships for these users
+      await this.prisma.teamMembership.updateMany({
+        where: {
+          userId: { in: data.userIds },
+          deletedAt: null
+        },
+        data: {
+          deletedAt: new Date()
+        }
+      });
+
+      // Create new team memberships
+      const memberships = data.userIds.map(userId => ({
+        userId,
+        teamId,
+        teamRole: data.team_role
+      }));
+
+      await this.prisma.teamMembership.createMany({
+        data: memberships
+      });
+
+      return {
+        message: `Successfully assigned ${data.userIds.length} users to team`
+      };
+    }
   }
 }
