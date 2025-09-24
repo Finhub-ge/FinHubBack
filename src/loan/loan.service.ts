@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { getPaymentSchedule, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { getPaymentSchedule, handleCommentsForReassignment, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -915,7 +915,7 @@ export class LoanService {
       return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: userId, });
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: assignLoanDto.userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: assignLoanDto.userId, isActive: true, deletedAt: null } });
     if (!user) throw new NotFoundException('User not found');
 
     //Check role matches
@@ -923,18 +923,25 @@ export class LoanService {
       throw new BadRequestException('User role does not match roleId provided');
     }
 
-    return this.assign({
-      loanId: loan.id,
-      userId: user.id,
-      roleId: assignLoanDto.roleId,
-      assignedBy: userId,
-    });
+    return await this.prisma.$transaction(async (tx) => {
+      // user.id is the new user id
+      // userId is the assigned by user id
+      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, tx);
 
+      // return await this.assign({
+      //   loanId: loan.id,
+      //   userId: user.id,
+      //   roleId: assignLoanDto.roleId,
+      //   assignedBy: userId,
+      //   tx
+      // });
+    });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy }) {
+  private async assign({ loanId, userId, roleId, assignedBy, tx = null }) {
+    const dbClient = tx || this.prisma;
     // Find current active assignment for this role
-    const currentAssignment = await this.prisma.loanAssignment.findFirst({
+    const currentAssignment = await dbClient.loanAssignment.findFirst({
       where: { loanId, roleId, isActive: true },
     });
 
@@ -945,19 +952,20 @@ export class LoanService {
 
     // If there is a current assignment → unassign old user
     if (currentAssignment) {
-      await this.unassign({ loanId, roleId, assignedBy });
+      await this.unassign({ loanId, roleId, assignedBy, tx });
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy });
+    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy }) {
-    await this.prisma.loanAssignment.create({
+  private async assignNew({ loanId, userId, roleId, assignedBy, tx = null }) {
+    const dbClient = tx || this.prisma;
+    await dbClient.loanAssignment.create({
       data: { loanId, userId, roleId, isActive: true },
     });
 
-    await logAssignmentHistory({ prisma: this.prisma, loanId, userId, roleId, action: 'assigned', assignedBy });
+    await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
 
     return { loanId, userId, roleId, action: 'assigned' };
   }
@@ -966,25 +974,28 @@ export class LoanService {
     loanId,
     roleId,
     assignedBy,
+    tx = null
   }: {
     loanId: number;
     roleId: number;
     assignedBy: number;
+    tx?: any;
   }) {
+    const dbClient = tx || this.prisma;
     // Find current active assignment
-    const currentAssignment = await this.prisma.loanAssignment.findFirst({
+    const currentAssignment = await dbClient.loanAssignment.findFirst({
       where: { loanId, roleId, isActive: true },
     });
     if (!currentAssignment) throw new BadRequestException('No active assignment found');
 
     // Deactivate
-    await this.prisma.loanAssignment.update({
+    await dbClient.loanAssignment.update({
       where: { id: currentAssignment.id },
       data: { isActive: false, unassignedAt: new Date() },
     });
 
     // Log history
-    await logAssignmentHistory({ prisma: this.prisma, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
+    await logAssignmentHistory({ prisma: dbClient, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
     return { loanId, userId: currentAssignment.userId, roleId, action: 'unassigned' };
   }
 
