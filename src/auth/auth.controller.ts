@@ -16,7 +16,7 @@ import { User } from "@prisma/client";
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public() // secure later with a setup token or IP restriction.
   @Post('signupSuperAdmin')
@@ -38,7 +38,7 @@ export class AuthController {
     return this.authService.signinUser(dto);
   }
 
-  @UseGuards( JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
   @Post('changePwd')
   changePwd(@GetUser() user: User, @Body() dto: SetNewPwdDto) {
@@ -46,7 +46,7 @@ export class AuthController {
   }
 
   @ApiBearerAuth('access-token')
-  @UseGuards( JwtGuard, RolesGuard)
+  @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('roles')
   getRoles() {
@@ -54,8 +54,7 @@ export class AuthController {
   }
 
   @ApiBearerAuth('access-token')
-  @UseGuards( JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @Public()
   @Get('me')
   getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user)
