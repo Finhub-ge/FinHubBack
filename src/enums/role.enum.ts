@@ -5,7 +5,6 @@ export enum Role {
   LAWYER = 'lawyer',
   ACCOUNTANT = 'accountant',
   COURIER = 'courier',
-
   AML_OFFICER = 'AML Officer',
   ANALYTICS = 'Analytics',
   HR = 'HR',

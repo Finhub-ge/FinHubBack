@@ -54,7 +54,16 @@ export class AuthController {
   }
 
   @ApiBearerAuth('access-token')
-  @Public()
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.COLLECTOR,
+    Role.COURIER,
+    Role.ACCOUNTANT,
+    Role.LAWYER,
+    Role.JUNIOR_LAWYER,
+    Role.SUPER_LAWYER, Role.AML_OFFICER, Role.ANALYTICS, Role.HR, Role.GENERAL_MANAGER, Role.PERSONAL_DATA_PROTECTION_OFFICER, Role.CONTROLLER, Role.ANALYST, Role.OPERATIONAL_MANAGER)
   @Get('me')
   getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user)
