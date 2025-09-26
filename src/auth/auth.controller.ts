@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { AuthDto } from "./dto/auth.dto";
 import { Public } from "./decorator/public.decorator";
-import { Roles } from "./decorator/role.decorator";
+import { AllRoles, Roles } from "./decorator/role.decorator";
 import { Role } from "src/enums/role.enum";
 import { RolesGuard } from "./guard/roles.guard";
 import { JwtGuard } from "./guard/jwt.guard";
@@ -16,7 +16,7 @@ import { User } from "@prisma/client";
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public() // secure later with a setup token or IP restriction.
   @Post('signupSuperAdmin')
@@ -38,24 +38,24 @@ export class AuthController {
     return this.authService.signinUser(dto);
   }
 
-  @UseGuards( JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
   @Post('changePwd')
   changePwd(@GetUser() user: User, @Body() dto: SetNewPwdDto) {
     return this.authService.changePwd(user, dto);
   }
 
   @ApiBearerAuth('access-token')
-  @UseGuards( JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
   @Get('roles')
   getRoles() {
     return this.authService.getRoles()
   }
 
   @ApiBearerAuth('access-token')
-  @UseGuards( JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
   @Get('me')
   getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user)

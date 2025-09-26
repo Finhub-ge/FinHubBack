@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
-import { Roles } from "src/auth/decorator/role.decorator";
+import { AllRoles, ExceptRoles, Roles } from "src/auth/decorator/role.decorator";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { GetUser } from "src/auth/decorator/get-user.decorator";
@@ -27,41 +27,41 @@ export class AdminController {
   ) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('debtor-contact-types')
   getDebtorContactTypes() {
     return this.adminService.getDebtorContactTypes();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('debtor-contact-labels')
   getDebtorContactLabels() {
     return this.adminService.getDebtorContactLabels();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('attributes')
   getAttributes() {
     return this.adminService.getAttributes();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('debtor-statuses')
   getDebtorStatuses() {
     return this.adminService.getDebtoreStatuses();
   }
 
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('transactions/get')
   async getTransactionList() {
     return await this.adminService.getTransactionList();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('loan-statuses')
   getloanStatuses() {
     return this.adminService.getloanStatuses();
@@ -74,6 +74,8 @@ export class AdminController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('addPayment/:publicId') // Loan publicId
   async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
     return await this.adminService.addPayment(publicId, data);
@@ -81,21 +83,21 @@ export class AdminController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('updatePayment/:publicId') // Transaction publicId
   async updatePayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: UpdatePaymentDto) {
     return await this.adminService.updatePayment(publicId, data);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('deleteTransaction/:id')
   async deleteTransaction(@Param('id') id: string) {
     return await this.adminService.deleteTransaction(+id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Post('createTask')
   async createTask(@GetUser() user: User, @Body() data: CreateTaskDto) {
     return await this.adminService.createTask(data, user.id);
@@ -112,7 +114,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('committee/:id/response')
   async responseCommittee(
     @GetUser() user: User,
@@ -123,14 +125,14 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('committees')
   async getAllCommittees() {
     return await this.adminService.getAllCommittees();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('createMarks')
   async createMarks(
     @GetUser() user: User,
@@ -140,7 +142,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('updateMarks/:id')
   async updateMarks(
     @GetUser() user: User,
@@ -151,56 +153,56 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Delete('deleteMarks/:id')
   async deleteMarks(@Param('id') id: number) {
     return await this.adminService.deleteMarks(id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('marks')
   async getMarks() {
     return await this.adminService.getMarks();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('loanMarks')
   async getLoanMarks() {
     return await this.adminService.getLoanMarks();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('legalStages')
   async getLegalStages() {
     return await this.adminService.getLegalStages();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('collateralStatuses')
   async getCollateralStatuses() {
     return await this.adminService.getCollateralStatuses();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('litigationStages')
   async getLitigationStages() {
     return await this.adminService.getLitigationStages();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('chargeTypes')
   async getChargeTypes() {
     return await this.adminService.getChargeTypes();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @Post('addCharge/:publicId')
   async addCharge(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreateChargeDto) {
@@ -208,35 +210,35 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('getCharges')
   async getCharges() {
     return await this.adminService.getCharges();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('portfolios')
   async getPortfolios() {
     return await this.adminService.getPortfolios();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('portfolioSellers')
   async getPortfolioSellers() {
     return await this.adminService.getPortfolioSellers();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get('file/:id')
   async downloadFile(@Param('id') id: number) {
     return await this.adminService.downloadFile(id)
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Post('createTeam')
   async createTeam(
     @GetUser() user: User,
@@ -246,7 +248,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('getTeams')
   async getTeams() {
     return await this.adminService.getTeams();
