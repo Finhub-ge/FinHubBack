@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patc
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
-import { Roles } from 'src/auth/decorator/role.decorator';
+import { AllRoles, ExceptRoles, Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
 import { ApiBearerAuth, ApiConsumes, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
@@ -30,7 +30,7 @@ export class LoanController {
   constructor(private readonly loanService: LoanService) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get()
   getAll(@Query() filters: GetLoansFilterDto) {
     return this.loanService.getAll(filters);
@@ -38,7 +38,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get(':publicId')
   getOne(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe) {
     return this.loanService.getOne(publicId, user);
@@ -46,7 +46,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
@@ -59,7 +59,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Patch(':publicId/debtor/contacts/:contactId')
   editDebtorContact(
     @GetUser() user: User,
@@ -73,7 +73,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Delete(':publicId/debtor/contacts/:contactId')
   deleteDebtorContact(
     @GetUser() user: User,
@@ -85,7 +85,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('/:publicId/loan-attributes')
   addLoanAttributes(
     @GetUser() user: User,
@@ -98,7 +98,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiConsumes('multipart/form-data')
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Post('/:publicId/comment')
   @UseInterceptors(FileInterceptor('attachment'))
   addComment(
@@ -112,8 +112,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
-  @Post('/:publicId/lawyer-comment')
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   addLawyerComment(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
@@ -124,7 +123,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Patch(':publicId/debtor/status')
   updateDeptorStatus(
     @GetUser() user: User,
@@ -136,7 +135,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Patch(':publicId/status')
   updateLoanStatus(
     @GetUser() user: User,
@@ -148,7 +147,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/sendSms')
   async sendSms(
     @GetUser() user: User,
@@ -160,9 +159,9 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/assignment')
-  assignLoan(
+  async assignLoan(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() sssignLoanDto: AssignLoanDto
@@ -173,7 +172,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiConsumes('multipart/form-data')
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('/:publicId/committee')
   @UseInterceptors(FileInterceptor('attachment'))
   requestCommittee(
@@ -187,7 +186,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/loanMarks')
   addLoanMarks(
     @GetUser() user: User,
@@ -199,7 +198,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Delete(':publicId/loanMarks/:markId')
   deleteLoanMark(
     @GetUser() user: User,
@@ -211,7 +210,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/loanLegalStage')
   addLoanLegalStage(
     @GetUser() user: User,
@@ -223,7 +222,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/loanCollateralStatus')
   addLoanCollateralStatus(
     @GetUser() user: User,
@@ -235,7 +234,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/loanLitigationStage')
   addLoanLitigationStage(
     @GetUser() user: User,
@@ -246,8 +245,7 @@ export class LoanController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
-  // @UseGuards(JwtGuard, RolesGuard)
-  // @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.LAWYER, Role.ACCOUNTANT, Role.JUNIOR_LAWYER)
+  @AllRoles()
   @Get(':publicId/schedulePdf')
   async downloadSchedulePdf(@Param('publicId') publicId: ParseUUIDPipe,) {
     const { buffer, caseId } = await this.loanService.downloadSchedulePdfBuffer(publicId);

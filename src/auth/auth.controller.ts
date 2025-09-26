@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { AuthDto } from "./dto/auth.dto";
 import { Public } from "./decorator/public.decorator";
-import { Roles } from "./decorator/role.decorator";
+import { AllRoles, Roles } from "./decorator/role.decorator";
 import { Role } from "src/enums/role.enum";
 import { RolesGuard } from "./guard/roles.guard";
 import { JwtGuard } from "./guard/jwt.guard";
@@ -39,7 +39,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.COLLECTOR, Role.COURIER, Role.ACCOUNTANT, Role.LAWYER)
+  @AllRoles()
   @Post('changePwd')
   changePwd(@GetUser() user: User, @Body() dto: SetNewPwdDto) {
     return this.authService.changePwd(user, dto);
@@ -47,7 +47,7 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @AllRoles()
   @Get('roles')
   getRoles() {
     return this.authService.getRoles()
@@ -55,15 +55,7 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(
-    Role.SUPER_ADMIN,
-    Role.ADMIN,
-    Role.COLLECTOR,
-    Role.COURIER,
-    Role.ACCOUNTANT,
-    Role.LAWYER,
-    Role.JUNIOR_LAWYER,
-    Role.SUPER_LAWYER, Role.AML_OFFICER, Role.ANALYTICS, Role.HR, Role.GENERAL_MANAGER, Role.PERSONAL_DATA_PROTECTION_OFFICER, Role.CONTROLLER, Role.ANALYST, Role.OPERATIONAL_MANAGER)
+  @AllRoles()
   @Get('me')
   getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user)

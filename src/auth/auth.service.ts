@@ -10,7 +10,7 @@ import { SignUpSuperAdminDto } from "./dto/signupSuperAdmin.dto";
 import { UserSigninDto } from "./dto/userSignin.dto";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { Role } from "src/enums/role.enum";
-import { User } from "@prisma/client";
+import { TeamMembership, User } from "@prisma/client";
 import { randomUUID } from "crypto"
 
 
@@ -20,8 +20,6 @@ export class AuthService {
     private prisma: PrismaService,
     private config: ConfigService,
     private jwt: JwtService,
-
-
   ) { }
 
   async signupSuperAdmin(dto: SignUpSuperAdminDto) {
@@ -56,7 +54,7 @@ export class AuthService {
         },
       );
 
-      return this.signToken(user.id, user.email, user.accountId, role.name);
+      // return this.signToken(user.id, user.email, user.accountId, role.name);
     } catch (error) {
       if (
         error instanceof
@@ -72,9 +70,7 @@ export class AuthService {
     }
   }
 
-
   async signinSuperAdmin(dto: AuthDto) {
-
     const user =
       await this.prisma.user.findFirst({
         where: {
@@ -82,6 +78,7 @@ export class AuthService {
         },
         include: {
           Role: true,
+          TeamMembership: true
         },
       });
 
@@ -114,7 +111,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.TeamMembership);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -126,6 +123,7 @@ export class AuthService {
         },
         include: {
           Role: true,
+          TeamMembership: true,
         },
       });
 
@@ -152,7 +150,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.TeamMembership);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -163,6 +161,7 @@ export class AuthService {
         },
         include: {
           Role: true,
+          TeamMembership: true,
         },
       });
 
@@ -196,20 +195,22 @@ export class AuthService {
       data: { hash: newHash, mustChangePassword: false }
     })
 
-    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name, userHash.TeamMembership);
   }
 
   async signToken(
     id: number,
     email: string,
     account_id: string,
-    role_name: string
+    role_name: string,
+    team_membership: TeamMembership[]
   ): Promise<{ access_token: string }> {
     const payload = {
       sub: id,
       email,
       account_id,
-      role_name
+      role_name,
+      team_membership
     };
     const secret = this.config.get('JWT_SECRET');
 
