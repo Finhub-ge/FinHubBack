@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TeamMembership_teamRole } from "@prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 const prisma = new PrismaClient();
 
@@ -74,7 +74,6 @@ export const handleCommentsForReassignment = async (loanId: number, roleId: numb
   if (!currentAssignment) {
     return;
   }
-
   await archiveCommentsForUser(loanId, roleId, currentAssignment.userId, assignedBy, dbClient);
 }
 
@@ -90,58 +89,30 @@ export const getCurrentAssignment = async (loanId: number, roleId: number, dbCli
 }
 
 export const archiveCommentsForUser = async (loanId: number, roleId: number, userId: number, archivedBy: number, dbClient: any) => {
-  // Find all active comments from this user for this loan
-  console.log(loanId, roleId);
-  const commentsToArchive = await dbClient.comments.findMany({
+  const commentsToArchive = await dbClient.comments.updateMany({
     where: {
       loanId: loanId,
+      userId: userId,
+      archived: false,
       deletedAt: null,
       User: {
         roleId: roleId  // Filter by role instead of specific userId
       }
     },
-    include: {
-      User: {
-        select: {
-          id: true,
-          roleId: true,
-        }
-      }
+    data: {
+      archived: true,
+      archivedAt: new Date(),
+      archivedBy: archivedBy
     }
   });
-  console.log(commentsToArchive);
-  // If no comments to archive, return early
-  if (commentsToArchive.length === 0) {
-    return;
-  }
+  return commentsToArchive;
+}
 
-  // Prepare archive data as array
-  const archiveData = commentsToArchive.map(comment => ({
-    originalCommentId: comment.id,
-    loanId: comment.loanId,
-    userId: comment.userId,
-    comment: comment.comment,
-    uploadId: comment.uploadId,
-    originalCreatedAt: comment.createdAt,
-    originalUpdatedAt: comment.updatedAt,
-    archivedBy: archivedBy,
-    archiveReason: 'role_reassignment'
-  }));
+export const getActiveTeamMembership = (user: any) => {
+  return user.team_membership?.find(tm => tm.deletedAt === null);
+}
 
-  // Execute all archive operations
-  // await dbClient.commentHistory.createMany({
-  //   data: archiveData
-  // });
-
-  // // Soft delete the original comments
-  // await dbClient.comments.updateMany({
-  //   where: {
-  //     loanId: loanId,
-  //     userId: userId,
-  //     deletedAt: null
-  //   },
-  //   data: {
-  //     deletedAt: new Date()
-  //   }
-  // });
+export const isTeamLead = (user: any): boolean => {
+  const activeTeamMembership = getActiveTeamMembership(user);
+  return activeTeamMembership?.teamRole === TeamMembership_teamRole.leader;
 }

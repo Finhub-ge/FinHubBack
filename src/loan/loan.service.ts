@@ -8,9 +8,9 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, SmsHistory_status } from '@prisma/client';
+import { Committee_status, Committee_type, SmsHistory_status, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { getPaymentSchedule, handleCommentsForReassignment, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -244,9 +244,26 @@ export class LoanService {
           }
         },
         Comments: {
+          where: user.role_name === Role.COLLECTOR && !isTeamLead(user) ? {
+            // Collectors: exclude other collectors' archived comments
+            NOT: {
+              AND: [
+                { archived: true }, // Is archived
+                { userId: { not: user.id } }, // Not their own
+                { User: { Role: { name: Role.COLLECTOR } } } // Is from a collector
+              ]
+            },
+            deletedAt: null
+          } : {
+            // Non-collectors: see ALL comments
+            deletedAt: null
+          },
           select: {
+            id: true,
             comment: true,
             createdAt: true,
+            archived: true,
+            archivedAt: true,
             User: {
               select: {
                 firstName: true,
@@ -928,13 +945,13 @@ export class LoanService {
       // userId is the assigned by user id
       await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, tx);
 
-      // return await this.assign({
-      //   loanId: loan.id,
-      //   userId: user.id,
-      //   roleId: assignLoanDto.roleId,
-      //   assignedBy: userId,
-      //   tx
-      // });
+      return await this.assign({
+        loanId: loan.id,
+        userId: user.id,
+        roleId: assignLoanDto.roleId,
+        assignedBy: userId,
+        tx
+      });
     });
   }
 

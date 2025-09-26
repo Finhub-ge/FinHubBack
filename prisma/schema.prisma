@@ -17,21 +17,28 @@ model Attributes {
 }
 
 model Comments {
-  id        Int       @id @default(autoincrement())
-  loanId    Int
-  userId    Int
-  comment   String?   @db.Text
-  uploadId  Int?
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
-  Loan      Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
-  User      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
-  Uploads   Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_3")
+  id                             Int       @id @default(autoincrement())
+  loanId                         Int
+  userId                         Int
+  comment                        String?   @db.Text
+  uploadId                       Int?
+  archived                       Boolean   @default(false)
+  archivedAt                     DateTime? @db.DateTime(0)
+  archivedBy                     Int?
+  createdAt                      DateTime  @default(now()) @db.DateTime(0)
+  updatedAt                      DateTime  @default(now()) @db.DateTime(0)
+  deletedAt                      DateTime? @db.DateTime(0)
+  Loan                           Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
+  User                           User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
+  Uploads                        Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_3")
+  User_Comments_archivedByToUser User?     @relation("Comments_archivedByToUser", fields: [archivedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_archivedBy")
 
   @@index([loanId], map: "fk_comments_1_idx")
   @@index([userId], map: "fk_comments_2_idx")
   @@index([uploadId], map: "fk_comments_3")
+  @@index([archivedBy], map: "fk_comments_archivedBy")
+  @@index([loanId, archived, deletedAt], map: "idx_comments_loan_archived")
+  @@index([userId, archived, loanId], map: "idx_comments_user_archived")
 }
 
 model ContactLabel {
@@ -180,7 +187,6 @@ model Loan {
   currency              String?                 @db.VarChar(45)
   Charges               Charges[]
   Comments              Comments[]
-  CommentsHistory       CommentsHistory[]
   Committee             Committee[]
   Debtor                Debtor                  @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   Portfolio             Portfolio               @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
@@ -407,8 +413,7 @@ model User {
   deletedAt                                                   DateTime?               @db.DateTime(0)
   Charges                                                     Charges[]
   Comments                                                    Comments[]
-  CommentsHistory_CommentsHistory_archivedByToUser            CommentsHistory[]       @relation("CommentsHistory_archivedByToUser")
-  CommentsHistory_CommentsHistory_userIdToUser                CommentsHistory[]       @relation("CommentsHistory_userIdToUser")
+  Comments_Comments_archivedByToUser                          Comments[]              @relation("Comments_archivedByToUser")
   Committee_Committee_requesterIdToUser                       Committee[]             @relation("Committee_requesterIdToUser")
   Committee_Committee_responderIdToUser                       Committee[]             @relation("Committee_responderIdToUser")
   DebtorContact                                               DebtorContact[]
@@ -797,15 +802,14 @@ model DebtorGuarantors {
 }
 
 model Uploads {
-  id               Int               @id @default(autoincrement())
-  originalFileName String            @db.VarChar(255)
-  filePath         String            @db.VarChar(1024)
-  sizeBytes        BigInt?           @db.UnsignedBigInt
-  createdAt        DateTime          @default(now()) @db.DateTime(0)
-  updatedAt        DateTime          @default(now()) @db.DateTime(0)
-  deletedAt        DateTime?         @db.DateTime(0)
+  id               Int         @id @default(autoincrement())
+  originalFileName String      @db.VarChar(255)
+  filePath         String      @db.VarChar(1024)
+  sizeBytes        BigInt?     @db.UnsignedBigInt
+  createdAt        DateTime    @default(now()) @db.DateTime(0)
+  updatedAt        DateTime    @default(now()) @db.DateTime(0)
+  deletedAt        DateTime?   @db.DateTime(0)
   Comments         Comments[]
-  CommentsHistory  CommentsHistory[]
   Committee        Committee[]
 
   @@index([filePath(length: 768)], map: "idx_filePath")
@@ -836,31 +840,6 @@ model TeamMembership {
   @@unique([teamId, userId, deletedAt], map: "unique_active_membership")
   @@index([teamId], map: "fk_TeamMemberships_1")
   @@index([userId], map: "fk_TeamMemberships_2")
-}
-
-model CommentsHistory {
-  id                                    Int       @id @default(autoincrement())
-  originalCommentId                     Int
-  loanId                                Int
-  userId                                Int
-  comment                               String?   @db.Text
-  uploadId                              Int?
-  originalCreatedAt                     DateTime  @db.DateTime(0)
-  originalUpdatedAt                     DateTime  @db.DateTime(0)
-  archivedAt                            DateTime  @default(now()) @db.DateTime(0)
-  archivedBy                            Int
-  archiveReason                         String    @default("role_reassignment") @db.VarChar(50)
-  deletedAt                             DateTime? @db.DateTime(0)
-  User_CommentsHistory_archivedByToUser User      @relation("CommentsHistory_archivedByToUser", fields: [archivedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CommentHistory_archived_by")
-  Loan                                  Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CommentHistory_loan")
-  Uploads                               Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CommentHistory_upload")
-  User_CommentsHistory_userIdToUser     User      @relation("CommentsHistory_userIdToUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CommentHistory_user")
-
-  @@index([uploadId], map: "fk_CommentHistory_upload")
-  @@index([archivedBy], map: "idx_archived_by")
-  @@index([loanId, archivedAt], map: "idx_loan_archive")
-  @@index([originalCommentId], map: "idx_original_comment")
-  @@index([userId, archivedAt], map: "idx_user_archive")
 }
 
 enum PaymentCommitment_type {
