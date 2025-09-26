@@ -17,21 +17,28 @@ model Attributes {
 }
 
 model Comments {
-  id        Int       @id @default(autoincrement())
-  loanId    Int
-  userId    Int
-  comment   String?   @db.Text
-  uploadId  Int?
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
-  Loan      Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
-  User      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
-  Uploads   Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_3")
+  id                             Int       @id @default(autoincrement())
+  loanId                         Int
+  userId                         Int
+  comment                        String?   @db.Text
+  uploadId                       Int?
+  archived                       Boolean   @default(false)
+  archivedAt                     DateTime? @db.DateTime(0)
+  archivedBy                     Int?
+  createdAt                      DateTime  @default(now()) @db.DateTime(0)
+  updatedAt                      DateTime  @default(now()) @db.DateTime(0)
+  deletedAt                      DateTime? @db.DateTime(0)
+  Loan                           Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Comments_1")
+  User                           User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_2")
+  Uploads                        Uploads?  @relation(fields: [uploadId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_3")
+  User_Comments_archivedByToUser User?     @relation("Comments_archivedByToUser", fields: [archivedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_comments_archivedBy")
 
   @@index([loanId], map: "fk_comments_1_idx")
   @@index([userId], map: "fk_comments_2_idx")
   @@index([uploadId], map: "fk_comments_3")
+  @@index([archivedBy], map: "fk_comments_archivedBy")
+  @@index([loanId, archived, deletedAt], map: "idx_comments_loan_archived")
+  @@index([userId, archived, loanId], map: "idx_comments_user_archived")
 }
 
 model ContactLabel {
@@ -406,6 +413,7 @@ model User {
   deletedAt                                                   DateTime?               @db.DateTime(0)
   Charges                                                     Charges[]
   Comments                                                    Comments[]
+  Comments_Comments_archivedByToUser                          Comments[]              @relation("Comments_archivedByToUser")
   Committee_Committee_requesterIdToUser                       Committee[]             @relation("Committee_requesterIdToUser")
   Committee_Committee_responderIdToUser                       Committee[]             @relation("Committee_responderIdToUser")
   DebtorContact                                               DebtorContact[]

@@ -161,7 +161,7 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/assignment')
-  assignLoan(
+  async assignLoan(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() sssignLoanDto: AssignLoanDto
