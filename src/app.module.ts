@@ -6,6 +6,8 @@ import { UserModule } from './user/user.module';
 import { LoanModule } from './loan/loan.module';
 import { AppController } from './app.controller';
 import { AminModule } from './admin/admin.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { CronService } from './cron/cron.service';
 
 
 @Module({
@@ -13,8 +15,8 @@ import { AminModule } from './admin/admin.module';
     ConfigModule.forRoot({
       envFilePath: '.env',
       isGlobal: true,
-      
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UserModule,
@@ -22,6 +24,6 @@ import { AminModule } from './admin/admin.module';
     AminModule
   ],
   controllers: [AppController],
-  providers: [],
+  providers: [CronService],
 })
-export class AppModule {}
+export class AppModule { }

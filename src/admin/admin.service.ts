@@ -736,4 +736,10 @@ export class AdminService {
       };
     }
   }
+
+  async getCity() {
+    return await this.prisma.city.findMany({
+      where: { deletedAt: null }
+    });
+  }
 }
