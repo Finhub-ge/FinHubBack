@@ -3,7 +3,7 @@ import { REQUEST } from "@nestjs/core";
 import { TeamMembership, TeamMembership_teamRole, User } from "@prisma/client";
 import { Role } from "src/enums/role.enum";
 import { PrismaService } from "src/prisma/prisma.service";
-import { getActiveTeamMembership, isTeamLead } from "./loan.helper";
+import { getActiveTeamMembership, isTeamLead, getCollectorLoansWithHighActDays } from "./loan.helper";
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -29,16 +29,40 @@ export class PermissionsHelper {
 
   private getScopedModel(model: string, user: AuthenticatedRequest['user']) {
     return {
-      findMany: (args: any) => {
-        const scopedWhere = this.addUserScope(args?.where || {}, user, model);
+      findMany: async (args: any) => {
+        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
+        // Special logic for collectors with loans > 40 actDays
+        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
+          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
+
+          if (highActDaysLoanIds.length > 0) {
+            scopedWhere = {
+              ...scopedWhere,
+              id: { in: highActDaysLoanIds }
+            };
+          }
+        }
+
         return this.prisma[model].findMany({
           ...args,
           where: scopedWhere
         });
       },
 
-      findUnique: (args: any) => {
-        const scopedWhere = this.addUserScope(args?.where || {}, user, model);
+      findUnique: async (args: any) => {
+        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
+
+        // Special logic for collectors with loans > 40 actDays
+        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
+          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
+          if (highActDaysLoanIds.length > 0) {
+            scopedWhere = {
+              ...scopedWhere,
+              id: { in: highActDaysLoanIds }
+            };
+          }
+        }
+
         return this.prisma[model].findUnique({
           ...args,
           where: scopedWhere

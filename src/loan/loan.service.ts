@@ -67,7 +67,7 @@ export class LoanService {
 
     const loans = await this.permissionsHelper.loan.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { actDays: 'desc' },
       include: {
         Portfolio: {
           select: {
@@ -740,7 +740,15 @@ export class LoanService {
         User: { select: { id: true, firstName: true, lastName: true } }
       }
     })
-    throw new HttpException('Comment added successfully', 200);
+    await this.prisma.loan.update({
+      where: { id: loan.id },
+      data: {
+        actDays: 0,
+      },
+    });
+    return {
+      message: 'Comment added successfully',
+    };
   }
 
   async updateDeptorStatus(publicId: ParseUUIDPipe, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {

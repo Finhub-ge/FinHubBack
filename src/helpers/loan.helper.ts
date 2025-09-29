@@ -116,3 +116,19 @@ export const isTeamLead = (user: any): boolean => {
   const activeTeamMembership = getActiveTeamMembership(user);
   return activeTeamMembership?.teamRole === TeamMembership_teamRole.leader;
 }
+
+export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, userId: number): Promise<number[]> => {
+  const loans = await prisma.loan.findMany({
+    where: {
+      actDays: { gt: 22 },
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: { id: userId }
+        }
+      }
+    },
+    select: { id: true }
+  });
+  return loans.map(loan => loan.id);
+}
