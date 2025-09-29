@@ -265,4 +265,11 @@ export class AdminController {
   ) {
     return await this.adminService.manageTeamUsers(teamId, data);
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('getCity')
+  async getCity() {
+    return await this.adminService.getCity();
+  }
 }

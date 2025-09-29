@@ -120,7 +120,7 @@ export const isTeamLead = (user: any): boolean => {
 export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, userId: number): Promise<number[]> => {
   const loans = await prisma.loan.findMany({
     where: {
-      actDays: { gt: 22 },
+      actDays: { gt: 40 },
       LoanAssignment: {
         some: {
           isActive: true,

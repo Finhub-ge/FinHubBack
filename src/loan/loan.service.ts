@@ -17,6 +17,8 @@ import { Role } from 'src/enums/role.enum';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
+import { AddAddressDto } from './dto/addAddress.dto';
+import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
@@ -144,6 +146,15 @@ export class LoanService {
           take: 1,
           select: {
             Marks: { select: { id: true, title: true } },
+          }
+        },
+        LoanAddress: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            address: true,
+            type: true,
+            City: { select: { id: true, city: true } },
           }
         }
       }
@@ -410,6 +421,17 @@ export class LoanService {
             }
           },
         },
+        LoanAddress: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            address: true,
+            type: true,
+            City: { select: { id: true, city: true } },
+            User: { select: { id: true, firstName: true, lastName: true } },
+            createdAt: true,
+          }
+        }
       }
     });
 
@@ -1226,6 +1248,121 @@ export class LoanService {
 
     return {
       message: 'Loan litigation stage added successfully'
+    };
+  }
+
+  async addAddress(publicId: ParseUUIDPipe, data: AddAddressDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the city exists
+    const city = await this.prisma.city.findUnique({
+      where: { id: data.cityId },
+    });
+
+    if (!city) {
+      throw new NotFoundException('City not found');
+    }
+
+    // Create the loan address
+    await this.prisma.loanAddress.create({
+      data: {
+        loanId: loan.id,
+        cityId: data.cityId,
+        type: data.type,
+        address: data.address,
+        userId: userId,
+      },
+    });
+
+    return {
+      message: 'Address added successfully'
+    };
+  }
+
+  async updateAddress(publicId: ParseUUIDPipe, addressId: number, data: UpdateAddressDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the address exists and belongs to this loan
+    const existingAddress = await this.prisma.loanAddress.findFirst({
+      where: {
+        id: addressId,
+        loanId: loan.id,
+        deletedAt: null
+      },
+    });
+
+    if (!existingAddress) {
+      throw new NotFoundException('Address not found');
+    }
+
+    // If cityId is being updated, verify the city exists
+    if (data.cityId) {
+      const city = await this.prisma.city.findUnique({
+        where: { id: data.cityId },
+      });
+
+      if (!city) {
+        throw new NotFoundException('City not found');
+      }
+    }
+
+    // Update the address
+    await this.prisma.loanAddress.update({
+      where: { id: addressId },
+      data: {
+        ...data
+      },
+    });
+
+    return {
+      message: 'Address updated successfully'
+    };
+  }
+
+  async deleteAddress(publicId: ParseUUIDPipe, addressId: number, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the address exists and belongs to this loan
+    const existingAddress = await this.prisma.loanAddress.findFirst({
+      where: {
+        id: addressId,
+        loanId: loan.id,
+        deletedAt: null
+      },
+    });
+
+    if (!existingAddress) {
+      throw new NotFoundException('Address not found');
+    }
+
+    // Soft delete the address
+    await this.prisma.loanAddress.update({
+      where: { id: addressId },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    return {
+      message: 'Address deleted successfully'
     };
   }
 

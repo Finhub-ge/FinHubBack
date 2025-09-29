@@ -192,6 +192,7 @@ model Loan {
   Debtor                Debtor                  @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   Portfolio             Portfolio               @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   LoanStatus            LoanStatus              @relation(fields: [statusId], references: [id])
+  LoanAddress           LoanAddress[]
   LoanAssignment        LoanAssignment[]
   LoanAssignmentHistory LoanAssignmentHistory[]
   LoanAttribute         LoanAttribute[]
@@ -419,6 +420,7 @@ model User {
   Committee_Committee_responderIdToUser                       Committee[]             @relation("Committee_responderIdToUser")
   DebtorContact                                               DebtorContact[]
   DebtorStatusHistory                                         DebtorStatusHistory[]
+  LoanAddress                                                 LoanAddress[]
   LoanAssignment                                              LoanAssignment[]
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[] @relation("LoanAssignmentHistory_userIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[] @relation("LoanAssignmentHistory_createdByToUser")
@@ -843,6 +845,34 @@ model TeamMembership {
   @@index([userId], map: "fk_TeamMemberships_2")
 }
 
+model City {
+  id          Int           @id @default(autoincrement())
+  city        String?       @db.VarChar(255)
+  createdAt   DateTime      @default(now()) @db.DateTime(0)
+  updatedAt   DateTime      @default(now()) @db.DateTime(0)
+  deletedAt   DateTime?     @db.DateTime(0)
+  LoanAddress LoanAddress[]
+}
+
+model LoanAddress {
+  id        Int               @id @default(autoincrement())
+  loanId    Int
+  cityId    Int
+  address   String?           @db.VarChar(255)
+  type      LoanAddress_type?
+  userId    Int
+  createdAt DateTime          @default(now()) @db.DateTime(0)
+  updatedAt DateTime          @default(now()) @db.DateTime(0)
+  deletedAt DateTime?         @db.DateTime(0)
+  Loan      Loan              @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAddress_1")
+  City      City              @relation(fields: [cityId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAddress_2")
+  User      User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAddress_3")
+
+  @@index([loanId], map: "fk_LoanAddress_1")
+  @@index([cityId], map: "fk_LoanAddress_2")
+  @@index([userId], map: "fk_LoanAddress_3")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -885,4 +915,9 @@ enum Templates_type {
 enum TeamMembership_teamRole {
   leader
   member
+}
+
+enum LoanAddress_type {
+  registered
+  current
 }
