@@ -28,6 +28,14 @@ export class CronService {
     }
   }
 
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
+  async updateLoanVisitStatus() {
+    try {
+      this.logger.log('Starting loan visit status update...');
+    } catch (error) {
+      this.logger.error('Error updating loan visit status:', error);
+    }
+  }
   // @Cron('* * * * *') // Runs every minute
   // async testCron() {
   //   this.logger.log('Test cron job running every minute...');
