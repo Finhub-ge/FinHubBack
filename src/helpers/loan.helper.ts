@@ -1,5 +1,6 @@
 import { PrismaClient, TeamMembership_teamRole } from "@prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
+import * as dayjs from "dayjs";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -66,10 +67,8 @@ export const getPaymentSchedule = async (loanId: number) => {
   });
 }
 
-export const handleCommentsForReassignment = async (loanId: number, roleId: number, userId: number, assignedBy: number, tx?: any) => {
+export const handleCommentsForReassignment = async (loanId: number, roleId: number, userId: number, assignedBy: number, currentAssignment: any, tx?: any) => {
   const dbClient = tx || prisma; // Use transaction if provided, otherwise use main prisma
-
-  const currentAssignment = await getCurrentAssignment(loanId, roleId, dbClient);
 
   if (!currentAssignment) {
     return;
@@ -131,4 +130,47 @@ export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, us
     select: { id: true }
   });
   return loans.map(loan => loan.id);
+}
+
+export const getScheduledVisits = async (prisma: PrismaService, daysAgo: number): Promise<number[]> => {
+  // Calculate the cutoff date (today minus daysAgo)
+  const cutoffDate = dayjs()
+    .subtract(daysAgo, 'day')
+    .startOf('day')
+    .toDate();
+
+  // Find visits scheduled on or before the cutoff date (meaning they're overdue by daysAgo or more)
+  const visitsToUpdate = await prisma.loanVisit.findMany({
+    where: {
+      scheduledAt: {
+        lt: cutoffDate
+      },
+      status: 'pending',
+      deletedAt: null
+    },
+    select: { id: true, scheduledAt: true }
+  });
+
+  return visitsToUpdate.map(visit => visit.id);
+}
+
+export const updateVisitsToNA = async (prisma: PrismaService, visitIds: number[]): Promise<number> => {
+  if (visitIds.length === 0) {
+    return 0;
+  }
+
+  // Update all found visits to n_a status
+  const result = await prisma.loanVisit.updateMany({
+    where: {
+      id: {
+        in: visitIds
+      }
+    },
+    data: {
+      status: 'n_a',
+      expiredAt: new Date()
+    }
+  });
+
+  return result.count;
 }

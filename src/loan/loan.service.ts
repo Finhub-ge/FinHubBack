@@ -8,9 +8,9 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, SmsHistory_status, TeamMembership_teamRole } from '@prisma/client';
+import { Committee_status, Committee_type, LoanVisit_status, SmsHistory_status, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -20,6 +20,7 @@ import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
+import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
@@ -973,6 +974,15 @@ export class LoanService {
   async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanVisit: {
+          where: { deletedAt: null },
+          select: {
+            status: true,
+          },
+        },
+      },
     });
 
     if (!loan) {
@@ -992,10 +1002,19 @@ export class LoanService {
       throw new BadRequestException('User role does not match roleId provided');
     }
 
+    // Check if any visit is pending
+    const hasPendingVisit = loan.LoanVisit.some(visit => visit.status === LoanVisit_status.pending);
+    if (hasPendingVisit) {
+      throw new BadRequestException('Cannot proceed while any visit is still pending');
+    }
+
+    const currentAssignment = await getCurrentAssignment(loan.id, assignLoanDto.roleId, this.prisma);
+
+
     return await this.prisma.$transaction(async (tx) => {
       // user.id is the new user id
       // userId is the assigned by user id
-      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, tx);
+      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, currentAssignment, tx);
 
       return await this.assign({
         loanId: loan.id,
@@ -1457,6 +1476,47 @@ export class LoanService {
 
     return {
       message: 'Visit added successfully'
+    };
+  }
+
+  async updateVisit(publicId: ParseUUIDPipe, visitId: number, data: UpdateVisitDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Verify the visit exists and belongs to this loan
+    const existingVisit = await this.prisma.loanVisit.findFirst({
+      where: {
+        id: visitId,
+        loanId: loan.id,
+        deletedAt: null
+      },
+    });
+
+    if (!existingVisit) {
+      throw new NotFoundException('Visit not found');
+    }
+
+    // Check if user is NOT the creator OR visit has expired
+    if (existingVisit.userId !== userId || existingVisit.expiredAt !== null) {
+      throw new BadRequestException('You can only edit your own non-expired visits');
+    }
+
+    // Update the visit with only provided fields
+    await this.prisma.loanVisit.update({
+      where: { id: visitId },
+      data: {
+        ...data,
+        updatedAt: new Date()
+      },
+    });
+
+    return {
+      message: 'Visit updated successfully'
     };
   }
 }

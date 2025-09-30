@@ -881,6 +881,7 @@ model LoanVisit {
   status      LoanVisit_status? @default(n_a)
   comment     String?           @db.VarChar(500)
   scheduledAt DateTime          @default(now()) @db.DateTime(0)
+  expiredAt   DateTime?         @db.DateTime(0)
   userId      Int
   createdAt   DateTime          @default(now()) @db.DateTime(0)
   updatedAt   DateTime          @default(now()) @db.DateTime(0)

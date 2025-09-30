@@ -254,7 +254,15 @@ export class AuthService {
           mustChangePassword: true,
           roleId: true,
           updatedAt: true,
-          Role: true
+          Role: true,
+          TeamMembership: {
+            select: {
+              id: true,
+              teamId: true,
+              teamRole: true,
+              Team: { select: { name: true } },
+            }
+          }
         }
       });
 

@@ -23,6 +23,7 @@ import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
+import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 
 
@@ -307,6 +308,20 @@ export class LoanController {
     @Body() data: AddVisitDto
   ) {
     return this.loanService.addVisit(publicId, data, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'visitId', type: 'number' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.COLLECTOR)
+  @Patch(':publicId/visit/:visitId')
+  updateVisit(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Param('visitId', ParseIntPipe) visitId: number,
+    @Body() data: UpdateVisitDto
+  ) {
+    return this.loanService.updateVisit(publicId, visitId, data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
