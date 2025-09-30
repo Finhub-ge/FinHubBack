@@ -19,6 +19,7 @@ import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
+import { AddVisitDto } from './dto/addVisit.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
@@ -155,6 +156,14 @@ export class LoanService {
             address: true,
             type: true,
             City: { select: { id: true, city: true } },
+          }
+        },
+        LoanVisit: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            status: true,
+            comment: true,
           }
         }
       }
@@ -430,6 +439,17 @@ export class LoanService {
             City: { select: { id: true, city: true } },
             User: { select: { id: true, firstName: true, lastName: true } },
             createdAt: true,
+          }
+        },
+        LoanVisit: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            status: true,
+            comment: true,
+            User: { select: { id: true, firstName: true, lastName: true } },
+            createdAt: true,
+            updatedAt: true,
           }
         }
       }
@@ -1384,6 +1404,56 @@ export class LoanService {
     return {
       buffer: pdfBuffer,
       caseId: loan.caseId,
+    };
+  }
+
+  async getAddress(publicId: ParseUUIDPipe, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+    const address = await this.prisma.loanAddress.findMany({
+      where: { loanId: loan.id, deletedAt: null },
+      select: {
+        id: true,
+        address: true,
+        type: true,
+        City: { select: { id: true, city: true } },
+        User: { select: { id: true, firstName: true, lastName: true } },
+        createdAt: true,
+      },
+    });
+    if (!address) {
+      throw new NotFoundException('Address not found');
+    }
+    return {
+      address: address,
+    };
+  }
+
+  async addVisit(publicId: ParseUUIDPipe, data: AddVisitDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Create the loan visit
+    await this.prisma.loanVisit.create({
+      data: {
+        loanId: loan.id,
+        status: data.status,
+        comment: data.comment,
+        userId: userId,
+      },
+    });
+
+    return {
+      message: 'Visit added successfully'
     };
   }
 }

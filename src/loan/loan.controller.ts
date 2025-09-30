@@ -22,6 +22,7 @@ import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
 import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
+import { AddVisitDto } from './dto/addVisit.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 
 
@@ -249,6 +250,17 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
+  @Get(':publicId/address')
+  getAddress(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+  ) {
+    return this.loanService.getAddress(publicId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
   @Post(':publicId/address')
   addAddress(
     @GetUser() user: User,
@@ -283,6 +295,18 @@ export class LoanController {
     @Param('addressId', ParseIntPipe) addressId: number
   ) {
     return this.loanService.deleteAddress(publicId, addressId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Post(':publicId/visit')
+  addVisit(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddVisitDto
+  ) {
+    return this.loanService.addVisit(publicId, data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

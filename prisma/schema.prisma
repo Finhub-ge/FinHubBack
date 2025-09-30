@@ -202,6 +202,7 @@ model Loan {
   LoanMarks             LoanMarks[]
   LoanRemaining         LoanRemaining[]
   LoanStatusHistory     LoanStatusHistory[]
+  LoanVisit             LoanVisit[]
   PastPayments          PastPayments[]
   PaymentCommitment     PaymentCommitment[]
   SmsHistory            SmsHistory[]
@@ -428,6 +429,7 @@ model User {
   LoanLegalStage                                              LoanLegalStage[]
   LoanLitigationStage                                         LoanLitigationStage[]
   LoanStatusHistory                                           LoanStatusHistory[]
+  LoanVisit                                                   LoanVisit[]
   PaymentCommitment                                           PaymentCommitment[]
   Tasks_Tasks_fromUserToUser                                  Tasks[]                 @relation("Tasks_fromUserToUser")
   Tasks_Tasks_toUserIdToUser                                  Tasks[]                 @relation("Tasks_toUserIdToUser")
@@ -873,6 +875,22 @@ model LoanAddress {
   @@index([userId], map: "fk_LoanAddress_3")
 }
 
+model LoanVisit {
+  id        Int               @id @default(autoincrement())
+  loanId    Int
+  status    LoanVisit_status? @default(n_a)
+  comment   String?           @db.VarChar(500)
+  userId    Int
+  createdAt DateTime          @default(now()) @db.DateTime(0)
+  updatedAt DateTime          @default(now()) @db.DateTime(0)
+  deletedAt DateTime?         @db.DateTime(0)
+  Loan      Loan              @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_1")
+  User      User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_3")
+
+  @@index([loanId], map: "fk_LoanVisit_1")
+  @@index([userId], map: "fk_LoanVisit_3")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -920,4 +938,11 @@ enum TeamMembership_teamRole {
 enum LoanAddress_type {
   registered
   current
+}
+
+enum LoanVisit_status {
+  n_a       @map("n/a")
+  pending
+  completed
+  canceled
 }
