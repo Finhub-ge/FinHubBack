@@ -1,6 +1,14 @@
-import { IsNotEmpty, IsString, IsEnum, MinLength, IsDate } from "class-validator";
+import { IsNotEmpty, IsString, IsEnum, MinLength, IsDate, IsDateString } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 import { LoanVisit_status } from "@prisma/client";
+import { Transform } from "class-transformer";
+import * as dayjs from "dayjs";
+import * as utc from "dayjs/plugin/utc";
+import * as timezone from "dayjs/plugin/timezone";
+
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 export class AddVisitDto {
   @ApiProperty({
@@ -25,7 +33,22 @@ export class AddVisitDto {
     description: 'Scheduled date of the visit',
     type: Date
   })
-  @IsDate()
+  @Transform(({ value }) => {
+    // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
+    console.log(value)
+    const date = dayjs
+      .utc(value)
+      .tz('Asia/Tbilisi')
+      .hour(12)
+      .minute(0)
+      .second(0)
+      .utc()
+      .toISOString()
+
+    console.log(date, 'data')
+    return date;
+  })
+  @IsDateString()
   @IsNotEmpty()
-  scheduledAt: Date;
+  scheduledAt: string;
 }
