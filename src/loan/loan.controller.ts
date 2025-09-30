@@ -300,7 +300,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
   @Post(':publicId/visit')
   addVisit(
     @GetUser() user: User,
@@ -313,7 +313,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'visitId', type: 'number' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
   @Patch(':publicId/visit/:visitId')
   updateVisit(
     @GetUser() user: User,
