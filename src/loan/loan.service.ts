@@ -224,6 +224,8 @@ export class LoanService {
                 value: true,
                 notes: true,
                 labelId: true,
+                createdAt: true,
+                updatedAt: true,
                 ContactType: { select: { name: true } },
                 ContactLabel: { select: { name: true } },
               },
@@ -1449,6 +1451,7 @@ export class LoanService {
         status: data.status,
         comment: data.comment,
         userId: userId,
+        scheduledAt: data.scheduledAt,
       },
     });
 

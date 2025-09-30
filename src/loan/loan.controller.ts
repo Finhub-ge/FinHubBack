@@ -299,7 +299,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.COLLECTOR)
   @Post(':publicId/visit')
   addVisit(
     @GetUser() user: User,

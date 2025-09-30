@@ -876,16 +876,17 @@ model LoanAddress {
 }
 
 model LoanVisit {
-  id        Int               @id @default(autoincrement())
-  loanId    Int
-  status    LoanVisit_status? @default(n_a)
-  comment   String?           @db.VarChar(500)
-  userId    Int
-  createdAt DateTime          @default(now()) @db.DateTime(0)
-  updatedAt DateTime          @default(now()) @db.DateTime(0)
-  deletedAt DateTime?         @db.DateTime(0)
-  Loan      Loan              @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_1")
-  User      User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_3")
+  id          Int               @id @default(autoincrement())
+  loanId      Int
+  status      LoanVisit_status? @default(n_a)
+  comment     String?           @db.VarChar(500)
+  scheduledAt DateTime          @default(now()) @db.DateTime(0)
+  userId      Int
+  createdAt   DateTime          @default(now()) @db.DateTime(0)
+  updatedAt   DateTime          @default(now()) @db.DateTime(0)
+  deletedAt   DateTime?         @db.DateTime(0)
+  Loan        Loan              @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_1")
+  User        User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanVisit_3")
 
   @@index([loanId], map: "fk_LoanVisit_1")
   @@index([userId], map: "fk_LoanVisit_3")

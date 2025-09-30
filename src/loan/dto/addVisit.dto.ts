@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsEnum, MinLength } from "class-validator";
+import { IsNotEmpty, IsString, IsEnum, MinLength, IsDate } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 import { LoanVisit_status } from "@prisma/client";
 
@@ -19,4 +19,13 @@ export class AddVisitDto {
   @IsNotEmpty()
   @MinLength(10, { message: 'Comment must be at least 10 characters long' })
   comment: string;
+
+
+  @ApiProperty({
+    description: 'Scheduled date of the visit',
+    type: Date
+  })
+  @IsDate()
+  @IsNotEmpty()
+  scheduledAt: Date;
 }
