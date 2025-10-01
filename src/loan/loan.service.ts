@@ -160,11 +160,14 @@ export class LoanService {
           }
         },
         LoanVisit: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           where: { deletedAt: null },
           select: {
             id: true,
             status: true,
             comment: true,
+            LoanAddress: { select: { id: true, address: true } },
           }
         }
       }
@@ -445,6 +448,7 @@ export class LoanService {
           }
         },
         LoanVisit: {
+          orderBy: { createdAt: 'desc' },
           where: { deletedAt: null },
           select: {
             id: true,
@@ -453,6 +457,7 @@ export class LoanService {
             User: { select: { id: true, firstName: true, lastName: true } },
             createdAt: true,
             updatedAt: true,
+            LoanAddress: { select: { id: true, address: true } },
           }
         }
       }
@@ -1470,7 +1475,7 @@ export class LoanService {
         status: data.status,
         comment: data.comment,
         userId: userId,
-        scheduledAt: data.scheduledAt,
+        loanAddressId: data.addressId,
       },
     });
 

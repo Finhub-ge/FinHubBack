@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsEnum, MinLength, IsDate, IsDateString } from "class-validator";
+import { IsNotEmpty, IsString, IsEnum, MinLength, IsDate, IsDateString, IsNumber } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 import { LoanVisit_status } from "@prisma/client";
 import { Transform } from "class-transformer";
@@ -29,26 +29,33 @@ export class AddVisitDto {
   comment: string;
 
 
-  @ApiProperty({
-    description: 'Scheduled date of the visit',
-    type: Date
-  })
-  @Transform(({ value }) => {
-    // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
-    console.log(value)
-    const date = dayjs
-      .utc(value)
-      .tz('Asia/Tbilisi')
-      .hour(12)
-      .minute(0)
-      .second(0)
-      .utc()
-      .toISOString()
+  // @ApiProperty({
+  //   description: 'Scheduled date of the visit',
+  //   type: Date
+  // })
+  // @Transform(({ value }) => {
+  //   // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
+  //   console.log(value)
+  //   const date = dayjs
+  //     .utc(value)
+  //     .tz('Asia/Tbilisi')
+  //     .hour(12)
+  //     .minute(0)
+  //     .second(0)
+  //     .utc()
+  //     .toISOString()
 
-    console.log(date, 'data')
-    return date;
+  //   console.log(date, 'data')
+  //   return date;
+  // })
+  // @IsDateString()
+  // @IsNotEmpty()
+  // scheduledAt: string;
+
+  @ApiProperty({
+    description: 'ID of the address for the visit',
   })
-  @IsDateString()
+  @IsNumber()
   @IsNotEmpty()
-  scheduledAt: string;
+  addressId: number;
 }
