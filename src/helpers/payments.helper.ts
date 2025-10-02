@@ -95,4 +95,10 @@ export class PaymentsHelper {
 
     return paymentTotals;
   }
+
+  async getTransactionByLoanId(loanId: number, prisma: Prisma.TransactionClient | PrismaClient = this.prisma) {
+    return await prisma.transaction.findMany({
+      where: { loanId },
+    });
+  }
 }

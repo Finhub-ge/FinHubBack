@@ -132,7 +132,7 @@ export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, us
   return loans.map(loan => loan.id);
 }
 
-export const getScheduledVisits = async (prisma: PrismaService, daysAgo: number): Promise<number[]> => {
+export const getScheduledVisits = async (prisma: PrismaService, daysAgo: number): Promise<any[]> => {
   // Calculate the cutoff date (today minus daysAgo)
   const cutoffDate = dayjs()
     .subtract(daysAgo, 'day')
@@ -146,12 +146,14 @@ export const getScheduledVisits = async (prisma: PrismaService, daysAgo: number)
         lt: cutoffDate
       },
       status: 'pending',
+      expiredAt: null,
       deletedAt: null
     },
-    select: { id: true, scheduledAt: true }
+    select: { id: true, scheduledAt: true, status: true }
   });
 
-  return visitsToUpdate.map(visit => visit.id);
+  return visitsToUpdate;
+  // return visitsToUpdate.map(visit => visit.id);
 }
 
 export const updateVisitsToNA = async (prisma: PrismaService, visitIds: number[]): Promise<number> => {
@@ -159,18 +161,34 @@ export const updateVisitsToNA = async (prisma: PrismaService, visitIds: number[]
     return 0;
   }
 
-  // Update all found visits to n_a status
-  const result = await prisma.loanVisit.updateMany({
-    where: {
-      id: {
-        in: visitIds
-      }
-    },
-    data: {
-      status: 'n_a',
-      expiredAt: new Date()
-    }
+  // Fetch all existing visits BEFORE transaction
+  const existingVisits = await prisma.loanVisit.findMany({
+    where: { id: { in: visitIds } },
   });
 
-  return result.count;
-}
+  // Execute all updates in a single transaction
+  await prisma.$transaction(async (tx) => {
+    // 1. Update existing visits - batch operation
+    await tx.loanVisit.updateMany({
+      where: { id: { in: visitIds } },
+      data: { expiredAt: new Date() },
+    });
+
+    // 2. Create new visits with status 'n_a' - batch operation
+    const newVisits = existingVisits.map(visit => ({
+      loanId: visit.loanId,
+      status: 'n_a' as const,
+      loanAddressId: visit.loanAddressId,
+      comment: 'status changed to n/a by system',
+      scheduledAt: new Date(),
+      expiredAt: null,
+      userId: visit.userId,
+    }));
+
+    await tx.loanVisit.createMany({
+      data: newVisits,
+    });
+  });
+
+  return existingVisits.length;
+};

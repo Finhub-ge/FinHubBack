@@ -25,6 +25,7 @@ import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
+import { statusToId } from 'src/enums/visitStatus.enum';
 
 @Injectable()
 export class LoanService {
@@ -844,38 +845,82 @@ export class LoanService {
   }
 
   async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanStatus: true
+      }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const status = await this.prisma.loanStatus.findUnique({
+      where: { id: updateLoanStatusDto.statusId },
+    });
+
+    if (!status) {
+      throw new NotFoundException('Status not found');
+    }
+
+    // Check StatusMatrix - is this transition allowed?
+    const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
+      where: {
+        entityType: 'LOAN',
+        fromStatusId: loan.LoanStatus.id,
+        toStatusId: updateLoanStatusDto.statusId,
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!isTransitionAllowed) {
+      throw new BadRequestException(
+        `Status transition from ${loan.LoanStatus.name} status to ${status.name} is not allowed`
+      );
+    }
+
+    // Check if reason is required
+    if (isTransitionAllowed.requiresReason === true && !updateLoanStatusDto.comment) {
+      throw new BadRequestException(
+        'Reason/comment is required for this status change'
+      );
+    }
+
+    if (status.name === 'Agreement') {
+      if (!updateLoanStatusDto.agreement) {
+        throw new BadRequestException('Agreement data is required for agreement status');
+      }
+
+      const transactions = await this.paymentsHelper.getTransactionByLoanId(loan.id);
+      if (transactions.length === 0) {
+        throw new BadRequestException('Cannot update loan status without transactions');
+      }
+      console.log(transactions, 'transactions');
+    }
+
+    if (status.name === 'Promised To Pay') {
+      if (!updateLoanStatusDto.promise) {
+        throw new BadRequestException('Promise data is required for promise status');
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loan.findUnique({
-        where: { publicId: String(publicId), deletedAt: null },
-      });
-
-      if (!loan) {
-        throw new NotFoundException('Loan not found');
-      }
-
-      const status = await tx.loanStatus.findUnique({
-        where: { id: updateLoanStatusDto.statusId },
-      });
-
-      if (!status) {
-        throw new NotFoundException('Status not found');
-      }
-
+      // Create history record
       await tx.loanStatusHistory.create({
         data: {
           loanId: loan.id,
-          oldStatusId: loan.statusId,
+          oldStatusId: loan.LoanStatus.id,
           newStatusId: updateLoanStatusDto.statusId,
           changedBy: userId,
           notes: updateLoanStatusDto.comment ?? null,
         },
       });
 
+      // Handle Agreement status
       if (status.name === 'Agreement') {
-        if (!updateLoanStatusDto.agreement) {
-          throw new BadRequestException('Agreement data is required for agreement status');
-        }
-
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
@@ -890,8 +935,9 @@ export class LoanService {
             userId: userId,
             type: 'agreement',
           },
-          tx // pass the transaction client
+          tx
         );
+
         await this.paymentsHelper.createPaymentSchedule(
           {
             commitmentId: commitment.id,
@@ -899,15 +945,12 @@ export class LoanService {
             amount: updateLoanStatusDto.agreement.agreedAmount,
             numberOfMonths: updateLoanStatusDto.agreement.numberOfMonths,
           },
-          tx // pass the transaction client
+          tx
         );
       }
 
+      // Handle Promise status
       if (status.name === 'Promised To Pay') {
-        if (!updateLoanStatusDto.promise) {
-          throw new BadRequestException('Promise data is required for promise status');
-        }
-
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
@@ -921,19 +964,21 @@ export class LoanService {
             comment: updateLoanStatusDto?.comment || null,
             userId: userId,
             type: 'promise',
-          }, tx // pass the transaction client
-        )
+          },
+          tx
+        );
       }
 
+      // Update loan status
       await tx.loan.update({
         where: { publicId: String(publicId) },
         data: { statusId: updateLoanStatusDto.statusId },
-        include: {
-          LoanStatus: { select: { name: true } },
-        },
       });
     });
-    throw new HttpException('Loan status updated successfully', 200);
+
+    return {
+      message: 'Loan status updated successfully',
+    };
   }
 
   async sendSms(publicId: ParseUUIDPipe, sendSmsDto: SendSmsDto, userId: number) {
@@ -1462,10 +1507,45 @@ export class LoanService {
   async addVisit(publicId: ParseUUIDPipe, data: AddVisitDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanVisit: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+          }
+        }
+      }
     });
 
     if (!loan) {
       throw new NotFoundException('Loan not found');
+    }
+
+    // Check StatusMatrix - is this transition allowed?
+    const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
+      where: {
+        entityType: 'LOAN_VISIT',
+        fromStatusId: statusToId[loan.LoanVisit[0]?.status || 'n_a'],
+        toStatusId: statusToId[data.status],
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!isTransitionAllowed) {
+      throw new BadRequestException(
+        `Status transition from ${loan.LoanVisit[0]?.status || 'N/A'} status to ${data.status} is not allowed`
+      );
+    }
+
+    // Check if reason is required
+    if (isTransitionAllowed.requiresReason === true && !data.comment) {
+      throw new BadRequestException(
+        'Reason/comment is required for this status change'
+      );
     }
 
     // Create the loan visit
