@@ -893,17 +893,48 @@ export class LoanService {
       if (!updateLoanStatusDto.agreement) {
         throw new BadRequestException('Agreement data is required for agreement status');
       }
+      const currentDebt = await this.prisma.loanRemaining.findFirst({
+        where: { loanId: loan.id, deletedAt: null },
+      });
+
+      // Convert Decimal to number with 2 decimal precision
+      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+
+      // Validate schedule
+      const adjustedSchedule = await this.paymentsHelper.validateAndAdjustPaymentSchedule(
+        updateLoanStatusDto.agreement.schedule,
+        updateLoanStatusDto.agreement.agreedAmount,
+        updateLoanStatusDto.agreement.numberOfMonths,
+        currentDebtAmount
+      );
+
+      // Store adjusted schedule for use in transaction
+      updateLoanStatusDto.agreement.schedule = adjustedSchedule;
 
       const transactions = await this.paymentsHelper.getTransactionByLoanId(loan.id);
       if (transactions.length === 0) {
         throw new BadRequestException('Cannot update loan status without transactions');
       }
-      console.log(transactions, 'transactions');
     }
 
-    if (status.name === 'Promised To Pay') {
+    if (status.name === 'Promised to pay') {
       if (!updateLoanStatusDto.promise) {
         throw new BadRequestException('Promise data is required for promise status');
+      }
+
+      const currentDebt = await this.prisma.loanRemaining.findFirst({
+        where: { loanId: loan.id, deletedAt: null },
+      });
+
+      if (!currentDebt) {
+        throw new NotFoundException('Loan remaining data not found');
+      }
+
+      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+      const promiseAmount = Number(Number(updateLoanStatusDto.promise.agreedAmount).toFixed(2));
+
+      if (promiseAmount > currentDebtAmount) {
+        throw new BadRequestException('Amount must be less or equal to current debt');
       }
     }
 
@@ -938,19 +969,18 @@ export class LoanService {
           tx
         );
 
-        await this.paymentsHelper.createPaymentSchedule(
+        // Save the schedule from frontend
+        await this.paymentsHelper.savePaymentSchedule(
           {
             commitmentId: commitment.id,
-            paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
-            amount: updateLoanStatusDto.agreement.agreedAmount,
-            numberOfMonths: updateLoanStatusDto.agreement.numberOfMonths,
+            schedules: updateLoanStatusDto.agreement.schedule,
           },
           tx
         );
       }
 
       // Handle Promise status
-      if (status.name === 'Promised To Pay') {
+      if (status.name === 'Promised to pay') {
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
