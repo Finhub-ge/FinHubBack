@@ -4,7 +4,7 @@ import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { AllRoles, ExceptRoles, Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
-import { ApiBearerAuth, ApiConsumes, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { StatusMatrix_entityType, User } from '@prisma/client';
@@ -338,6 +338,10 @@ export class LoanController {
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiQuery({
+    name: 'entityType',
+    enum: StatusMatrix_entityType,
+  })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
   @Get(':publicId/availableStatuses')
