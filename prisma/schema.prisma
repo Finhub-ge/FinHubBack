@@ -922,16 +922,6 @@ model StatusMatrix {
   @@index([entityType, fromStatusId], map: "idx_entity_from")
 }
 
-model VisitStatus {
-  id        Int       @id @default(autoincrement())
-  title     String    @db.VarChar(500)
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
-
-  @@index([deletedAt], map: "idx_deletedAt")
-}
-
 model StatusMatrixAutomatic {
   id              Int                              @id @default(autoincrement())
   entityType      StatusMatrixAutomatic_entityType
@@ -947,6 +937,16 @@ model StatusMatrixAutomatic {
   @@unique([entityType, fromStatusId, toStatusId], map: "unique_auto_rule")
   @@index([deletedAt], map: "idx_deleted")
   @@index([entityType, isActive], map: "idx_entity_active")
+}
+
+model VisitStatus {
+  id        Int       @id @default(autoincrement())
+  title     String    @db.VarChar(500)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+
+  @@index([deletedAt], map: "idx_deletedAt")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -1041,6 +1041,13 @@ enum LoanAddress_type {
   current
 }
 
+enum LoanVisit_status {
+  n_a       @map("n/a")
+  pending
+  completed
+  canceled
+}
+
 enum StatusMatrix_entityType {
   LOAN
   LOAN_VISIT
@@ -1055,11 +1062,4 @@ enum StatusMatrixAutomatic_entityType {
   DEBTOR
   TASK
   COMMITTEE
-}
-
-enum LoanVisit_status {
-  n_a       @map("n/a")
-  pending
-  completed
-  canceled
 }
