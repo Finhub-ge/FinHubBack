@@ -183,27 +183,92 @@ export class AdminService {
   }
 
   async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto) {
-
     const loan = await this.prisma.loan.findUnique({
-      where: {
-        publicId: String(publicId)
-      }
-    })
+      where: { publicId: String(publicId) },
+      include: { LoanStatus: true }
+    });
 
-    if (!loan) throw new HttpException('Loan not found', 404)
+    if (!loan) {
+      throw new HttpException('Loan not found', 404);
+    }
 
-    await this.prisma.transaction.create({
-      data: {
-        loanId: loan.id,
-        amount: Number(data.amount || 0),
-        paymentDate: data.paymentDate,
-        transactionChannelAccountId: data.accountId,
-        publicId: randomUUID(),
-      }
-    })
+    let loanRemaining = await this.prisma.loanRemaining.findFirst({
+      where: { loanId: loan.id }
+    });
 
-    throw new HttpException('Payment added successfully', 200);
+    if (!loanRemaining) {
+      throw new HttpException('Loan remaining balance not found', 404);
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const transaction = await tx.transaction.create({
+          data: {
+            loanId: loan.id,
+            amount: Number(data.amount || 0),
+            paymentDate: data.paymentDate,
+            transactionChannelAccountId: data.accountId,
+            publicId: randomUUID(),
+            principal: 0,
+            interest: 0,
+            penalty: 0,
+            fees: 0,
+            legal: 0
+          }
+        });
+
+        // If LoanRemaining doesn't exist, create it with initial values from Loan implement later
+        const allocationResult = await this.paymentHelper.allocatePayment(
+          transaction.id,
+          Number(data.amount || 0),
+          loanRemaining,
+          tx
+        );
+
+        await this.paymentHelper.updateTransactionSummary(
+          transaction.id,
+          allocationResult.transactionSummary,
+          tx
+        );
+
+        await this.paymentHelper.updateLoanRemaining(
+          loanRemaining.id,
+          allocationResult.newBalances,
+          allocationResult.newCurrentDebt,
+          tx
+        );
+
+        await this.paymentHelper.createBalanceHistory(
+          loan.id,
+          transaction.id,
+          allocationResult.newBalances,
+          allocationResult.newCurrentDebt,
+          'PAYMENT',
+          tx
+        );
+
+        if (loan.LoanStatus.name === 'Agreement') {
+          await this.paymentHelper.applyPaymentToSchedule(
+            loan.id,
+            Number(data.amount || 0),
+            tx
+          );
+        }
+
+        return {
+          message: 'Payment added successfully'
+        };
+      });
+    } catch (error) {
+      // Transaction automatically rolled back
+      console.error('Payment processing failed:', error);
+      throw new HttpException(
+        'Failed to process payment. Please try again.',
+        500
+      );
+    }
   }
+
   async updatePayment(publicId: ParseUUIDPipe, data: UpdatePaymentDto) {
 
     const payment = await this.prisma.transaction.findUnique({
