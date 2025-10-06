@@ -153,6 +153,7 @@ export class LoanService {
         },
         LoanAddress: {
           where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
           select: {
             id: true,
             address: true,
