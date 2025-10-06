@@ -897,6 +897,50 @@ model LoanVisit {
   @@index([loanAddressId], map: "fk_LoanVisit_2")
 }
 
+model StatusMatrix {
+  id             Int                     @id @default(autoincrement())
+  entityType     StatusMatrix_entityType
+  fromStatusId   Int
+  toStatusId     Int
+  isAllowed      Boolean?                @default(true)
+  requiresReason Boolean?                @default(false)
+  description    String?                 @db.VarChar(255)
+  createdAt      DateTime?               @default(now()) @db.DateTime(0)
+  updatedAt      DateTime?               @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?               @db.DateTime(0)
+
+  @@unique([entityType, fromStatusId, toStatusId], map: "unique_transition")
+  @@index([deletedAt], map: "idx_deleted")
+  @@index([entityType, fromStatusId], map: "idx_entity_from")
+}
+
+model StatusMatrixAutomatic {
+  id              Int                              @id @default(autoincrement())
+  entityType      StatusMatrixAutomatic_entityType
+  fromStatusId    Int
+  toStatusId      Int
+  daysAfterStatus Int?
+  isActive        Boolean?                         @default(true)
+  description     String?                          @db.VarChar(255)
+  createdAt       DateTime?                        @default(now()) @db.DateTime(0)
+  updatedAt       DateTime?                        @default(now()) @db.DateTime(0)
+  deletedAt       DateTime?                        @db.DateTime(0)
+
+  @@unique([entityType, fromStatusId, toStatusId], map: "unique_auto_rule")
+  @@index([deletedAt], map: "idx_deleted")
+  @@index([entityType, isActive], map: "idx_entity_active")
+}
+
+model VisitStatus {
+  id        Int       @id @default(autoincrement())
+  title     String    @db.VarChar(500)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -951,4 +995,20 @@ enum LoanVisit_status {
   pending
   completed
   canceled
+}
+
+enum StatusMatrix_entityType {
+  LOAN
+  LOAN_VISIT
+  DEBTOR
+  TASK
+  COMMITTEE
+}
+
+enum StatusMatrixAutomatic_entityType {
+  LOAN
+  LOAN_VISIT
+  DEBTOR
+  TASK
+  COMMITTEE
 }
