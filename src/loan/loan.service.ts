@@ -8,7 +8,7 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, LoanVisit_status, SmsHistory_status, TeamMembership_teamRole } from '@prisma/client';
+import { Committee_status, Committee_type, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
@@ -1638,6 +1638,93 @@ export class LoanService {
 
     return {
       message: 'Visit updated successfully'
+    };
+  }
+
+  async getAvailableStatuses(
+    publicId: ParseUUIDPipe,
+    entityType: StatusMatrix_entityType
+  ) {
+    let currentStatusId: number;
+    let currentStatusName: string;
+
+    // Get current status based on entity type
+    if (entityType === 'LOAN') {
+      const loan = await this.prisma.loan.findUnique({
+        where: { publicId: String(publicId), deletedAt: null },
+        include: { LoanStatus: true },
+      });
+
+      if (!loan) {
+        throw new NotFoundException('Loan not found');
+      }
+
+      currentStatusId = loan.statusId;
+      currentStatusName = loan.LoanStatus.name;
+    } else if (entityType === 'LOAN_VISIT') {
+      const visit = await this.prisma.loanVisit.findUnique({
+        where: { id: Number(publicId), deletedAt: null },
+      });
+
+      if (!visit) {
+        throw new NotFoundException('Visit not found');
+      }
+
+      // Map enum to ID
+      const visitStatusToId = {
+        'n_a': 1,
+        'pending': 2,
+        'completed': 3,
+        'canceled': 4,
+      };
+
+      currentStatusId = visitStatusToId[visit.status];
+      currentStatusName = visit.status;
+    }
+
+    // Get allowed transitions from StatusMatrix
+    const allowedStatuses = await this.prisma.statusMatrix.findMany({
+      where: {
+        entityType,
+        fromStatusId: currentStatusId,
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    // Get status details
+    let statusDetails: any[] = [];
+
+    if (entityType === 'LOAN') {
+      const toStatusIds = allowedStatuses.map(t => t.toStatusId);
+      statusDetails = await this.prisma.loanStatus.findMany({
+        where: { id: { in: toStatusIds } },
+      });
+    } else if (entityType === 'LOAN_VISIT') {
+      // For visits, map IDs back to enum names
+      const visitIdToStatus = {
+        1: 'n_a',
+        2: 'pending',
+        3: 'completed',
+        4: 'canceled',
+      };
+
+      statusDetails = allowedStatuses.map(t => ({
+        id: t.toStatusId,
+        name: visitIdToStatus[t.toStatusId],
+      }));
+    }
+
+    return {
+      allowedStatuses: allowedStatuses.map(transition => {
+        const status = statusDetails.find(s => s.id === transition.toStatusId);
+        return {
+          statusId: transition.toStatusId,
+          status: status?.name,
+          requiresReason: transition.requiresReason === true,
+          description: transition.description,
+        };
+      }),
     };
   }
 }
