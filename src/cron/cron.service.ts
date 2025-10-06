@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { getScheduledVisits, updateVisitsToNA } from '../helpers/loan.helper';
+import { statusToId } from 'src/enums/visitStatus.enum';
 
 @Injectable()
 export class CronService {
@@ -35,9 +36,27 @@ export class CronService {
       this.logger.log('Starting loan visit status update...');
 
       // Get visits that were scheduled 30+ days ago
-      const visitIds = await getScheduledVisits(this.prisma, 30);
+      const visits = await getScheduledVisits(this.prisma, 30);
 
-      if (visitIds.length > 0) {
+      if (visits.length > 0) {
+        for (const visit of visits) {
+          // Check StatusMatrix - is this transition allowed?
+          const isTransitionAllowed = await this.prisma.statusMatrixAutomatic.findFirst({
+            where: {
+              entityType: 'LOAN_VISIT',
+              fromStatusId: statusToId[visit.status],
+              toStatusId: statusToId['n_a'],
+              isActive: true,
+              deletedAt: null,
+            },
+          });
+
+          if (!isTransitionAllowed) {
+            this.logger.log(`Status transition from ${visit.status} status to 'N/A' is not allowed`);
+          }
+        }
+
+        const visitIds = visits.map(visit => visit.id);
         // Update visits to n_a status
         const updatedCount = await updateVisitsToNA(this.prisma, visitIds);
         this.logger.log(`Successfully updated ${updatedCount} visit statuses to n/a`);
@@ -49,6 +68,7 @@ export class CronService {
     }
   }
   // @Cron('* * * * *') // Runs every minute
+  // @Cron('30 * * * * *') // Runs every 30 seconds
   // async testCron() {
   //   this.logger.log('Test cron job running every minute...');
   // }
