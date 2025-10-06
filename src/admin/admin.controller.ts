@@ -77,8 +77,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('addPayment/:publicId') // Loan publicId
-  async addPayment(@Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
-    return await this.adminService.addPayment(publicId, data);
+  async addPayment(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
+    return await this.adminService.addPayment(publicId, data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

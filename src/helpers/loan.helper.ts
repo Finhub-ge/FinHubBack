@@ -41,6 +41,9 @@ export const getPaymentSchedule = async (loanId: number) => {
           id: true,
           paymentDate: true,
           amount: true,
+          status: true,
+          paidAmount: true,
+          paidDate: true,
         },
         orderBy: {
           paymentDate: 'asc',

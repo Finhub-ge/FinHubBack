@@ -438,6 +438,8 @@ export class PaymentsHelper {
           status: newStatus
         }
       });
+
+      paymentToApply -= amountForSchedule;
     }
   }
 }

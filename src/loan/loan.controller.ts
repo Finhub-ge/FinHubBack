@@ -4,10 +4,10 @@ import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { AllRoles, ExceptRoles, Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
-import { ApiBearerAuth, ApiConsumes, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
-import { User } from '@prisma/client';
+import { StatusMatrix_entityType, User } from '@prisma/client';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
@@ -335,5 +335,17 @@ export class LoanController {
       disposition: `inline; filename="schedule_${caseId}.pdf"`,
       length: buffer.length,
     });
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @ApiQuery({
+    name: 'entityType',
+    enum: StatusMatrix_entityType,
+  })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Get(':publicId/availableStatuses')
+  async getAvailableStatuses(@Param('publicId') publicId: ParseUUIDPipe, @Query('entityType') entityType: StatusMatrix_entityType,) {
+    return this.loanService.getAvailableStatuses(publicId, entityType);
   }
 }
