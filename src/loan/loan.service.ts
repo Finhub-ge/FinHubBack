@@ -469,7 +469,12 @@ export class LoanService {
       throw new NotFoundException('Loan not found');
     }
 
-    const activeCommitments = await getPaymentSchedule(loan.id);
+    let activeCommitments = [];
+    if (loan.LoanStatus.name === 'Agreement' || loan.LoanStatus.name === 'Promised to pay') {
+      activeCommitments = await getPaymentSchedule(loan.id);
+    } else {
+      activeCommitments = null;
+    }
 
     let comments = loan.Comments;
     let lawyerComments = [];

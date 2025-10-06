@@ -45,7 +45,12 @@ export class AdminService {
   }
 
   async getloanStatuses() {
-    return await this.prisma.loanStatus.findMany()
+    return await this.prisma.loanStatus.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true
+      }
+    })
   }
 
   async getTasks(user: User, filters: GetTasksFilterDto) {
@@ -182,7 +187,7 @@ export class AdminService {
 
   }
 
-  async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto) {
+  async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId) },
       include: { LoanStatus: true }
@@ -209,6 +214,7 @@ export class AdminService {
             paymentDate: data.paymentDate,
             transactionChannelAccountId: data.accountId,
             publicId: randomUUID(),
+            userId: userId,
             principal: 0,
             interest: 0,
             penalty: 0,
