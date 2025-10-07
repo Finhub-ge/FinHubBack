@@ -9,4 +9,5 @@ export enum Role {
   JUNIOR_LAWYER = 'junior_lawyer',
   EXECUTION_LAWYER = 'execution_lawyer',
   ACCOUNTANT = 'accountant',
+  AML_OFFICER = 'aml_officer',
 }
