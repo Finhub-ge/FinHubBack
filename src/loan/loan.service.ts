@@ -1662,8 +1662,13 @@ export class LoanService {
       currentStatusId = loan.statusId;
       currentStatusName = loan.LoanStatus.name;
     } else if (entityType === 'LOAN_VISIT') {
-      const visit = await this.prisma.loanVisit.findUnique({
-        where: { id: Number(publicId), deletedAt: null },
+      const loan = await this.prisma.loan.findUnique({
+        where: { publicId: String(publicId), deletedAt: null }
+      });
+
+      const visit = await this.prisma.loanVisit.findFirst({
+        where: { loanId: loan.id, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
       });
 
       if (!visit) {
