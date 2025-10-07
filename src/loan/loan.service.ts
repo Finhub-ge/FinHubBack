@@ -1005,6 +1005,13 @@ export class LoanService {
         );
       }
 
+      if (status.name === 'Agreement cancel') {
+        await tx.paymentCommitment.updateMany({
+          where: { loanId: loan.id, isActive: 1 },
+          data: { isActive: 0 },
+        });
+      }
+
       // Update loan status
       await tx.loan.update({
         where: { publicId: String(publicId) },

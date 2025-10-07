@@ -1,6 +1,8 @@
-import { PrismaClient, TeamMembership_teamRole } from "@prisma/client";
+import { Prisma, PrismaClient, TeamMembership_teamRole } from "@prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import * as dayjs from "dayjs";
+import { statusToId } from "src/enums/visitStatus.enum";
+import { BadRequestException } from "@nestjs/common";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -195,3 +197,92 @@ export const updateVisitsToNA = async (prisma: PrismaService, visitIds: number[]
 
   return existingVisits.length;
 };
+
+export const markSchedulesAsOverdue = async (prisma: PrismaService, date: Date) => {
+  const overdueUpdate = await prisma.paymentSchedule.updateMany({
+    where: {
+      status: { in: ['PENDING', 'PARTIAL'] },
+      paymentDate: { lt: date },
+      deletedAt: null,
+    },
+    data: {
+      status: 'OVERDUE'
+    }
+  });
+  return overdueUpdate;
+}
+
+export const agreementsToCancel = async (prisma: PrismaService, sixtyDaysAgo: Date) => {
+  const agreementsToCancel = await prisma.paymentCommitment.findMany({
+    where: {
+      type: 'agreement',
+      isActive: 1,
+      deletedAt: null,
+      PaymentSchedule: {
+        some: {
+          status: 'OVERDUE',
+          paymentDate: { lt: sixtyDaysAgo }
+        }
+      }
+    },
+    include: {
+      PaymentSchedule: {
+        where: {
+          status: 'OVERDUE',
+          paymentDate: { lt: sixtyDaysAgo }
+        },
+        orderBy: { paymentDate: 'asc' },
+        take: 1
+      },
+      Loan: {
+        include: { LoanStatus: true }
+      }
+    }
+  });
+  return agreementsToCancel;
+}
+
+export const cancelCommitment = async (prisma: Prisma.TransactionClient | PrismaClient, commitmentId: number) => {
+  const commitment = await prisma.paymentCommitment.update({
+    where: { id: commitmentId },
+    data: { isActive: 0 }
+  });
+
+  return commitment;
+}
+
+export const cancelSchedules = async (prisma: Prisma.TransactionClient | PrismaClient, commitmentId: number) => {
+  const schedules = await prisma.paymentSchedule.updateMany({
+    where: { commitmentId },
+    data: { status: 'CANCELLED' }
+  });
+
+  return schedules;
+}
+
+export const cancelLoan = async (prisma: Prisma.TransactionClient | PrismaClient, loanId: number, statusId: number) => {
+  const loan = await prisma.loan.findUnique({
+    where: { id: loanId },
+    select: { statusId: true, LoanStatus: true }
+  });
+
+  const isTransitionAllowed = await prisma.statusMatrixAutomatic.findFirst({
+    where: {
+      entityType: 'LOAN',
+      fromStatusId: loan.statusId,
+      toStatusId: statusId,
+      isActive: true,
+      deletedAt: null,
+    },
+  });
+
+  if (!isTransitionAllowed) {
+    throw new BadRequestException(`Status transition from ${loan.LoanStatus.name} status to 'Agreement cancel' is not allowed`);
+  }
+  const updatedLoan = await prisma.loan.update({
+    where: { id: loanId },
+    data: { statusId: statusId }
+  });
+
+  return updatedLoan;
+}

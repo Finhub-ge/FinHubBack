@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { getScheduledVisits, updateVisitsToNA } from '../helpers/loan.helper';
+import { getScheduledVisits, markSchedulesAsOverdue, updateVisitsToNA, agreementsToCancel, cancelCommitment, cancelSchedules, cancelLoan } from '../helpers/loan.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
+import { getStartOfDay, getTodayAtMidnight, subtractDays } from 'src/helpers/date.helper';
 
 @Injectable()
 export class CronService {
@@ -68,10 +69,31 @@ export class CronService {
     }
   }
 
-  @Cron('30 * * * * *') // Runs every 30 seconds
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
   async aggrementCancellation() {
     try {
       this.logger.log('Starting agreement cancellation...');
+
+      const today = getTodayAtMidnight();
+      const sixtyDaysAgo = subtractDays(today, 60);
+
+      await markSchedulesAsOverdue(this.prisma, today);
+
+      const agreementToCancel = await agreementsToCancel(this.prisma, sixtyDaysAgo);
+
+      let cancelCount = 0;
+      for (const commitment of agreementToCancel) {
+        await this.prisma.$transaction(async (tx) => {
+          await cancelCommitment(tx, commitment.id);
+
+          // await cancelSchedules(tx, commitment.id);
+
+          await cancelLoan(tx, commitment.loanId, 7);
+        });
+        cancelCount++;
+      }
+
+      this.logger.log(`Successfully cancelled ${cancelCount} agreements`);
     } catch (error) {
       this.logger.error('Error cancelling agreement:', error);
     }
