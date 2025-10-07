@@ -67,6 +67,15 @@ export class CronService {
       this.logger.error('Error updating loan visit status:', error);
     }
   }
+
+  @Cron('30 * * * * *') // Runs every 30 seconds
+  async aggrementCancellation() {
+    try {
+      this.logger.log('Starting agreement cancellation...');
+    } catch (error) {
+      this.logger.error('Error cancelling agreement:', error);
+    }
+  }
   // @Cron('* * * * *') // Runs every minute
   // @Cron('30 * * * * *') // Runs every 30 seconds
   // async testCron() {
