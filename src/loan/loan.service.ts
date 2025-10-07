@@ -179,7 +179,7 @@ export class LoanService {
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
-    const loan = await this.permissionsHelper.loan.findUnique({
+    const loan = await this.permissionsHelper.loan.findFirst({
       where: {
         publicId: String(publicId),
         deletedAt: null

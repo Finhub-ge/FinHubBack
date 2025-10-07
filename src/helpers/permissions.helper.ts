@@ -49,9 +49,8 @@ export class PermissionsHelper {
         });
       },
 
-      findUnique: async (args: any) => {
+      findFirst: async (args: any) => {
         let scopedWhere = this.addUserScope(args?.where || {}, user, model);
-
         // Special logic for collectors with loans > 40 actDays
         if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
           const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
@@ -63,7 +62,7 @@ export class PermissionsHelper {
           }
         }
 
-        return this.prisma[model].findUnique({
+        return this.prisma[model].findFirst({
           ...args,
           where: scopedWhere
         });
