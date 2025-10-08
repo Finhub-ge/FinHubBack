@@ -123,7 +123,7 @@ export class AdminService {
       conditions.push({ updatedAt: completeDateCondition });
     }
 
-    const whereClause = conditions.length > 0 ? { AND: conditions } : {};
+    const whereClause = conditions.length > 0 ? { AND: { deletedAt: null, AND: conditions } } : {};
 
     return await this.prisma.tasks.findMany({
       where: whereClause,
@@ -457,6 +457,12 @@ export class AdminService {
               select: {
                 firstName: true,
                 lastName: true
+              }
+            },
+            LoanRemaining: true,
+            Portfolio: {
+              select: {
+                portfolioSeller: true
               }
             }
           }
