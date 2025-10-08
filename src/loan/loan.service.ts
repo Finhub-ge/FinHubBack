@@ -1683,7 +1683,8 @@ export class LoanService {
       });
 
       if (!visit) {
-        throw new NotFoundException('Visit not found');
+        // throw new NotFoundException('Visit not found');
+        return
       }
 
       // Map enum to ID
