@@ -122,8 +122,8 @@ export class AdminService {
       }
       conditions.push({ updatedAt: completeDateCondition });
     }
-
-    const whereClause = conditions.length > 0 ? { AND: { deletedAt: null, AND: conditions } } : {};
+    conditions.push({ deletedAt: null });
+    const whereClause = conditions.length > 0 ? { AND: conditions } : {};
 
     return await this.prisma.tasks.findMany({
       where: whereClause,
