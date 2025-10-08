@@ -458,6 +458,12 @@ export class AdminService {
                 firstName: true,
                 lastName: true
               }
+            },
+            LoanRemaining: true,
+            Portfolio: {
+              select: {
+                portfolioSeller: true
+              }
             }
           }
         },
