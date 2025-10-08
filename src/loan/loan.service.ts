@@ -70,6 +70,10 @@ export class LoanService {
       where.LoanMarks = { some: { Marks: { id: { in: filters.marks } } } };
     }
 
+    if (filters.actDays) {
+      where.actDays = { gt: filters.actDays };
+    }
+
     const loans = await this.permissionsHelper.loan.findMany({
       where,
       orderBy: { actDays: 'desc' },
