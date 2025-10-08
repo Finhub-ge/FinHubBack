@@ -41,7 +41,7 @@ export class LoanService {
     const where: any = { deletedAt: null };
 
     if (filters.caseId) where.caseId = filters.caseId;
-    if (filters.portfolio?.length) where.portfolioId = { in: filters.portfolio };
+    if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
     if (filters.loanstatus?.length) where.statusId = { in: filters.loanstatus };
 
     if (filters.portfolioseller?.length) {
@@ -88,6 +88,12 @@ export class LoanService {
                 name: true,
               }
             }
+          }
+        },
+        PortfolioCaseGroup: {
+          select: {
+            id: true,
+            groupName: true,
           }
         },
         Debtor: {
@@ -1683,7 +1689,6 @@ export class LoanService {
       });
 
       if (!visit) {
-        // throw new NotFoundException('Visit not found');
         return
       }
 

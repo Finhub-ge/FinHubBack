@@ -697,7 +697,7 @@ export class AdminService {
   }
 
   async getPortfolios() {
-    return await this.prisma.portfolio.findMany({
+    return await this.prisma.portfolioCaseGroup.findMany({
       where: { deletedAt: null }
     });
   }
