@@ -8,6 +8,7 @@ import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
 import { Roles } from "src/auth/decorator/role.decorator";
 import { GetUsersFilterDto } from "./dto/getUsersFilter.dto";
+import { Public } from "src/auth/decorator/public.decorator";
 
 @ApiTags('User')
 @ApiBearerAuth('access-token')
@@ -36,6 +37,12 @@ export class UserController {
   @Get('getAll')
   getAllUsers(@Query() getUsersFilterDto: GetUsersFilterDto) {
     return this.userService.getAllUsers(getUsersFilterDto)
+  }
+
+  @Public()
+  @Get('tempCreateUser')
+  tempCreateUser() {
+    return this.userService.tempCreateUser()
   }
 
   @UseGuards(JwtGuard, RolesGuard)

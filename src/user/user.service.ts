@@ -7,6 +7,8 @@ import * as argon from 'argon2';
 import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { GetUsersFilterDto } from "./dto/getUsersFilter.dto";
+import { dummyUsers } from "dummyUsers";
+import { TeamMembership_teamRole } from "@prisma/client";
 
 @Injectable()
 export class UserService {
@@ -238,5 +240,83 @@ export class UserService {
     }
 
     return { message: 'User updated successfully' };
+  }
+
+  async tempCreateUser() {
+    const users = dummyUsers;
+    const results = {
+      created: [],
+      skipped: [],
+      errors: []
+    };
+
+    for (const userData of users) {
+      try {
+        const hash = await argon.hash(userData.password, {});
+        const accountId = generateAccountId(userData.firstName);
+
+        const role = await this.prisma.role.findUnique({
+          where: { id: userData.role_id }
+        });
+
+        if (!role) {
+          results.errors.push({
+            email: userData.email,
+            reason: `Role ${userData.role_id} not found`
+          });
+          continue;
+        }
+
+        const user = await this.prisma.user.create({
+          data: {
+            accountId: accountId,
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            hash,
+            roleId: role.id,
+            publicId: randomUUID(),
+          },
+        });
+
+        // Create team membership if team_id exists and is not 0
+        if (userData.team_id && userData.team_id !== 0) {
+          await this.prisma.teamMembership.create({
+            data: {
+              userId: user.id,
+              teamId: userData.team_id,
+              teamRole: userData.team_role as TeamMembership_teamRole
+            }
+          });
+        }
+
+        results.created.push({
+          email: user.email,
+          accountId: user.accountId,
+        });
+      } catch (error) {
+        if (error instanceof PrismaClientKnownRequestError) {
+          if (error.code === 'P2002') {
+            results.skipped.push({
+              email: userData.email,
+              reason: 'Already exists'
+            });
+            continue;
+          }
+        }
+        results.errors.push({
+          email: userData.email,
+          reason: error.message || 'Unknown error'
+        });
+      }
+    }
+
+    return {
+      total: users.length,
+      created: results.created.length,
+      skipped: results.skipped.length,
+      errors: results.errors.length,
+      details: results
+    };
   }
 }
