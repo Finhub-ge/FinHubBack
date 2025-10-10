@@ -26,6 +26,7 @@ import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
+import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 
 @Injectable()
 export class LoanService {
@@ -1747,6 +1748,25 @@ export class LoanService {
           description: transition.description,
         };
       }),
+    };
+  }
+
+  async updatePortfolioGroup(publicId: ParseUUIDPipe, userId: number, updatePortfolioGroupDto: UpdatePortfolioGroupDto) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    await this.prisma.loan.update({
+      where: { id: loan.id },
+      data: { groupId: updatePortfolioGroupDto.groupId },
+    });
+
+    return {
+      message: 'Portfolio group updated successfully'
     };
   }
 }
