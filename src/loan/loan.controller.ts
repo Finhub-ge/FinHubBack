@@ -25,6 +25,7 @@ import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
 import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
+import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 
 
 @ApiTags('Loans')
@@ -347,5 +348,13 @@ export class LoanController {
   @Get(':publicId/availableStatuses')
   async getAvailableStatuses(@Param('publicId') publicId: ParseUUIDPipe, @Query('entityType') entityType: StatusMatrix_entityType,) {
     return this.loanService.getAvailableStatuses(publicId, entityType);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Patch(':publicId/updatePortfolioGroup')
+  async updatePortfolioGroup(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() updatePortfolioGroupDto: UpdatePortfolioGroupDto) {
+    return this.loanService.updatePortfolioGroup(publicId, user.id, updatePortfolioGroupDto);
   }
 }
