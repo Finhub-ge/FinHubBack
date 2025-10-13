@@ -765,6 +765,27 @@ export class AdminService {
     }
   }
 
+  async deleteTeam(teamId: number) {
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId }
+    });
+
+    if (!team || team.deletedAt !== null) {
+      throw new BadRequestException('Team not found');
+    }
+
+    await this.prisma.team.update({
+      where: { id: teamId },
+      data: {
+        deletedAt: new Date()
+      }
+    });
+
+    return {
+      message: 'Team deleted successfully'
+    }
+  }
+
   async manageTeamUsers(teamId: number, data: ManageTeamUsersDto) {
     // Check if team exists
     const team = await this.prisma.team.findUnique({
