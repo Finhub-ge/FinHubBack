@@ -269,6 +269,14 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @ApiParam({ name: 'teamId', type: 'number' })
+  @Delete('deleteTeam/:teamId')
+  async deleteTeam(@Param('teamId', ParseIntPipe) teamId: number) {
+    return await this.adminService.deleteTeam(teamId);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiParam({ name: 'teamId', type: 'number' })
   @Post('manageTeamUsers/:teamId')
   async manageTeamUsers(
     @GetUser() user: User,
