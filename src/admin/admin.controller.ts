@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, UseGuards, Query, Delete } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -16,6 +16,7 @@ import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
 import { CreateChargeDto } from "./dto/create-charge.dto";
 import { CreateTeamDto } from "./dto/createTeam.dto";
+import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 
 @ApiTags('Admin')
@@ -252,6 +253,17 @@ export class AdminController {
   @Get('getTeams')
   async getTeams() {
     return await this.adminService.getTeams();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiParam({ name: 'teamId', type: 'number' })
+  @Patch('updateTeam/:teamId')
+  async updateTeam(
+    @Param('teamId', ParseIntPipe) teamId: number,
+    @Body() data: UpdateTeamDto
+  ) {
+    return await this.adminService.updateTeam(teamId, data);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

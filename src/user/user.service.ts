@@ -240,14 +240,16 @@ export class UserService {
         });
       }
 
-      // Create new team membership
-      await this.prisma.teamMembership.create({
-        data: {
-          userId: userId,
-          teamId: data.team_id,
-          teamRole: data.team_role || 'member'
-        }
-      });
+      // Only create new team membership if team_id is not null
+      if (data.team_id !== null) {
+        await this.prisma.teamMembership.create({
+          data: {
+            userId: userId,
+            teamId: data.team_id,
+            teamRole: data.team_role || 'member'
+          }
+        });
+      }
     }
 
     return { message: 'User updated successfully' };

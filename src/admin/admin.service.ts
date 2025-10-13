@@ -15,6 +15,7 @@ import * as timezone from "dayjs/plugin/timezone";
 import { CreateChargeDto } from "./dto/create-charge.dto";
 import { S3Helper } from "src/helpers/s3.helper";
 import { CreateTeamDto } from "./dto/createTeam.dto";
+import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 
 dayjs.extend(utc);
@@ -743,6 +744,25 @@ export class AdminService {
     return await this.prisma.team.findMany({
       where: { deletedAt: null }
     });
+  }
+
+  async updateTeam(teamId: number, data: UpdateTeamDto) {
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId }
+    });
+
+    if (!team || team.deletedAt !== null) {
+      throw new BadRequestException('Team not found');
+    }
+
+    await this.prisma.team.update({
+      where: { id: teamId },
+      data: data
+    });
+
+    return {
+      message: 'Team updated successfully'
+    }
   }
 
   async manageTeamUsers(teamId: number, data: ManageTeamUsersDto) {
