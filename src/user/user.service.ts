@@ -140,6 +140,9 @@ export class UserService {
         updatedAt: true,
         Role: true,
         TeamMembership: {
+          where: {
+            deletedAt: null
+          },
           select: {
             id: true,
             teamId: true,
@@ -176,6 +179,9 @@ export class UserService {
         updatedAt: true,
         Role: true,
         TeamMembership: {
+          where: {
+            deletedAt: null
+          },
           select: {
             id: true,
             teamId: true,
@@ -213,28 +219,35 @@ export class UserService {
     }
 
     // Handle team membership changes
-    if (data.team_id !== undefined || data.team_role !== undefined) {
-      // First, soft delete existing team memberships
-      await this.prisma.teamMembership.updateMany({
+    if (data.team_id !== undefined) {
+      // Check if user already has team membership
+      const existingTeamMembership = await this.prisma.teamMembership.findFirst({
         where: {
           userId: userId,
           deletedAt: null
-        },
-        data: {
-          deletedAt: new Date()
         }
       });
 
-      // Create new team membership if team_id is provided
-      if (data.team_id !== undefined) {
-        await this.prisma.teamMembership.create({
+      if (existingTeamMembership) {
+        // If exists, soft delete the existing membership
+        await this.prisma.teamMembership.update({
+          where: {
+            id: existingTeamMembership.id
+          },
           data: {
-            userId: userId,
-            teamId: data.team_id,
-            teamRole: data.team_role || 'member'
+            deletedAt: new Date()
           }
         });
       }
+
+      // Create new team membership
+      await this.prisma.teamMembership.create({
+        data: {
+          userId: userId,
+          teamId: data.team_id,
+          teamRole: data.team_role || 'member'
+        }
+      });
     }
 
     return { message: 'User updated successfully' };
