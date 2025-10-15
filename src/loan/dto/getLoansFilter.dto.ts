@@ -1,6 +1,7 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, IntersectionType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import { IsOptional } from "class-validator";
+import { PaginationDto } from "src/common";
 
 export class GetLoansFilterDto {
   @ApiProperty({
@@ -93,3 +94,9 @@ export class GetLoansFilterDto {
   @Transform(({ value }) => value ? Number(value) : undefined)
   actDays?: number;
 }
+
+// Combine with pagination
+export class GetLoansFilterWithPaginationDto extends IntersectionType(
+  GetLoansFilterDto,
+  PaginationDto,
+) { }

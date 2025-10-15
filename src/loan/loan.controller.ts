@@ -24,7 +24,7 @@ import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
 import { UpdateVisitDto } from './dto/updateVisit.dto';
-import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
+import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 
 
@@ -37,8 +37,8 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get()
-  getAll(@Query() filters: GetLoansFilterDto) {
-    return this.loanService.getAll(filters);
+  getAll(@Query() filterDto: GetLoansFilterWithPaginationDto) {
+    return this.loanService.getAll(filterDto);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

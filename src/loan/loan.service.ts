@@ -8,7 +8,7 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
@@ -21,12 +21,13 @@ import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
 import { UpdateVisitDto } from './dto/updateVisit.dto';
-import { GetLoansFilterDto } from './dto/getLoansFilter.dto';
+import { GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
+import { PaginatedResult, PaginationService } from 'src/common';
 
 @Injectable()
 export class LoanService {
@@ -35,10 +36,20 @@ export class LoanService {
     private readonly paymentsHelper: PaymentsHelper,
     private readonly utilsHelper: UtilsHelper,
     private readonly uploadsHelper: UploadsHelper,
-    private readonly permissionsHelper: PermissionsHelper
+    private readonly permissionsHelper: PermissionsHelper,
+    private readonly paginationService: PaginationService,
+
   ) { }
 
-  async getAll(filters: GetLoansFilterDto) {
+  async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
+    const { page, limit, ...filters } = filterDto;
+
+    // Get Prisma pagination params
+    const paginationParams = this.paginationService.getPaginationParams({
+      page,
+      limit,
+    });
+
     const where: any = { deletedAt: null };
 
     if (filters.caseId) where.caseId = filters.caseId;
@@ -75,118 +86,129 @@ export class LoanService {
       where.actDays = { gt: filters.actDays };
     }
 
-    const loans = await this.permissionsHelper.loan.findMany({
-      where,
-      orderBy: { actDays: 'desc' },
-      include: {
-        Portfolio: {
-          select: {
-            id: true,
-            name: true,
-            portfolioSeller: {
-              select: {
-                id: true,
-                name: true,
-              }
-            }
-          }
-        },
-        PortfolioCaseGroup: {
-          select: {
-            id: true,
-            groupName: true,
-          }
-        },
-        Debtor: {
-          select: {
-            firstName: true,
-            lastName: true,
-            idNumber: true,
-            DebtorStatus: {
-              select: {
-                id: true,
-                name: true,
-              }
-            }
-          }
-        },
-        LoanStatus: {
-          select: {
-            id: true,
-            name: true,
-          }
-        },
-        LoanAssignment: {
-          where: { isActive: true },
-          select: {
-            createdAt: true,
-            User: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-            Role: {
-              select: {
-                name: true,
+    const [data, total] = await Promise.all([
+      this.permissionsHelper.loan.findMany({
+        where,
+        ...paginationParams,
+        orderBy: { actDays: 'desc' },
+        include: {
+          Portfolio: {
+            select: {
+              id: true,
+              name: true,
+              portfolioSeller: {
+                select: {
+                  id: true,
+                  name: true,
+                }
               }
             }
           },
-        },
-        LoanCollateralStatus: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            CollateralStatus: { select: { id: true, title: true } },
-          }
-        },
-        LoanLitigationStage: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            LitigationStage: { select: { id: true, title: true } },
-          }
-        },
-        LoanLegalStage: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            LegalStage: { select: { id: true, title: true } },
-          }
-        },
-        LoanMarks: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            Marks: { select: { id: true, title: true } },
-          }
-        },
-        LoanAddress: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            address: true,
-            type: true,
-            City: { select: { id: true, city: true } },
-          }
-        },
-        LoanVisit: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          where: { deletedAt: null },
-          select: {
-            id: true,
-            status: true,
-            comment: true,
-            LoanAddress: { select: { id: true, address: true } },
+          PortfolioCaseGroup: {
+            select: {
+              id: true,
+              groupName: true,
+            }
+          },
+          Debtor: {
+            select: {
+              firstName: true,
+              lastName: true,
+              idNumber: true,
+              DebtorStatus: {
+                select: {
+                  id: true,
+                  name: true,
+                }
+              }
+            }
+          },
+          LoanStatus: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+          LoanAssignment: {
+            where: { isActive: true },
+            select: {
+              createdAt: true,
+              User: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                },
+              },
+              Role: {
+                select: {
+                  name: true,
+                }
+              }
+            },
+          },
+          LoanCollateralStatus: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              CollateralStatus: { select: { id: true, title: true } },
+            }
+          },
+          LoanLitigationStage: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              LitigationStage: { select: { id: true, title: true } },
+            }
+          },
+          LoanLegalStage: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              LegalStage: { select: { id: true, title: true } },
+            }
+          },
+          LoanMarks: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              Marks: { select: { id: true, title: true } },
+            }
+          },
+          LoanAddress: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              address: true,
+              type: true,
+              City: { select: { id: true, city: true } },
+            }
+          },
+          LoanVisit: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              status: true,
+              comment: true,
+              LoanAddress: { select: { id: true, address: true } },
+            }
           }
         }
-      }
-    });
+      }),
+      this.permissionsHelper.loan.count({
+        where,
+      }),
+    ]);
 
-    return loans;
+    // Return paginated result
+    return this.paginationService.createPaginatedResult(
+      data,
+      total,
+      { page, limit },
+    );
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
