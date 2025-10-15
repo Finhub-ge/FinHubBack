@@ -114,4 +114,11 @@ export class PaginationService {
   ): PaginatedResult<T> {
     return this.createPaginatedResult<T>([], 0, pagination);
   }
+
+  getAllWithoutPagination<T>(
+    data: T[],
+    total?: number,
+  ): PaginatedResult<T> {
+    return this.createPaginatedResult<T>(data, total || 0, { page: 1, limit: total || 0 });
+  }
 }

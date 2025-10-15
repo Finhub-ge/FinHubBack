@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -21,13 +21,14 @@ import { AddAddressDto } from './dto/addAddress.dto';
 import { UpdateAddressDto } from './dto/updateAddress.dto';
 import { AddVisitDto } from './dto/addVisit.dto';
 import { UpdateVisitDto } from './dto/updateVisit.dto';
-import { GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
+import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
+import { generateExcel } from 'src/helpers/excel.helper';
 
 @Injectable()
 export class LoanService {
@@ -42,13 +43,11 @@ export class LoanService {
   ) { }
 
   async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
-    const { page, limit, ...filters } = filterDto;
-
+    const { page, limit, columns, ...filters } = filterDto;
     // Get Prisma pagination params
-    const paginationParams = this.paginationService.getPaginationParams({
-      page,
-      limit,
-    });
+    const paginationParams = columns
+      ? {}
+      : this.paginationService.getPaginationParams({ page, limit });
 
     const where: any = { deletedAt: null };
 
@@ -202,6 +201,11 @@ export class LoanService {
         where,
       }),
     ]);
+
+    // If columns provided, it's export mode (return data without pagination meta)
+    if (columns) {
+      return this.paginationService.getAllWithoutPagination(data, total);
+    }
 
     // Return paginated result
     return this.paginationService.createPaginatedResult(
@@ -1790,5 +1794,13 @@ export class LoanService {
     return {
       message: 'Portfolio group updated successfully'
     };
+  }
+
+  async exportLoans(filterDto: GetLoansFilterDto) {
+    const loans = await this.getAll(filterDto);
+
+    const prepareLoanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+
+    return await generateExcel(prepareLoanExportData, filterDto.columns, 'Loans Report');
   }
 }

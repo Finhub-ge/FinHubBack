@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { AllRoles, ExceptRoles, Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
-import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { StatusMatrix_entityType, User } from '@prisma/client';
@@ -39,6 +39,28 @@ export class LoanController {
   @Get()
   getAll(@Query() filterDto: GetLoansFilterWithPaginationDto) {
     return this.loanService.getAll(filterDto);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('exportExcel')
+  @ApiOperation({ summary: 'Export loans to Excel' })
+  @ApiResponse({
+    status: 200,
+    description: 'Excel file download',
+    schema: {
+      type: 'string',
+      format: 'binary',
+    },
+  })
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportLoans(@Query() filterDto: GetLoansFilterDto) {
+    const excelBuffer = await this.loanService.exportLoans(filterDto);
+
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=loans-${Date.now()}.xlsx`
+    });
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

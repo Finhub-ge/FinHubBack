@@ -286,3 +286,86 @@ export const cancelLoan = async (prisma: Prisma.TransactionClient | PrismaClient
 
   return updatedLoan;
 }
+
+export const prepareLoanExportData = (loan: any) => {
+  const getAssignmentByRole = (roleName: string) =>
+    loan.LoanAssignment?.find((a) => a.Role?.name === roleName);
+
+  const collector = getAssignmentByRole('collector');
+  const lawyer = getAssignmentByRole('lawyer');
+  const juniorLawyer = getAssignmentByRole('junior-lawyer');
+  const execLawyer = getAssignmentByRole('execution_lawyer');
+  return {
+    caseId: loan.caseId ?? '',
+    portfolio: loan.PortfolioCaseGroup?.groupName ?? '',
+    lender: loan.Portfolio.portfolioSeller?.name ?? '',
+    fullName: `${loan.Debtor?.firstName ?? ''} ${loan.Debtor?.lastName ?? ''}`.trim(),
+    idNumber: loan.Debtor.idNumber ?? '',
+    city: loan?.LoanAddress[0]?.City?.city ?? '',
+    address: loan?.LoanAddress[0]?.address ?? '',
+    principal: loan.principal ?? '',
+    totalDebt: loan.totalDebt ?? '',
+    curr: loan.currency ?? '',
+    interest: loan.interest ?? '',
+    penalty: loan.penalty ?? '',
+    otherFees: loan.otherFee ?? '',
+    charges: loan.legalCharges ?? '',
+    collateralStatus: loan?.LoanCollateralStatus[0]?.CollateralStatus?.title ?? '',
+    clientStatus: loan.Debtor.DebtorStatus?.name ?? '',
+    collectionStatus: loan.LoanStatus?.name ?? '',
+    statusDate: loan.LoanStatus?.createdAt ?? '',
+    visitStatus: loan?.LoanVisit[0]?.status ?? '',
+    legalStage: loan?.LoanLegalStage[0]?.LegalStage?.title ?? '',
+    litigationStage: loan?.LoanLitigationStage[0]?.LitigationStage?.title ?? '',
+    mark: loan?.LoanMarks[0]?.Marks?.title ?? '',
+    collector: collector
+      ? `${collector.User?.firstName ?? ''} ${collector.User?.lastName ?? ''}`.trim()
+      : '',
+    collAssignDate: collector?.createdAt ?? '',
+    lawyer: lawyer
+      ? `${lawyer.User?.firstName ?? ''} ${lawyer.User?.lastName ?? ''}`.trim()
+      : '',
+    lawAssignDate: lawyer?.createdAt ?? '',
+    juniorLawyer: juniorLawyer
+      ? `${juniorLawyer.User?.firstName ?? ''} ${juniorLawyer.User?.lastName ?? ''}`.trim()
+      : '',
+    execLawyer: execLawyer
+      ? `${execLawyer.User?.firstName ?? ''} ${execLawyer.User?.lastName ?? ''}`.trim()
+      : '',
+    actDay: loan.actDays ?? '',
+  };
+}
+
+export const getLoanExportHeaders = (): Record<string, string> => {
+  return {
+    caseId: 'Case',
+    portfolio: 'Portfolio',
+    lender: 'Lender',
+    fullName: 'Full Name',
+    idNumber: 'ID Number',
+    city: 'City',
+    address: 'Address',
+    principal: 'Principal',
+    totalDebt: 'Total Debt',
+    curr: 'Currency',
+    interest: 'Interest',
+    penalty: 'Penalty',
+    otherFees: 'Other Fees',
+    charges: 'Legal Charges',
+    collateralStatus: 'Collateral Status',
+    clientStatus: 'Client Status',
+    collectionStatus: 'Collection Status',
+    statusDate: 'Status Date',
+    visitStatus: 'Visit Status',
+    legalStage: 'Legal Stage',
+    litigationStage: 'Litigation Stage',
+    mark: 'Mark',
+    collector: 'Collector',
+    collAssignDate: 'Collector Assign Date',
+    lawyer: 'Lawyer',
+    lawAssignDate: 'Lawyer Assign Date',
+    juniorLawyer: 'Junior Lawyer',
+    execLawyer: 'Execution Lawyer',
+    actDay: 'Act Day',
+  };
+}
