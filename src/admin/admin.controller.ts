@@ -11,7 +11,7 @@ import { GetUser } from "src/auth/decorator/get-user.decorator";
 import { User } from "@prisma/client";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
 import { CreateChargeDto } from "./dto/create-charge.dto";
@@ -74,7 +74,7 @@ export class AdminController {
 
   @UseGuards(JwtGuard)
   @Get('tasks')
-  getTasks(@GetUser() user: User, @Query() getTasksFilterDto: GetTasksFilterDto) {
+  getTasks(@GetUser() user: User, @Query() getTasksFilterDto: GetTasksWithPaginationDto) {
     return this.adminService.getTasks(user, getTasksFilterDto);
   }
 

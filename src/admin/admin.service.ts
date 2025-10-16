@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { Tasks_status, User, Committee_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
@@ -59,80 +59,59 @@ export class AdminService {
     })
   }
 
-  async getTasks(user: User, filters: GetTasksFilterDto) {
-    const {
-      type,
-      status,
-      employeeId,
-      createdDateStart,
-      createdDateEnd,
-      deadlineDateStart,
-      deadlineDateEnd,
-      completeDateStart,
-      completeDateEnd
-    } = filters
+  async getTasks(user: User, getTasksFilterDto: GetTasksWithPaginationDto) {
+    const { page, limit, ...filters } = getTasksFilterDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const conditions = [];
 
-    // Type filter
-    if (type === 'ASSIGNED_TO_ME') {
-      conditions.push({ toUserId: user.id });
-    } else if (type === 'ASSIGNED_BY_ME') {
-      conditions.push({ fromUser: user.id });
-    }
-
-    // Status filter
-    if (status) {
-      conditions.push({ status: status });
-    }
-
-    // Employee filter
-    if (employeeId) {
-      conditions.push({ toUserId: Number(employeeId) });
+    if (filters.caseId) {
+      conditions.push({ Loan: { caseId: filters.caseId } });
     }
 
     // Created date range
-    if (createdDateStart || createdDateEnd) {
+    if (filters.createdDateStart || filters.createdDateEnd) {
       const createdDateCondition: any = {};
-      if (createdDateStart) {
+      if (filters.createdDateStart) {
         // Set to start of day to include all records from that date
-        createdDateCondition.gte = dayjs(createdDateStart).startOf('day').toDate();
+        createdDateCondition.gte = dayjs(filters.createdDateStart).startOf('day').toDate();
       }
-      if (createdDateEnd) {
+      if (filters.createdDateEnd) {
         // Set to end of day to include all records from that date
-        createdDateCondition.lte = dayjs(createdDateEnd).endOf('day').toDate();
+        createdDateCondition.lte = dayjs(filters.createdDateEnd).endOf('day').toDate();
       }
       conditions.push({ createdAt: createdDateCondition });
     }
 
     // Deadline range
-    if (deadlineDateStart || deadlineDateEnd) {
+    if (filters.deadlineDateStart || filters.deadlineDateEnd) {
       const deadlineCondition: any = {};
-      if (deadlineDateStart) {
-        deadlineCondition.gte = dayjs(deadlineDateStart).startOf('day').toDate();
+      if (filters.deadlineDateStart) {
+        deadlineCondition.gte = dayjs(filters.deadlineDateStart).startOf('day').toDate();
       }
-      if (deadlineDateEnd) {
-        deadlineCondition.lte = dayjs(deadlineDateEnd).endOf('day').toDate();
+      if (filters.deadlineDateEnd) {
+        deadlineCondition.lte = dayjs(filters.deadlineDateEnd).endOf('day').toDate();
       }
       conditions.push({ deadline: deadlineCondition });
     }
 
     // Completed date range
-    if (completeDateStart || completeDateEnd) {
+    if (filters.completeDateStart || filters.completeDateEnd) {
       const completeDateCondition: any = {};
-      if (completeDateStart) {
-        completeDateCondition.gte = dayjs(completeDateStart).startOf('day').toDate();
+      if (filters.completeDateStart) {
+        completeDateCondition.gte = dayjs(filters.completeDateStart).startOf('day').toDate();
       }
-      if (completeDateEnd) {
-        completeDateCondition.lte = dayjs(completeDateEnd).endOf('day').toDate();
+      if (filters.completeDateEnd) {
+        completeDateCondition.lte = dayjs(filters.completeDateEnd).endOf('day').toDate();
       }
       conditions.push({ updatedAt: completeDateCondition });
     }
     conditions.push({ deletedAt: null });
     const whereClause = conditions.length > 0 ? { AND: conditions } : {};
 
-    return await this.prisma.tasks.findMany({
+    const data = await this.prisma.tasks.findMany({
       where: whereClause,
+      ...paginationParams,
       include: {
         User_Tasks_fromUserToUser: {
           select: {
@@ -154,6 +133,10 @@ export class AdminService {
         }
       }
     })
+    const total = await this.prisma.tasks.count({
+      where: whereClause,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto) {
