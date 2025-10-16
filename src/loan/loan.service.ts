@@ -1799,8 +1799,8 @@ export class LoanService {
   async exportLoans(filterDto: GetLoansFilterDto) {
     const loans = await this.getAll(filterDto);
 
-    const prepareLoanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+    const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 
-    return await generateExcel(prepareLoanExportData, filterDto.columns, 'Loans Report');
+    return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
   }
 }

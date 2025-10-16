@@ -44,22 +44,13 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
-  @ApiOperation({ summary: 'Export loans to Excel' })
-  @ApiResponse({
-    status: 200,
-    description: 'Excel file download',
-    schema: {
-      type: 'string',
-      format: 'binary',
-    },
-  })
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   async exportLoans(@Query() filterDto: GetLoansFilterDto) {
     const excelBuffer = await this.loanService.exportLoans(filterDto);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: `attachment; filename=loans-${Date.now()}.xlsx`
+      disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
     });
   }
 

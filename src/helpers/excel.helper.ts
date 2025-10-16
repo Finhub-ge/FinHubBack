@@ -2,12 +2,6 @@ import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { getLoanExportHeaders } from './loan.helper';
 
-/**
- * Simple Excel Generator
- * @param data - Array of objects
- * @param columns - Array of column keys ['caseId', 'fullName']
- * @param sheetName - Sheet name (optional)
- */
 export const generateExcel = async (
   data: any[],
   columns: string[],
@@ -151,6 +145,12 @@ const formatCells = (worksheet: ExcelJS.Worksheet): void => {
       if (typeof value === 'number' && Number.isInteger(value)) {
         cell.numFmt = '#,##0';
       }
+
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: rowNumber % 2 === 0 ? 'FFFFFFFF' : 'e6def9' },
+      };
     });
     row.alignment = {
       vertical: 'middle',
