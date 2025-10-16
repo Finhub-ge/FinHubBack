@@ -281,7 +281,8 @@ export class LoanService {
         LoanStatus: {
           select: {
             name: true,
-            description: true
+            description: true,
+            createdAt: true
           }
         },
         LoanStatusHistory: {
