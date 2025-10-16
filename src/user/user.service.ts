@@ -6,12 +6,14 @@ import { randomUUID } from "crypto";
 import * as argon from 'argon2';
 import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { GetUsersFilterDto } from "./dto/getUsersFilter.dto";
+import { GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
+import { PaginationService } from "src/common/services/pagination.service";
 
 @Injectable()
 export class UserService {
   constructor(
     private prisma: PrismaService,
+    private readonly paginationService: PaginationService,
   ) { }
 
   async createUser(data: CreateUserDto) {
@@ -108,8 +110,9 @@ export class UserService {
     })
   }
 
-  async getAllUsers(filters: GetUsersFilterDto) {
-    const { role } = filters;
+  async getAllUsers(filters: GetUsersWithPaginationDto) {
+    const { page, limit, role } = filters;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     let where: any = {};
 
@@ -124,8 +127,9 @@ export class UserService {
       }
     }
 
-    return this.prisma.user.findMany({
+    const data = await this.prisma.user.findMany({
       where,
+      ...paginationParams,
       select: {
         id: true,
         email: true,
@@ -157,6 +161,12 @@ export class UserService {
         }
       }
     });
+
+    const total = await this.prisma.user.count({
+      where,
+    });
+
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getUsersByRoleId(roleId: string) {
