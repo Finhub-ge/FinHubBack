@@ -1,6 +1,7 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, IntersectionType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { IsOptional } from "class-validator";
+import { IsArray, IsOptional, IsString } from "class-validator";
+import { PaginationDto } from "src/common";
 
 export class GetLoansFilterDto {
   @ApiProperty({
@@ -92,4 +93,25 @@ export class GetLoansFilterDto {
   @IsOptional()
   @Transform(({ value }) => value ? Number(value) : undefined)
   actDays?: number;
+
+  @ApiProperty({
+    description: 'Columns to include in export (comma-separated or array)',
+    required: false,
+    type: String,
+    example: 'caseId,portfolio,loanstatus'
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (!value) return undefined;
+    return Array.isArray(value) ? value : value.split(',');
+  })
+  columns?: string[];
 }
+
+// Combine with pagination
+export class GetLoansFilterWithPaginationDto extends IntersectionType(
+  GetLoansFilterDto,
+  PaginationDto,
+) { }
