@@ -66,6 +66,27 @@ export class PermissionsHelper {
           ...args,
           where: scopedWhere
         });
+      },
+
+      count: async (args: any) => {
+        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
+
+        // Special logic for collectors with loans > 40 actDays
+        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
+          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
+
+          if (highActDaysLoanIds.length > 0) {
+            scopedWhere = {
+              ...scopedWhere,
+              id: { in: highActDaysLoanIds }
+            };
+          }
+        }
+
+        return this.prisma[model].count({
+          ...args,
+          where: scopedWhere
+        });
       }
     };
   }

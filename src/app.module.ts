@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
 import { AminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
+import { CommonModule } from './common/common.module';
 
 
 @Module({
@@ -17,6 +18,7 @@ import { CronService } from './cron/cron.service';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    CommonModule,
     PrismaModule,
     AuthModule,
     UserModule,
