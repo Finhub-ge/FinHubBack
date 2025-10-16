@@ -20,6 +20,7 @@ import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 import { GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
+import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -550,14 +551,42 @@ export class AdminService {
     });
   }
 
-  async getLoanMarks() {
-    return await this.prisma.loanMarks.findMany({
-      where: {
-        deletedAt: null
-      },
+  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
+    const { page, limit, ...filters } = getMarkReportDto;
+
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    const where: any = { deletedAt: null };
+    where.Loan = {};
+    where.LoanAssignment = undefined;
+
+    if (filters.caseId) {
+      where.Loan.caseId = filters.caseId;
+    }
+    if (filters.assigneduser?.length) {
+      where.Loan.LoanAssignment = {
+        some: { User: { id: { in: filters.assigneduser } } },
+      };
+    }
+    if (filters.portfolio?.length) {
+      where.Loan.groupId = { in: filters.portfolio };
+    }
+    if (filters.portfolioseller?.length) {
+      where.Loan.Portfolio = {
+        portfolioSeller: { id: { in: filters.portfolioseller } },
+      };
+    }
+    if (filters.marks?.length) {
+      where.Marks = { id: { in: filters.marks } };
+    }
+
+    const data = await this.prisma.loanMarks.findMany({
+      where,
+      ...paginationParams,
       include: {
         Marks: {
           select: {
+            id: true,
             title: true
           }
         },
@@ -566,6 +595,8 @@ export class AdminService {
             publicId: true,
             caseId: true,
             principal: true,
+            groupId: true,
+            totalDebt: true,
             Debtor: {
               select: {
                 firstName: true,
@@ -574,17 +605,32 @@ export class AdminService {
             },
             Portfolio: {
               select: {
-                name: true
+                id: true,
+                name: true,
+                portfolioSeller: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
+              }
+            },
+            PortfolioCaseGroup: {
+              select: {
+                id: true,
+                groupName: true,
               }
             },
             LoanAssignment: {
               where: {
+                deletedAt: null,
                 isActive: true,
                 unassignedAt: null
               },
               select: {
                 User: {
                   select: {
+                    id: true,
                     firstName: true,
                     lastName: true,
                     Role: {
@@ -600,6 +646,10 @@ export class AdminService {
         }
       }
     });
+    const total = await this.prisma.loanMarks.count({
+      where: where,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getLegalStages() {

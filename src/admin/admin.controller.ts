@@ -20,6 +20,7 @@ import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
+import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -173,8 +174,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('loanMarks')
-  async getLoanMarks() {
-    return await this.adminService.getLoanMarks();
+  async getLoanMarks(@Query() getMarkReportDto: GetMarkReportWithPaginationDto) {
+    return await this.adminService.getLoanMarks(getMarkReportDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
