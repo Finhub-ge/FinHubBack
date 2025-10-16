@@ -21,6 +21,7 @@ import { GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
+import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -450,11 +451,38 @@ export class AdminService {
     });
   }
 
-  async getAllCommittees() {
-    const committees = await this.prisma.committee.findMany({
-      where: {
-        deletedAt: null
-      },
+  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto) {
+    const { page, limit, ...filters } = getCommiteesDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    const where: any = { deletedAt: null };
+
+    if (filters.caseId) {
+      where.Loan = { caseId: filters.caseId };
+    }
+
+    if (filters.type) {
+      where.type = filters.type;
+    }
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.createdDateStart || filters.createdDateEnd) {
+      const createdDateCondition: any = {};
+      if (filters.createdDateStart) {
+        createdDateCondition.gte = dayjs(filters.createdDateStart).startOf('day').toDate();
+      }
+      if (filters.createdDateEnd) {
+        createdDateCondition.lte = dayjs(filters.createdDateEnd).endOf('day').toDate();
+      }
+      where.createdAt = createdDateCondition;
+    }
+
+    const data = await this.prisma.committee.findMany({
+      where,
+      ...paginationParams,
       include: {
         Loan: {
           select: {
@@ -466,12 +494,29 @@ export class AdminService {
                 lastName: true
               }
             },
-            LoanRemaining: true,
+            LoanRemaining: {
+              where: {
+                deletedAt: null
+              }
+            },
             Portfolio: {
               select: {
                 portfolioSeller: true
               }
-            }
+            },
+            LoanLegalStage: {
+              where: {
+                deletedAt: null,
+              },
+              select: {
+                LegalStage: {
+                  select: {
+                    id: true,
+                    title: true
+                  }
+                }
+              }
+            },
           }
         },
         User_Committee_requesterIdToUser: {
@@ -485,6 +530,12 @@ export class AdminService {
             firstName: true,
             lastName: true
           }
+        },
+        Uploads: {
+          select: {
+            id: true,
+            originalFileName: true
+          }
         }
       },
       orderBy: {
@@ -492,7 +543,10 @@ export class AdminService {
       }
     });
 
-    return committees;
+    const total = await this.prisma.committee.count({
+      where,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async createMarks(title: string) {

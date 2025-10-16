@@ -21,6 +21,7 @@ import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
+import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -132,8 +133,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('committees')
-  async getAllCommittees() {
-    return await this.adminService.getAllCommittees();
+  async getAllCommittees(@Query() getCommiteesDto: GetCommiteesWithPaginationDto) {
+    return await this.adminService.getAllCommittees(getCommiteesDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
