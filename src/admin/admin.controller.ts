@@ -18,6 +18,7 @@ import { CreateChargeDto } from "./dto/create-charge.dto";
 import { CreateTeamDto } from "./dto/createTeam.dto";
 import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
+import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -55,10 +56,11 @@ export class AdminController {
     return this.adminService.getDebtoreStatuses();
   }
 
+  @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('transactions/get')
-  async getTransactionList() {
-    return await this.adminService.getTransactionList();
+  async getTransactionList(@Query() getPaymentDto: GetPaymentWithPaginationDto) {
+    return await this.adminService.getTransactionList(getPaymentDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

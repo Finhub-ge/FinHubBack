@@ -17,6 +17,8 @@ import { S3Helper } from "src/helpers/s3.helper";
 import { CreateTeamDto } from "./dto/createTeam.dto";
 import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
+import { GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
+import { PaginationService } from "src/common/services/pagination.service";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -26,7 +28,8 @@ export class AdminService {
   constructor(
     private prisma: PrismaService,
     private paymentHelper: PaymentsHelper,
-    private s3Helper: S3Helper
+    private s3Helper: S3Helper,
+    private readonly paginationService: PaginationService,
   ) { }
 
   async getDebtorContactTypes() {
@@ -151,10 +154,17 @@ export class AdminService {
     })
   }
 
-  async getTransactionList() {
+  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto) {
+    const { page, limit, caseId } = getPaymentDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
     const data = await this.prisma.transaction.findMany({
       where: {
-        deleted: 0
+        deleted: 0,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
       },
       include: {
         TransactionChannelAccounts: {
@@ -175,17 +185,28 @@ export class AdminService {
           }
         }
       },
+      ...paginationParams,
       orderBy: {
         id: 'desc'
       }
     });
+    const total = await this.prisma.transaction.count({
+      where: {
+        deleted: 0,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
+      }
+    });
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
-    const dataObj = {}
-    dataObj['transactions'] = data
-    dataObj['paymentChannels'] = paymentChannels
-    return dataObj;
-
+    const dataObj = {
+      transactions: data,
+      paymentChannels,
+    };
+    return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
   }
 
   async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto, userId: number) {
