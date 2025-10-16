@@ -6,8 +6,9 @@ import { randomUUID } from "crypto";
 import * as argon from 'argon2';
 import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
+import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 import { PaginationService } from "src/common/services/pagination.service";
+import { TeamMembership_teamRole } from "@prisma/client";
 
 @Injectable()
 export class UserService {
@@ -263,5 +264,76 @@ export class UserService {
     }
 
     return { message: 'User updated successfully' };
+  }
+
+  async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto) {
+    const { role } = filters;
+    // Get all team memberships with their users and team info
+    const memberships = await this.prisma.teamMembership.findMany({
+      where: {
+        deletedAt: null,
+        User: role ? { Role: { name: role } } : undefined,
+      },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            Role: true
+          },
+        },
+        Team: true,
+      },
+    });
+
+    // Group by teamId
+    const teamsMap = new Map<number, any>();
+
+    for (const membership of memberships) {
+      const { teamId, teamRole, User, Team } = membership;
+
+      if (!teamsMap.has(teamId)) {
+        teamsMap.set(teamId, {
+          teamId,
+          teamName: Team?.name,
+          teamLeaderId: null,
+          teamLeader: null,
+          teamLeaderRole: null,
+          members: [],
+        });
+      }
+
+      const team = teamsMap.get(teamId);
+
+      if (teamRole === TeamMembership_teamRole.leader) {
+        team.teamLeaderId = User.id;
+        team.teamLeader = `${User.firstName} ${User.lastName}`;
+        team.teamLeaderRole = User.Role?.name;
+        team.teamName = Team.name;
+      } else {
+        team.members.push({
+          id: User.id,
+          firstName: User.firstName,
+          lastName: User.lastName,
+          role: User.Role?.name,
+        });
+      }
+    }
+
+    // Convert to array and filter out teams without leaders (optional)
+    let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
+
+    // ✅ If role = 'collector', return only those teams where members include collectors
+    if (role === 'collector') {
+      result = result
+        .map(team => ({
+          ...team,
+          members: team.members.filter(m => m.role === 'collector'),
+        }))
+        .filter(team => team.members.length > 0);
+    }
+
+    return result
   }
 }

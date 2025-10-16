@@ -52,4 +52,11 @@ export class UserController {
   editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
     return this.userService.editUser(userId, data)
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('groupedBy/teamLeader')
+  getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto) {
+    return this.userService.getUsersGroupedByTeamLeader(getUsersFilterDto)
+  }
 }
