@@ -19,6 +19,7 @@ import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
 import { GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
 import { PaginationService } from "src/common/services/pagination.service";
+import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -672,10 +673,17 @@ export class AdminService {
     }
   }
 
-  async getCharges() {
-    return await this.prisma.charges.findMany({
+  async getCharges(getChargeDto: GetChargeWithPaginationDto) {
+    const { page, limit, caseId } = getChargeDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const data = await this.prisma.charges.findMany({
       where: {
-        deletedAt: null
+        deletedAt: null,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
       },
       include: {
         Loan: {
@@ -720,8 +728,23 @@ export class AdminService {
             }
           }
         }
+      },
+      ...paginationParams,
+      orderBy: {
+        createdAt: 'desc'
       }
     })
+    const total = await this.prisma.charges.count({
+      where: {
+        deletedAt: null,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
+      }
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getPortfolios() {
