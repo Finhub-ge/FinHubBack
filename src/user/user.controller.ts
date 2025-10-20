@@ -7,7 +7,7 @@ import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
 import { Roles } from "src/auth/decorator/role.decorator";
-import { GetUsersFilterDto } from "./dto/getUsersFilter.dto";
+import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 
 @ApiTags('User')
 @ApiBearerAuth('access-token')
@@ -34,7 +34,7 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('getAll')
-  getAllUsers(@Query() getUsersFilterDto: GetUsersFilterDto) {
+  getAllUsers(@Query() getUsersFilterDto: GetUsersWithPaginationDto) {
     return this.userService.getAllUsers(getUsersFilterDto)
   }
 
@@ -51,5 +51,12 @@ export class UserController {
   @Patch(':userId')
   editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
     return this.userService.editUser(userId, data)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Get('groupedBy/teamLeader')
+  getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto) {
+    return this.userService.getUsersGroupedByTeamLeader(getUsersFilterDto)
   }
 }

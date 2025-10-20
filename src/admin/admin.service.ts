@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { Tasks_status, User, Committee_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
@@ -17,6 +17,11 @@ import { S3Helper } from "src/helpers/s3.helper";
 import { CreateTeamDto } from "./dto/createTeam.dto";
 import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
+import { GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
+import { PaginationService } from "src/common/services/pagination.service";
+import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
+import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
+import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -26,7 +31,8 @@ export class AdminService {
   constructor(
     private prisma: PrismaService,
     private paymentHelper: PaymentsHelper,
-    private s3Helper: S3Helper
+    private s3Helper: S3Helper,
+    private readonly paginationService: PaginationService,
   ) { }
 
   async getDebtorContactTypes() {
@@ -54,80 +60,59 @@ export class AdminService {
     })
   }
 
-  async getTasks(user: User, filters: GetTasksFilterDto) {
-    const {
-      type,
-      status,
-      employeeId,
-      createdDateStart,
-      createdDateEnd,
-      deadlineDateStart,
-      deadlineDateEnd,
-      completeDateStart,
-      completeDateEnd
-    } = filters
+  async getTasks(user: User, getTasksFilterDto: GetTasksWithPaginationDto) {
+    const { page, limit, ...filters } = getTasksFilterDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const conditions = [];
 
-    // Type filter
-    if (type === 'ASSIGNED_TO_ME') {
-      conditions.push({ toUserId: user.id });
-    } else if (type === 'ASSIGNED_BY_ME') {
-      conditions.push({ fromUser: user.id });
-    }
-
-    // Status filter
-    if (status) {
-      conditions.push({ status: status });
-    }
-
-    // Employee filter
-    if (employeeId) {
-      conditions.push({ toUserId: Number(employeeId) });
+    if (filters.caseId) {
+      conditions.push({ Loan: { caseId: filters.caseId } });
     }
 
     // Created date range
-    if (createdDateStart || createdDateEnd) {
+    if (filters.createdDateStart || filters.createdDateEnd) {
       const createdDateCondition: any = {};
-      if (createdDateStart) {
+      if (filters.createdDateStart) {
         // Set to start of day to include all records from that date
-        createdDateCondition.gte = dayjs(createdDateStart).startOf('day').toDate();
+        createdDateCondition.gte = dayjs(filters.createdDateStart).startOf('day').toDate();
       }
-      if (createdDateEnd) {
+      if (filters.createdDateEnd) {
         // Set to end of day to include all records from that date
-        createdDateCondition.lte = dayjs(createdDateEnd).endOf('day').toDate();
+        createdDateCondition.lte = dayjs(filters.createdDateEnd).endOf('day').toDate();
       }
       conditions.push({ createdAt: createdDateCondition });
     }
 
     // Deadline range
-    if (deadlineDateStart || deadlineDateEnd) {
+    if (filters.deadlineDateStart || filters.deadlineDateEnd) {
       const deadlineCondition: any = {};
-      if (deadlineDateStart) {
-        deadlineCondition.gte = dayjs(deadlineDateStart).startOf('day').toDate();
+      if (filters.deadlineDateStart) {
+        deadlineCondition.gte = dayjs(filters.deadlineDateStart).startOf('day').toDate();
       }
-      if (deadlineDateEnd) {
-        deadlineCondition.lte = dayjs(deadlineDateEnd).endOf('day').toDate();
+      if (filters.deadlineDateEnd) {
+        deadlineCondition.lte = dayjs(filters.deadlineDateEnd).endOf('day').toDate();
       }
       conditions.push({ deadline: deadlineCondition });
     }
 
     // Completed date range
-    if (completeDateStart || completeDateEnd) {
+    if (filters.completeDateStart || filters.completeDateEnd) {
       const completeDateCondition: any = {};
-      if (completeDateStart) {
-        completeDateCondition.gte = dayjs(completeDateStart).startOf('day').toDate();
+      if (filters.completeDateStart) {
+        completeDateCondition.gte = dayjs(filters.completeDateStart).startOf('day').toDate();
       }
-      if (completeDateEnd) {
-        completeDateCondition.lte = dayjs(completeDateEnd).endOf('day').toDate();
+      if (filters.completeDateEnd) {
+        completeDateCondition.lte = dayjs(filters.completeDateEnd).endOf('day').toDate();
       }
       conditions.push({ updatedAt: completeDateCondition });
     }
     conditions.push({ deletedAt: null });
     const whereClause = conditions.length > 0 ? { AND: conditions } : {};
 
-    return await this.prisma.tasks.findMany({
+    const data = await this.prisma.tasks.findMany({
       where: whereClause,
+      ...paginationParams,
       include: {
         User_Tasks_fromUserToUser: {
           select: {
@@ -149,12 +134,23 @@ export class AdminService {
         }
       }
     })
+    const total = await this.prisma.tasks.count({
+      where: whereClause,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
-  async getTransactionList() {
+  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto) {
+    const { page, limit, caseId } = getPaymentDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
     const data = await this.prisma.transaction.findMany({
       where: {
-        deleted: 0
+        deleted: 0,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
       },
       include: {
         TransactionChannelAccounts: {
@@ -175,17 +171,28 @@ export class AdminService {
           }
         }
       },
+      ...paginationParams,
       orderBy: {
         id: 'desc'
       }
     });
+    const total = await this.prisma.transaction.count({
+      where: {
+        deleted: 0,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
+      }
+    });
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
-    const dataObj = {}
-    dataObj['transactions'] = data
-    dataObj['paymentChannels'] = paymentChannels
-    return dataObj;
-
+    const dataObj = {
+      transactions: data,
+      paymentChannels,
+    };
+    return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
   }
 
   async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto, userId: number) {
@@ -444,11 +451,38 @@ export class AdminService {
     });
   }
 
-  async getAllCommittees() {
-    const committees = await this.prisma.committee.findMany({
-      where: {
-        deletedAt: null
-      },
+  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto) {
+    const { page, limit, ...filters } = getCommiteesDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    const where: any = { deletedAt: null };
+
+    if (filters.caseId) {
+      where.Loan = { caseId: filters.caseId };
+    }
+
+    if (filters.type) {
+      where.type = filters.type;
+    }
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.createdDateStart || filters.createdDateEnd) {
+      const createdDateCondition: any = {};
+      if (filters.createdDateStart) {
+        createdDateCondition.gte = dayjs(filters.createdDateStart).startOf('day').toDate();
+      }
+      if (filters.createdDateEnd) {
+        createdDateCondition.lte = dayjs(filters.createdDateEnd).endOf('day').toDate();
+      }
+      where.createdAt = createdDateCondition;
+    }
+
+    const data = await this.prisma.committee.findMany({
+      where,
+      ...paginationParams,
       include: {
         Loan: {
           select: {
@@ -460,12 +494,29 @@ export class AdminService {
                 lastName: true
               }
             },
-            LoanRemaining: true,
+            LoanRemaining: {
+              where: {
+                deletedAt: null
+              }
+            },
             Portfolio: {
               select: {
                 portfolioSeller: true
               }
-            }
+            },
+            LoanLegalStage: {
+              where: {
+                deletedAt: null,
+              },
+              select: {
+                LegalStage: {
+                  select: {
+                    id: true,
+                    title: true
+                  }
+                }
+              }
+            },
           }
         },
         User_Committee_requesterIdToUser: {
@@ -479,6 +530,12 @@ export class AdminService {
             firstName: true,
             lastName: true
           }
+        },
+        Uploads: {
+          select: {
+            id: true,
+            originalFileName: true
+          }
         }
       },
       orderBy: {
@@ -486,7 +543,10 @@ export class AdminService {
       }
     });
 
-    return committees;
+    const total = await this.prisma.committee.count({
+      where,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async createMarks(title: string) {
@@ -528,14 +588,42 @@ export class AdminService {
     });
   }
 
-  async getLoanMarks() {
-    return await this.prisma.loanMarks.findMany({
-      where: {
-        deletedAt: null
-      },
+  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
+    const { page, limit, ...filters } = getMarkReportDto;
+
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    const where: any = { deletedAt: null };
+    where.Loan = {};
+    where.LoanAssignment = undefined;
+
+    if (filters.caseId) {
+      where.Loan.caseId = filters.caseId;
+    }
+    if (filters.assigneduser?.length) {
+      where.Loan.LoanAssignment = {
+        some: { User: { id: { in: filters.assigneduser } } },
+      };
+    }
+    if (filters.portfolio?.length) {
+      where.Loan.groupId = { in: filters.portfolio };
+    }
+    if (filters.portfolioseller?.length) {
+      where.Loan.Portfolio = {
+        portfolioSeller: { id: { in: filters.portfolioseller } },
+      };
+    }
+    if (filters.marks?.length) {
+      where.Marks = { id: { in: filters.marks } };
+    }
+
+    const data = await this.prisma.loanMarks.findMany({
+      where,
+      ...paginationParams,
       include: {
         Marks: {
           select: {
+            id: true,
             title: true
           }
         },
@@ -544,6 +632,8 @@ export class AdminService {
             publicId: true,
             caseId: true,
             principal: true,
+            groupId: true,
+            totalDebt: true,
             Debtor: {
               select: {
                 firstName: true,
@@ -552,17 +642,32 @@ export class AdminService {
             },
             Portfolio: {
               select: {
-                name: true
+                id: true,
+                name: true,
+                portfolioSeller: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
+              }
+            },
+            PortfolioCaseGroup: {
+              select: {
+                id: true,
+                groupName: true,
               }
             },
             LoanAssignment: {
               where: {
+                deletedAt: null,
                 isActive: true,
                 unassignedAt: null
               },
               select: {
                 User: {
                   select: {
+                    id: true,
                     firstName: true,
                     lastName: true,
                     Role: {
@@ -578,6 +683,10 @@ export class AdminService {
         }
       }
     });
+    const total = await this.prisma.loanMarks.count({
+      where: where,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getLegalStages() {
@@ -651,10 +760,17 @@ export class AdminService {
     }
   }
 
-  async getCharges() {
-    return await this.prisma.charges.findMany({
+  async getCharges(getChargeDto: GetChargeWithPaginationDto) {
+    const { page, limit, caseId } = getChargeDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const data = await this.prisma.charges.findMany({
       where: {
-        deletedAt: null
+        deletedAt: null,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
       },
       include: {
         Loan: {
@@ -699,8 +815,23 @@ export class AdminService {
             }
           }
         }
+      },
+      ...paginationParams,
+      orderBy: {
+        createdAt: 'desc'
       }
     })
+    const total = await this.prisma.charges.count({
+      where: {
+        deletedAt: null,
+        ...(caseId && {
+          Loan: {
+            caseId: caseId
+          }
+        })
+      }
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getPortfolios() {

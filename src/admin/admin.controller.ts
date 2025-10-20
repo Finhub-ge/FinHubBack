@@ -11,13 +11,17 @@ import { GetUser } from "src/auth/decorator/get-user.decorator";
 import { User } from "@prisma/client";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto } from "./dto/getTasksFilter.dto";
+import { GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import { CreateMarksDto } from "./dto/createMarks.dto";
 import { CreateChargeDto } from "./dto/create-charge.dto";
 import { CreateTeamDto } from "./dto/createTeam.dto";
 import { UpdateTeamDto } from "./dto/updateTeam.dto";
 import { ManageTeamUsersDto } from "./dto/manageTeamUsers.dto";
+import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto";
+import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
+import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
+import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -55,10 +59,11 @@ export class AdminController {
     return this.adminService.getDebtoreStatuses();
   }
 
+  @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('transactions/get')
-  async getTransactionList() {
-    return await this.adminService.getTransactionList();
+  async getTransactionList(@Query() getPaymentDto: GetPaymentWithPaginationDto) {
+    return await this.adminService.getTransactionList(getPaymentDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -70,7 +75,7 @@ export class AdminController {
 
   @UseGuards(JwtGuard)
   @Get('tasks')
-  getTasks(@GetUser() user: User, @Query() getTasksFilterDto: GetTasksFilterDto) {
+  getTasks(@GetUser() user: User, @Query() getTasksFilterDto: GetTasksWithPaginationDto) {
     return this.adminService.getTasks(user, getTasksFilterDto);
   }
 
@@ -128,8 +133,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('committees')
-  async getAllCommittees() {
-    return await this.adminService.getAllCommittees();
+  async getAllCommittees(@Query() getCommiteesDto: GetCommiteesWithPaginationDto) {
+    return await this.adminService.getAllCommittees(getCommiteesDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -170,8 +175,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('loanMarks')
-  async getLoanMarks() {
-    return await this.adminService.getLoanMarks();
+  async getLoanMarks(@Query() getMarkReportDto: GetMarkReportWithPaginationDto) {
+    return await this.adminService.getLoanMarks(getMarkReportDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -213,8 +218,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('getCharges')
-  async getCharges() {
-    return await this.adminService.getCharges();
+  async getCharges(@Query() getChargeDto: GetChargeWithPaginationDto) {
+    return await this.adminService.getCharges(getChargeDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
