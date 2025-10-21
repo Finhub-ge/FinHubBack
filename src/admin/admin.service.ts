@@ -195,9 +195,9 @@ export class AdminService {
     return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
   }
 
-  async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto, userId: number) {
-    const loan = await this.prisma.loan.findUnique({
-      where: { publicId: String(publicId) },
+  async addPayment(data: CreatePaymentDto, userId: number) {
+    const loan = await this.prisma.loan.findFirst({
+      where: { caseId: Number(data.caseId) },
       include: { LoanStatus: true }
     });
 
