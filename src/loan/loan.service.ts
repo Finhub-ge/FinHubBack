@@ -961,7 +961,7 @@ export class LoanService {
       }
     }
 
-    if (status.name === 'Promised to pay') {
+    if (status.name === 'Promised To Pay') {
       if (!updateLoanStatusDto.promise) {
         throw new BadRequestException('Promise data is required for promise status');
       }
@@ -1024,7 +1024,7 @@ export class LoanService {
       }
 
       // Handle Promise status
-      if (status.name === 'Promised to pay') {
+      if (status.name === 'Promised To Pay') {
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
@@ -1043,7 +1043,7 @@ export class LoanService {
         );
       }
 
-      if (status.name === 'Agreement cancel') {
+      if (status.name === 'Agreement Canceled') {
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
