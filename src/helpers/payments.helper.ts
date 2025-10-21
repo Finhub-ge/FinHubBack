@@ -323,17 +323,22 @@ export class PaymentsHelper {
       principal: number;
     },
     newCurrentDebt: number,
+    loanRemaining: LoanRemaining,
     prisma: Prisma.TransactionClient | PrismaClient = this.prisma
   ) {
+    const newAgreementMin = newCurrentDebt = Number(loanRemaining.agreementMin) ? newCurrentDebt : Number(loanRemaining.agreementMin);
     await prisma.loanRemaining.update({
-      where: { id: loanRemainingId },
+      where: { id: loanRemainingId, },
       data: {
-        legalCharges: newBalances.legalCharges,
-        otherFee: newBalances.otherFee,
-        penalty: newBalances.penalty,
-        interest: newBalances.interest,
-        principal: newBalances.principal,
-        currentDebt: newCurrentDebt
+        deletedAt: new Date()
+      }
+    });
+    await prisma.loanRemaining.create({
+      data: {
+        loanId: loanRemaining.loanId,
+        ...newBalances,
+        currentDebt: newCurrentDebt,
+        agreementMin: newAgreementMin
       }
     });
   }

@@ -22,6 +22,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
+import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -195,9 +196,9 @@ export class AdminService {
     return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
   }
 
-  async addPayment(publicId: ParseUUIDPipe, data: CreatePaymentDto, userId: number) {
-    const loan = await this.prisma.loan.findUnique({
-      where: { publicId: String(publicId) },
+  async addPayment(data: CreatePaymentDto, userId: number) {
+    const loan = await this.prisma.loan.findFirst({
+      where: { caseId: Number(data.caseId) },
       include: { LoanStatus: true }
     });
 
@@ -206,7 +207,7 @@ export class AdminService {
     }
 
     let loanRemaining = await this.prisma.loanRemaining.findFirst({
-      where: { loanId: loan.id }
+      where: { loanId: loan.id, deletedAt: null }
     });
 
     if (!loanRemaining) {
@@ -215,6 +216,30 @@ export class AdminService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        if (Number(data.amount) > Number(loanRemaining.currentDebt)) {
+          const remainingAmount = Number(data.amount) - Number(loanRemaining.currentDebt);
+          await tx.loanRemaining.update({
+            where: { id: loanRemaining.id },
+            data: {
+              deletedAt: new Date()
+            }
+          });
+          await tx.loanRemaining.create({
+            data: {
+              loanId: loan.id,
+              principal: loanRemaining.principal,
+              interest: loanRemaining.interest,
+              penalty: Number(loanRemaining.penalty) + remainingAmount,
+              otherFee: loanRemaining.otherFee,
+              legalCharges: loanRemaining.legalCharges,
+              currentDebt: Number(loanRemaining.currentDebt) + remainingAmount,
+              agreementMin: loanRemaining.agreementMin,
+            }
+          });
+          loanRemaining = await tx.loanRemaining.findFirst({
+            where: { loanId: loan.id, deletedAt: null }
+          });
+        }
         const transaction = await tx.transaction.create({
           data: {
             loanId: loan.id,
@@ -239,6 +264,7 @@ export class AdminService {
           tx
         );
 
+        // return allocationResult
         await this.paymentHelper.updateTransactionSummary(
           transaction.id,
           allocationResult.transactionSummary,
@@ -249,6 +275,7 @@ export class AdminService {
           loanRemaining.id,
           allocationResult.newBalances,
           allocationResult.newCurrentDebt,
+          loanRemaining,
           tx
         );
 
@@ -267,6 +294,28 @@ export class AdminService {
             Number(data.amount || 0),
             tx
           );
+        }
+
+        // Update loan status if balance is fully paid
+        if (Number(allocationResult.newCurrentDebt) === 0) {
+          // Update loan status
+          await tx.loan.update({
+            where: { id: loan.id },
+            data: {
+              statusId: 12,
+            }
+          });
+
+          // Create loan status history record
+          await tx.loanStatusHistory.create({
+            data: {
+              loanId: loan.id,
+              oldStatusId: loan.statusId,
+              newStatusId: 12,
+              changedBy: userId,
+              notes: 'Automatically updated to Closed (paid) - loan balance reached 0',
+            },
+          });
         }
 
         return {
@@ -414,38 +463,11 @@ export class AdminService {
         }
       });
 
-      if (!currentRemaining) {
-        await tx.loanRemaining.create({
-          data: {
-            loanId: committee.loanId,
-            principal: committee.Loan.principal,
-            interest: committee.Loan.interest,
-            penalty: committee.Loan.penalty,
-            otherFee: committee.Loan.otherFee,
-            legalCharges: committee.Loan.legalCharges,
-            currentDebt: committee.Loan.totalDebt,
-            agreementMin: data.agreementMinAmount,
-          }
-        });
-      } else {
-        await tx.loanRemaining.update({
-          where: { id: currentRemaining.id },
-          data: { deletedAt: new Date() },
-        });
-
-        await tx.loanRemaining.create({
-          data: {
-            loanId: currentRemaining.loanId,
-            principal: currentRemaining.principal,
-            interest: currentRemaining.interest,
-            penalty: currentRemaining.penalty,
-            otherFee: currentRemaining.otherFee,
-            legalCharges: currentRemaining.legalCharges,
-            currentDebt: currentRemaining.currentDebt,
-            agreementMin: data.agreementMinAmount,
-          },
-        });
-      }
+      // if (!currentRemaining) {
+      //   await createInitialLoanRemaining(tx, committee, data.agreementMinAmount);
+      // } else {
+      await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
+      // }
 
       return { message: 'Committee response submitted successfully' };
     });

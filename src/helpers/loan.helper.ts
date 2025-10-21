@@ -369,3 +369,143 @@ export const getLoanExportHeaders = (): Record<string, string> => {
     actDay: 'Act Day',
   };
 }
+
+export const createInitialLoanRemaining = async (prisma: Prisma.TransactionClient | PrismaClient, committee: any, agreementMinAmount: number) => {
+  await prisma.loanRemaining.create({
+    data: {
+      loanId: committee.loanId,
+      principal: committee.Loan.principal,
+      interest: committee.Loan.interest,
+      penalty: committee.Loan.penalty,
+      otherFee: committee.Loan.otherFee,
+      legalCharges: committee.Loan.legalCharges,
+      currentDebt: committee.Loan.totalDebt,
+      agreementMin: agreementMinAmount,
+    }
+  });
+}
+
+export const updateLoanRemaining = async (prisma: Prisma.TransactionClient | PrismaClient, currentRemaining: any, newAgreementMin: number) => {
+  // Soft delete the current record
+  await prisma.loanRemaining.update({
+    where: { id: currentRemaining.id },
+    data: { deletedAt: new Date() },
+  });
+
+  const currentDebt = Number(currentRemaining.currentDebt);
+  const difference = currentDebt - newAgreementMin;
+
+  const newLoanData = calculateNewLoanValues(currentRemaining, difference);
+
+  await prisma.loanRemaining.create({
+    data: {
+      loanId: currentRemaining.loanId,
+      ...newLoanData,
+      currentDebt: newAgreementMin,
+      agreementMin: newAgreementMin,
+    },
+  });
+}
+
+export const calculateNewLoanValues = (currentRemaining: any, difference: number) => {
+  if (difference > 0) {
+    // Current debt is higher than agreement min, need to reduce
+    return handleDebtReduction(currentRemaining, difference);
+  }
+
+  if (difference < 0) {
+    // Current debt is lower than agreement min, need to increase
+    return handleDebtIncrease(currentRemaining, Math.abs(difference));
+  }
+
+  return copyCurrentValues(currentRemaining);
+}
+
+export const handleDebtReduction = (currentRemaining: any, reductionAmount: number) => {
+  const values = {
+    otherFee: Number(currentRemaining.otherFee),
+    penalty: Number(currentRemaining.penalty),
+    interest: Number(currentRemaining.interest),
+    principal: Number(currentRemaining.principal),
+    legalCharges: Number(currentRemaining.legalCharges),
+  };
+
+  const { newValues, remainingReduction } = applyReductions(values, reductionAmount);
+
+  if (remainingReduction > 0) {
+    throw new BadRequestException(
+      'Cannot reduce debt: insufficient funds in Other Fee, Penalty, Interest, Principal, or Legal Charges to cover the reduction'
+    );
+  }
+
+  return {
+    otherFee: newValues.otherFee,
+    penalty: newValues.penalty,
+    interest: newValues.interest,
+    principal: newValues.principal,
+    legalCharges: newValues.legalCharges,
+  };
+}
+
+export const applyReductions = (
+  values: {
+    otherFee: number;
+    penalty: number;
+    interest: number;
+    principal: number;
+    legalCharges: number;
+  },
+  amount: number
+) => {
+  const newValues = { ...values };
+  let remainingReduction = amount;
+
+  // 1. Reduce Other Fee first
+  const otherFeeReduction = Math.min(newValues.otherFee, remainingReduction);
+  newValues.otherFee -= otherFeeReduction;
+  remainingReduction -= otherFeeReduction;
+
+  // 2. Reduce Penalty
+  const penaltyReduction = Math.min(newValues.penalty, remainingReduction);
+  newValues.penalty -= penaltyReduction;
+  remainingReduction -= penaltyReduction;
+
+  // 3. Reduce Interest
+  const interestReduction = Math.min(newValues.interest, remainingReduction);
+  newValues.interest -= interestReduction;
+  remainingReduction -= interestReduction;
+
+  // 4. Reduce Principal
+  const principalReduction = Math.min(newValues.principal, remainingReduction);
+  newValues.principal -= principalReduction;
+  remainingReduction -= principalReduction;
+
+  // 5. Reduce Legal Charges
+  const legalChargesReduction = Math.min(newValues.legalCharges, remainingReduction);
+  newValues.legalCharges -= legalChargesReduction;
+  remainingReduction -= legalChargesReduction;
+
+  return { newValues, remainingReduction };
+}
+
+export const handleDebtIncrease = (currentRemaining: any, increaseAmount: number) => {
+  return {
+    principal: currentRemaining.principal,
+    interest: currentRemaining.interest,
+    penalty: Number(currentRemaining.penalty) + increaseAmount,
+    otherFee: currentRemaining.otherFee,
+    legalCharges: currentRemaining.legalCharges,
+    currentDebt: Number(currentRemaining.currentDebt) + increaseAmount,
+  };
+}
+
+export const copyCurrentValues = (currentRemaining: any) => {
+  return {
+    principal: currentRemaining.principal,
+    interest: currentRemaining.interest,
+    penalty: currentRemaining.penalty,
+    otherFee: currentRemaining.otherFee,
+    legalCharges: currentRemaining.legalCharges,
+    currentDebt: currentRemaining.currentDebt,
+  };
+}

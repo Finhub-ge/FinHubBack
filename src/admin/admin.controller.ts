@@ -79,12 +79,11 @@ export class AdminController {
     return this.adminService.getTasks(user, getTasksFilterDto);
   }
 
-  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
-  @Post('addPayment/:publicId') // Loan publicId
-  async addPayment(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreatePaymentDto) {
-    return await this.adminService.addPayment(publicId, data, user.id);
+  @Post('addPayment') // Loan publicId
+  async addPayment(@GetUser() user: User, @Body() data: CreatePaymentDto) {
+    return await this.adminService.addPayment(data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
