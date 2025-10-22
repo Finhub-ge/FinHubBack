@@ -1,5 +1,5 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import { IsInt, IsOptional, Min, Max } from 'class-validator';
 
 export class PaginationDto {
@@ -28,6 +28,11 @@ export class PaginationDto {
   @Min(1)
   @Max(100)
   limit?: number = 10;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(({ value }) => value ? value === 'true' : undefined)
+  skip?: boolean = false;
 }
 
 export interface PaginationMeta {
@@ -46,5 +51,5 @@ export interface PaginatedResult<T> {
 
 export interface PrismaPaginationParams {
   skip: number;
-  take: number;
+  take?: number;
 }
