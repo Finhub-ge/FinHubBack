@@ -51,5 +51,5 @@ export interface PaginatedResult<T> {
 
 export interface PrismaPaginationParams {
   skip: number;
-  take: number;
+  take?: number;
 }

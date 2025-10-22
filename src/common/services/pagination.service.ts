@@ -69,6 +69,12 @@ export class PaginationService {
   }
 
   getPaginationParams(pagination: PaginationDto): PrismaPaginationParams {
+    if (pagination.skip) {
+      return {
+        skip: 0,
+        take: undefined, // No limit when skip=true
+      };
+    }
     return {
       skip: this.getSkip(pagination),
       take: this.getLimit(pagination),
