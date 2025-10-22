@@ -18,7 +18,6 @@ export class PaginationService {
     pagination: PaginationDto,
   ): PaginatedResult<T> {
     if (pagination.skip) {
-      console.log('skip', pagination.skip);
       return {
         meta: {
           page: 1,

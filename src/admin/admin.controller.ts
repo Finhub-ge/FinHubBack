@@ -208,10 +208,9 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
-  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
-  @Post('addCharge/:publicId')
-  async addCharge(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() data: CreateChargeDto) {
-    return await this.adminService.addCharge(publicId, data, user.id);
+  @Post('addCharge')
+  async addCharge(@GetUser() user: User, @Body() data: CreateChargeDto) {
+    return await this.adminService.addCharge(data, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
