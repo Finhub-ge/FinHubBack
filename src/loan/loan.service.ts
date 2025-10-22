@@ -53,8 +53,9 @@ export class LoanService {
     const where: any = { deletedAt: null };
 
     if (showOnlyClosedLoans) {
-      console.log('showOnlyClosedLoans', filters);
       where.statusId = { in: LoanStatusGroups.CLOSED };
+
+      if (filters.caseId) where.caseId = filters.caseId;
 
       if (filters.portfolio?.length) {
         where.groupId = { in: filters.portfolio };
