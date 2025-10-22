@@ -108,6 +108,24 @@ export class GetLoansFilterDto {
     return Array.isArray(value) ? value : value.split(',');
   })
   columns?: string[];
+
+  @ApiProperty({
+    description: 'Show closed loans',
+    required: false,
+    type: Boolean
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value === 'true' : undefined)
+  showClosedLoans?: boolean = false;
+
+  @ApiProperty({
+    description: 'Show only closed loans',
+    required: false,
+    type: Boolean
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value === 'true' : undefined)
+  showOnlyClosedLoans?: boolean = false;
 }
 
 // Combine with pagination

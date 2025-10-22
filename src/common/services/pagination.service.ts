@@ -35,8 +35,8 @@ export class PaginationService {
     };
 
     return {
-      data,
       meta,
+      data,
     };
   }
 
