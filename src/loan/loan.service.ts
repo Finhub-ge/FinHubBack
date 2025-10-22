@@ -29,6 +29,7 @@ import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
+import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
 
 @Injectable()
 export class LoanService {
@@ -43,13 +44,44 @@ export class LoanService {
   ) { }
 
   async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
-    const { page, limit, columns, ...filters } = filterDto;
+    const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
     // Get Prisma pagination params
     const paginationParams = columns
       ? {}
       : this.paginationService.getPaginationParams({ page, limit });
 
     const where: any = { deletedAt: null };
+
+    if (showOnlyClosedLoans) {
+      where.statusId = { in: LoanStatusGroups.CLOSED };
+
+      if (filters.caseId) where.caseId = filters.caseId;
+
+      if (filters.portfolio?.length) {
+        where.groupId = { in: filters.portfolio };
+      }
+
+      if (filters.portfolioseller?.length) {
+        where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
+      }
+
+      if (filters.assigneduser?.length) {
+        where.LoanAssignment = {
+          some: {
+            isActive: true,
+            User: { id: { in: filters.assigneduser } }
+          }
+        };
+      }
+
+      if (filters.legalstage?.length) {
+        where.LoanLegalStage = { some: { LegalStage: { id: { in: filters.legalstage } } } };
+      }
+    } else if (!showClosedLoans && !filters.caseId) {
+      where.statusId = {
+        notIn: LoanStatusGroups.CLOSED,
+      };
+    }
 
     if (filters.caseId) where.caseId = filters.caseId;
     if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
