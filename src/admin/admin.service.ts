@@ -743,9 +743,13 @@ export class AdminService {
     });
   }
 
-  async addCharge(publicId: ParseUUIDPipe, data: CreateChargeDto, userId: number) {
+  async addCharge(data: CreateChargeDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({
-      where: { publicId: String(publicId) }
+      where: { publicId: String(data.loanId) }
+    });
+
+    const loanRemaining = await this.prisma.loanRemaining.findFirst({
+      where: { loanId: loan.id, deletedAt: null }
     });
     if (!loan) throw new HttpException('Loan not found', 404)
 
@@ -764,15 +768,22 @@ export class AdminService {
         }
       });
 
-      await tx.loan.update({
-        where: { id: loan.id },
+      await tx.loanRemaining.update({
+        where: { id: loanRemaining.id },
         data: {
-          legalCharges: {
-            increment: Number(data.amount)
-          },
-          totalDebt: {
-            increment: Number(data.amount)
-          }
+          deletedAt: new Date()
+        }
+      });
+      await tx.loanRemaining.create({
+        data: {
+          loanId: loan.id,
+          principal: loanRemaining.principal,
+          interest: loanRemaining.interest,
+          penalty: loanRemaining.penalty,
+          otherFee: loanRemaining.otherFee,
+          legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
+          currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
+          agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
         }
       });
     });
