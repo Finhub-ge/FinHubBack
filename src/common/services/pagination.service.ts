@@ -17,6 +17,20 @@ export class PaginationService {
     total: number,
     pagination: PaginationDto,
   ): PaginatedResult<T> {
+    if (pagination.skip) {
+      console.log('skip', pagination.skip);
+      return {
+        meta: {
+          page: 1,
+          limit: total,
+          total,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+        data,
+      };
+    }
     const page = pagination.page || this.DEFAULT_PAGE;
     const limit = pagination.limit || this.DEFAULT_LIMIT;
 
@@ -41,9 +55,13 @@ export class PaginationService {
   }
 
   getSkip(pagination: PaginationDto): number {
-    const page = pagination.page || this.DEFAULT_PAGE;
-    const limit = pagination.limit || this.DEFAULT_LIMIT;
-    return (page - 1) * limit;
+    if (pagination.skip) {
+      return 0;
+    } else {
+      const page = pagination.page || this.DEFAULT_PAGE;
+      const limit = pagination.limit || this.DEFAULT_LIMIT;
+      return (page - 1) * limit;
+    }
   }
 
   getLimit(pagination: PaginationDto): number {

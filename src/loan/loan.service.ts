@@ -239,6 +239,15 @@ export class LoanService {
       return this.paginationService.getAllWithoutPagination(data, total);
     }
 
+    if (showOnlyClosedLoans) {
+      await Promise.all(
+        data.map(async (loan) => {
+          const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
+          loan.totalPayments = totalPayments;
+        })
+      );
+    }
+
     // Return paginated result
     return this.paginationService.createPaginatedResult(
       data,

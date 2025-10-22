@@ -112,8 +112,8 @@ export class UserService {
   }
 
   async getAllUsers(filters: GetUsersWithPaginationDto) {
-    const { page, limit, role } = filters;
-    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const { page, limit, role, skip } = filters;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
     let where: any = {};
 
@@ -167,7 +167,7 @@ export class UserService {
       where,
     });
 
-    return this.paginationService.createPaginatedResult(data, total, { page, limit });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 
   async getUsersByRoleId(roleId: string) {
