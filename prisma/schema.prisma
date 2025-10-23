@@ -74,8 +74,8 @@ model ContactType {
 model Debtor {
   id                  Int                   @id @default(autoincrement())
   publicId            String                @default(dbgenerated("(uuid())")) @db.Char(36)
-  firstName           String
-  lastName            String
+  firstName           String?
+  lastName            String?
   birthdate           DateTime?             @db.Date
   mainEmail           String?
   mainPhone           String?
@@ -84,7 +84,7 @@ model Debtor {
   createdAt           DateTime              @default(now()) @db.DateTime(0)
   updatedAt           DateTime              @default(now()) @db.DateTime(0)
   deletedAt           DateTime?             @db.DateTime(0)
-  idNumber            String?               @db.VarChar(45)
+  idNumber            String?               @unique(map: "idNumber_UNIQUE") @db.VarChar(45)
   DebtorStatus        DebtorStatus          @relation(fields: [statusId], references: [id])
   DebtorContact       DebtorContact[]
   DebtorGuarantors    DebtorGuarantors[]
@@ -187,6 +187,7 @@ model Loan {
   updatedAt             DateTime                @default(now()) @db.DateTime(0)
   deletedAt             DateTime?               @db.DateTime(0)
   currency              String?                 @db.VarChar(45)
+  olDbId                Int?
   Charges               Charges[]
   Comments              Comments[]
   Committee             Committee[]

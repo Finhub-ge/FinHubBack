@@ -509,3 +509,69 @@ export const copyCurrentValues = (currentRemaining: any) => {
     currentDebt: currentRemaining.currentDebt,
   };
 }
+
+export const calculateRemainingChanges = (remaining: any[]) => {
+  if (remaining.length < 2) {
+    return null;
+  }
+
+  // Filter out the last record if it's all zeros (payment)
+  let activeHistory = [...remaining];
+  const lastRecord = activeHistory[activeHistory.length - 1];
+
+  const isLastRecordZero =
+    parseFloat(lastRecord.principal?.toString() || '0') === 0 &&
+    parseFloat(lastRecord.interest?.toString() || '0') === 0 &&
+    parseFloat(lastRecord.penalty?.toString() || '0') === 0 &&
+    parseFloat(lastRecord.otherFee?.toString() || '0') === 0 &&
+    parseFloat(lastRecord.legalCharges?.toString() || '0') === 0;
+
+  if (isLastRecordZero) {
+    activeHistory = activeHistory.slice(0, -1); // Remove last record
+  }
+
+  if (activeHistory.length < 2) {
+    return null; // No changes to calculate
+  }
+
+  const fields = ['principal', 'interest', 'penalty', 'otherFee', 'legalCharges'];
+
+  const result = {
+    principal: 0,
+    interest: 0,
+    penalty: 0,
+    otherFee: 0,
+    legalCharges: 0,
+    totalWriteOff: 0
+  };
+
+  // Compare consecutive records (excluding the payment record)
+  for (let i = 1; i < activeHistory.length; i++) {
+    const previous = activeHistory[i - 1];
+    const current = activeHistory[i];
+
+    fields.forEach(field => {
+      const oldValue = parseFloat(previous[field]?.toString() || '0');
+      const newValue = parseFloat(current[field]?.toString() || '0');
+
+      // Positive if decreased (write-off), negative if increased (added debt)
+      const change = oldValue - newValue;
+
+      result[field] += change;
+    });
+  }
+
+  // Calculate totalWriteOff (sum of all components)
+  result.totalWriteOff = result.principal + result.interest + result.penalty +
+    result.otherFee + result.legalCharges;
+
+  // Round to 2 decimal places
+  result.principal = parseFloat(result.principal.toFixed(2));
+  result.interest = parseFloat(result.interest.toFixed(2));
+  result.penalty = parseFloat(result.penalty.toFixed(2));
+  result.otherFee = parseFloat(result.otherFee.toFixed(2));
+  result.legalCharges = parseFloat(result.legalCharges.toFixed(2));
+  result.totalWriteOff = parseFloat(result.totalWriteOff.toFixed(2));
+
+  return result;
+}
