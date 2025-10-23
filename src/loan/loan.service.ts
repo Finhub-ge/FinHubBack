@@ -64,14 +64,19 @@ export class LoanService {
       if (filters.portfolioseller?.length) {
         where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
       }
-
       if (filters.assigneduser?.length || filters.assignedlawyer?.length || filters.assignedjuniorLawyer?.length || filters.assignedexecutionLawyer?.length) {
-        let users = [filters.assigneduser, filters.assignedlawyer, filters.assignedjuniorLawyer, filters.assignedexecutionLawyer];
+        const assignedIds = [
+          ...(filters.assigneduser || []),
+          ...(filters.assignedlawyer || []),
+          ...(filters.assignedjuniorLawyer || []),
+          ...(filters.assignedexecutionLawyer || []),
+        ];
+
         where.LoanAssignment = {
           some: {
             isActive: true,
-            User: { id: { in: [filters.assigneduser, filters.assignedlawyer, filters.assignedjuniorLawyer, filters.assignedexecutionLawyer] } }
-          }
+            User: { id: { in: assignedIds } },
+          },
         };
       }
 
@@ -92,12 +97,19 @@ export class LoanService {
       where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
     }
 
-    if (filters.assigneduser?.length) {
+    if (filters.assigneduser?.length || filters.assignedlawyer?.length || filters.assignedjuniorLawyer?.length || filters.assignedexecutionLawyer?.length) {
+      const assignedIds = [
+        ...(filters.assigneduser || []),
+        ...(filters.assignedlawyer || []),
+        ...(filters.assignedjuniorLawyer || []),
+        ...(filters.assignedexecutionLawyer || []),
+      ];
+
       where.LoanAssignment = {
         some: {
           isActive: true,
-          User: { id: { in: filters.assigneduser } }
-        }
+          User: { id: { in: assignedIds } },
+        },
       };
     }
 
