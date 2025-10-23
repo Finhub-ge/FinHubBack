@@ -41,13 +41,40 @@ export class GetLoansFilterDto {
   loanstatus?: number[];
 
   @ApiProperty({
-    description: 'Filter by assigned user IDs',
+    description: 'Filter by collector user IDs',
     required: false,
     type: String
   })
   @IsOptional()
   @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
   assigneduser?: number[];
+
+  @ApiProperty({
+    description: 'Filter by lawyer user IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  assignedlawyer?: number[];
+
+  @ApiProperty({
+    description: 'Filter by junior lawyer user IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  assignedjuniorLawyer?: number[];
+
+  @ApiProperty({
+    description: 'Filter by execution lawyer user IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  assignedexecutionLawyer?: number[];
 
   @ApiProperty({
     description: 'Filter by collateral status IDs',
