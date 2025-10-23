@@ -575,7 +575,13 @@ export class LoanService {
     }
 
     let activeCommitments = [];
-    if (loan.LoanStatus.name === 'Agreement' || loan.LoanStatus.name === 'Promised to pay') {
+    if (
+      loan?.LoanStatus &&
+      (
+        ['Agreement', 'Promised to pay'].includes(loan.LoanStatus.name) ||
+        LoanStatusGroups.CLOSED.includes(Number(loan.statusId))
+      )
+    ) {
       activeCommitments = await getPaymentSchedule(loan.id);
     } else {
       activeCommitments = null;
