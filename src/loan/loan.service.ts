@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, calculateRemainingChanges } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -244,6 +244,19 @@ export class LoanService {
         data.map(async (loan) => {
           const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
           loan.totalPayments = totalPayments;
+        })
+      );
+
+      await Promise.all(
+        data.map(async (loan) => {
+          const remainingHistory = await this.prisma.loanRemaining.findMany({
+            where: {
+              loanId: loan.id
+            },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          loan.remainingChanges = calculateRemainingChanges(remainingHistory);
         })
       );
     }

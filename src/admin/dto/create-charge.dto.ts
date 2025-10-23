@@ -9,51 +9,51 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 export class CreateChargeDto {
-    @ApiProperty()
-    @IsNumber()
-    @IsNotEmpty()
-    loanId: number;
+  @ApiProperty()
+  @IsNumber()
+  @IsNotEmpty()
+  caseId: number;
 
-    @ApiProperty()
-    @IsNumber()
-    @IsNotEmpty()
-    chargeTypeId: number;
+  @ApiProperty()
+  @IsNumber()
+  @IsNotEmpty()
+  chargeTypeId: number;
 
-    @ApiProperty()
-    @IsNumber()
-    @IsNotEmpty()
-    channel: number;
+  @ApiProperty()
+  @IsNumber()
+  @IsNotEmpty()
+  channel: number;
 
-    @ApiProperty()
-    @IsNumber()
-    @IsNotEmpty()
-    accountId: number;
+  @ApiProperty()
+  @IsNumber()
+  @IsNotEmpty()
+  accountId: number;
 
-    @ApiProperty()
-    @Transform(({ value }) => {
-        // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
-        console.log(value)
-        const date = dayjs
-            .utc(value)
-            .tz('Asia/Tbilisi')
-            .hour(12)
-            .minute(0)
-            .second(0)
-            .utc()
-            .toISOString()
+  @ApiProperty()
+  @Transform(({ value }) => {
+    // Convert UTC ISO string to Tbilisi local date string (YYYY-MM-DD)
+    console.log(value)
+    const date = dayjs
+      .utc(value)
+      .tz('Asia/Tbilisi')
+      .hour(12)
+      .minute(0)
+      .second(0)
+      .utc()
+      .toISOString()
 
-        console.log(date)
-        return date;
-    })
-    @IsDateString()
-    chargeDate: string;
+    console.log(date)
+    return date;
+  })
+  @IsDateString()
+  chargeDate: string;
 
-    @ApiProperty()
-    @IsNumberString()
-    amount: string;
+  @ApiProperty()
+  @IsNumberString()
+  amount: string;
 
-    @ApiProperty()
-    @IsOptional()
-    @IsString()
-    comment?: string;
+  @ApiProperty()
+  @IsOptional()
+  @IsString()
+  comment?: string;
 }
