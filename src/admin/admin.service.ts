@@ -304,6 +304,7 @@ export class AdminService {
             where: { id: loan.id },
             data: {
               statusId: 12,
+              closedAt: new Date(),
             }
           });
 

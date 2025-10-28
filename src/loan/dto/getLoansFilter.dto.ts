@@ -1,6 +1,6 @@
 import { ApiProperty, IntersectionType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { IsArray, IsOptional, IsString } from "class-validator";
+import { IsArray, IsDateString, IsOptional, IsString } from "class-validator";
 import { PaginationDto } from "src/common";
 
 export class GetLoansFilterDto {
@@ -153,6 +153,16 @@ export class GetLoansFilterDto {
   @IsOptional()
   @Transform(({ value }) => value ? value === 'true' : undefined)
   showOnlyClosedLoans?: boolean = false;
+
+  @ApiProperty({ description: 'Start date for closed date range', required: false })
+  @IsDateString()
+  @IsOptional()
+  closedDateStart?: string;
+
+  @ApiProperty({ description: 'End date for closed date range', required: false })
+  @IsDateString()
+  @IsOptional()
+  closedDateEnd?: string;
 }
 
 // Combine with pagination
