@@ -594,6 +594,8 @@ export const buildLoanSearchWhere = (searchValue: string) => {
   // Debtor phone
   orConditions.push({ Debtor: { mainPhone: { contains: trimmed } } });
 
+  orConditions.push({ Debtor: { DebtorContact: { some: { value: { contains: trimmed } } } } });
+
   // Guarantors
   const guarantorFields = ['firstName', 'lastName', 'phone', 'mobile', 'idNumber'];
   guarantorFields.forEach((field) => {

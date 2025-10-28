@@ -103,7 +103,6 @@ export class LoanService {
 
     if (filters.search) {
       const searchWhere = buildLoanSearchWhere(filters.search);
-
       where.AND = where.AND || [];
       where.AND.push({ OR: searchWhere });
     }
