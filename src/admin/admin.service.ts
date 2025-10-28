@@ -252,7 +252,8 @@ export class AdminService {
             interest: 0,
             penalty: 0,
             fees: 0,
-            legal: 0
+            legal: 0,
+            comment: data.comment || null
           }
         });
 
