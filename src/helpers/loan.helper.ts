@@ -575,3 +575,65 @@ export const calculateRemainingChanges = (remaining: any[]) => {
 
   return result;
 }
+
+export const buildLoanSearchWhere = (searchValue: string) => {
+  const trimmed = searchValue.trim();
+  const isNumeric = /^\d+$/.test(trimmed);
+  const orConditions: Prisma.LoanWhereInput[] = [];
+
+  // numeric Case ID
+  if (isNumeric) orConditions.push({ caseId: Number(trimmed) });
+
+  // Debtor personal ID
+  orConditions.push({ Debtor: { idNumber: trimmed } });
+
+  // Debtor first/last name
+  orConditions.push({ Debtor: { firstName: { contains: trimmed } } });
+  orConditions.push({ Debtor: { lastName: { contains: trimmed } } });
+
+  // Debtor phone
+  orConditions.push({ Debtor: { mainPhone: { contains: trimmed } } });
+
+  // Guarantors
+  const guarantorFields = ['firstName', 'lastName', 'phone', 'mobile', 'idNumber'];
+  guarantorFields.forEach((field) => {
+    orConditions.push({
+      Debtor: {
+        DebtorGuarantors: {
+          some: { [field]: { contains: trimmed } },
+        },
+      },
+    });
+  });
+
+  return orConditions;
+};
+
+export const getLatestLoanIds = async (prisma: PrismaService, table: string, relationField: string, filterValues: (number | string)[]) => {
+  const latest = await prisma[table].groupBy({
+    by: ['loanId'],
+    where: { deletedAt: null },
+    _max: { createdAt: true },
+  });
+
+  const whereCondition: any = {
+    deletedAt: null,
+    OR: latest.map((s) => ({
+      loanId: s.loanId,
+      createdAt: s._max.createdAt,
+    })),
+  };
+
+  if (relationField === 'status') {
+    whereCondition.status = { in: Array.isArray(filterValues) ? filterValues : [filterValues] };
+  } else {
+    whereCondition[`${relationField}Id`] = { in: filterValues.map(Number) };
+  }
+
+  const matches = await prisma[table].findMany({
+    where: whereCondition,
+    select: { loanId: true },
+  });
+
+  return matches.map((m) => m.loanId);
+};

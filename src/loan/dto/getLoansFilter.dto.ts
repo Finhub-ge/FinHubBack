@@ -7,11 +7,11 @@ export class GetLoansFilterDto {
   @ApiProperty({
     description: 'Search by case ID',
     required: false,
-    type: Number
+    type: String
   })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  @Transform(({ value }) => value ? value.trim() : undefined)
+  search?: string;
 
   @ApiProperty({
     description: 'Filter by portfolio IDs',
@@ -86,6 +86,15 @@ export class GetLoansFilterDto {
   collateralstatus?: number[];
 
   @ApiProperty({
+    description: 'Filter by client status IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  clientStatus?: number[];
+
+  @ApiProperty({
     description: 'Filter by litigation stage IDs',
     required: false,
     type: String
@@ -113,6 +122,24 @@ export class GetLoansFilterDto {
   marks?: number[];
 
   @ApiProperty({
+    description: 'Filter by city IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  city?: number[];
+
+  @ApiProperty({
+    description: 'Filter by visit status IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  // @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  visitStatus?: string[];
+
+  @ApiProperty({
     description: 'Search by act days',
     required: false,
     type: Number
@@ -125,7 +152,6 @@ export class GetLoansFilterDto {
     description: 'Columns to include in export (comma-separated or array)',
     required: false,
     type: String,
-    example: 'caseId,portfolio,loanstatus'
   })
   @IsOptional()
   @IsArray()

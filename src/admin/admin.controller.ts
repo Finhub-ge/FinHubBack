@@ -295,4 +295,11 @@ export class AdminController {
   async getCity() {
     return await this.adminService.getCity();
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('getVisitStatus')
+  async getVisitStatus() {
+    return await this.adminService.getVisitStatus();
+  }
 }

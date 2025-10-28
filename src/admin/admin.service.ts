@@ -1027,4 +1027,10 @@ export class AdminService {
       where: { deletedAt: null }
     });
   }
+
+  async getVisitStatus() {
+    return await this.prisma.visitStatus.findMany({
+      where: { deletedAt: null }
+    });
+  }
 }
