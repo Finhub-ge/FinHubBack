@@ -4,6 +4,7 @@ import { ArrayMinSize, IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, 
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
+import { IsWithinOneMonth } from 'src/validators/date.validator';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -86,6 +87,7 @@ class PromiseDto {
   })
   @IsDateString()
   @IsNotEmpty()
+  @IsWithinOneMonth({ message: 'Payment date must be within one month from today' })
   paymentDate: string;
 
   @ApiProperty()

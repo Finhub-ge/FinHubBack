@@ -43,3 +43,24 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
     });
   };
 }
+
+export function IsWithinOneMonth(validationOptions?: ValidationOptions) {
+  return function (object: any, propertyName: string) {
+    registerDecorator({
+      name: 'isWithinOneMonth',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any, args: ValidationArguments) {
+          const date = dayjs.utc(value);
+          const oneMonthLater = dayjs().add(1, 'month');
+          return date.isBefore(oneMonthLater); // true if date <= one month from now
+        },
+        defaultMessage(args: ValidationArguments) {
+          return `${args.property} must be within one month from today`;
+        },
+      },
+    });
+  };
+}
