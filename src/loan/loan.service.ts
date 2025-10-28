@@ -30,6 +30,7 @@ import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class LoanService {
@@ -82,6 +83,17 @@ export class LoanService {
 
       if (filters.legalstage?.length) {
         where.LoanLegalStage = { some: { LegalStage: { id: { in: filters.legalstage } } } };
+      }
+
+      if (filters.closedDateStart || filters.closedDateEnd) {
+        const closedDateCondition: any = {};
+        if (filters.closedDateStart) {
+          closedDateCondition.gte = dayjs(filters.closedDateStart).startOf('day').toDate();
+        }
+        if (filters.closedDateEnd) {
+          closedDateCondition.lte = dayjs(filters.closedDateEnd).endOf('day').toDate();
+        }
+        where.closedAt = closedDateCondition;
       }
     } else if (!showClosedLoans && !filters.caseId) {
       where.statusId = {

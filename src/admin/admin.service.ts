@@ -252,7 +252,8 @@ export class AdminService {
             interest: 0,
             penalty: 0,
             fees: 0,
-            legal: 0
+            legal: 0,
+            comment: data.comment || null
           }
         });
 
@@ -303,6 +304,7 @@ export class AdminService {
             where: { id: loan.id },
             data: {
               statusId: 12,
+              closedAt: new Date(),
             }
           });
 
