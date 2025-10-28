@@ -6,7 +6,7 @@ import { EditUserDto } from "./dto/editUser.dto";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
-import { Roles } from "src/auth/decorator/role.decorator";
+import { AllRoles, Roles } from "src/auth/decorator/role.decorator";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 
 @ApiTags('User')
@@ -32,7 +32,7 @@ export class UserController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @AllRoles()
   @Get('getAll')
   getAllUsers(@Query() getUsersFilterDto: GetUsersWithPaginationDto) {
     return this.userService.getAllUsers(getUsersFilterDto)

@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, calculateRemainingChanges } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, calculateRemainingChanges, buildLoanSearchWhere, getLatestLoanIds } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -46,7 +46,7 @@ export class LoanService {
 
   async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
-    // Get Prisma pagination params
+
     const paginationParams = columns
       ? {}
       : this.paginationService.getPaginationParams({ page, limit });
@@ -56,16 +56,24 @@ export class LoanService {
     if (showOnlyClosedLoans) {
       where.statusId = { in: LoanStatusGroups.CLOSED };
 
-      if (filters.caseId) where.caseId = filters.caseId;
+      if (filters.search) {
+        const searchWhere = buildLoanSearchWhere(filters.search);
 
-      if (filters.portfolio?.length) {
-        where.groupId = { in: filters.portfolio };
+        where.AND = where.AND || [];
+        where.AND.push({ OR: searchWhere });
       }
-
+      if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
       if (filters.portfolioseller?.length) {
         where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
       }
-      if (filters.assigneduser?.length || filters.assignedlawyer?.length || filters.assignedjuniorLawyer?.length || filters.assignedexecutionLawyer?.length) {
+
+      // Assigned users (collectors, lawyers, etc.)
+      if (
+        filters.assigneduser?.length ||
+        filters.assignedlawyer?.length ||
+        filters.assignedjuniorLawyer?.length ||
+        filters.assignedexecutionLawyer?.length
+      ) {
         const assignedIds = [
           ...(filters.assigneduser || []),
           ...(filters.assignedlawyer || []),
@@ -81,35 +89,41 @@ export class LoanService {
         };
       }
 
-      if (filters.legalstage?.length) {
-        where.LoanLegalStage = { some: { LegalStage: { id: { in: filters.legalstage } } } };
-      }
-
       if (filters.closedDateStart || filters.closedDateEnd) {
         const closedDateCondition: any = {};
-        if (filters.closedDateStart) {
+        if (filters.closedDateStart)
           closedDateCondition.gte = dayjs(filters.closedDateStart).startOf('day').toDate();
-        }
-        if (filters.closedDateEnd) {
+        if (filters.closedDateEnd)
           closedDateCondition.lte = dayjs(filters.closedDateEnd).endOf('day').toDate();
-        }
         where.closedAt = closedDateCondition;
       }
-    } else if (!showClosedLoans && !filters.caseId) {
-      where.statusId = {
-        notIn: LoanStatusGroups.CLOSED,
-      };
+    } else if (!showClosedLoans && !filters.search) {
+      where.statusId = { notIn: LoanStatusGroups.CLOSED };
     }
 
-    if (filters.caseId) where.caseId = filters.caseId;
+    if (filters.search) {
+      const searchWhere = buildLoanSearchWhere(filters.search);
+
+      where.AND = where.AND || [];
+      where.AND.push({ OR: searchWhere });
+    }
     if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
     if (filters.loanstatus?.length) where.statusId = { in: filters.loanstatus };
-
     if (filters.portfolioseller?.length) {
       where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
     }
 
-    if (filters.assigneduser?.length || filters.assignedlawyer?.length || filters.assignedjuniorLawyer?.length || filters.assignedexecutionLawyer?.length) {
+    if (filters.clientStatus?.length) {
+      where.Debtor = { DebtorStatus: { id: { in: filters.clientStatus } } };
+    }
+
+    // Active assignment filter
+    if (
+      filters.assigneduser?.length ||
+      filters.assignedlawyer?.length ||
+      filters.assignedjuniorLawyer?.length ||
+      filters.assignedexecutionLawyer?.length
+    ) {
       const assignedIds = [
         ...(filters.assigneduser || []),
         ...(filters.assignedlawyer || []),
@@ -125,21 +139,45 @@ export class LoanService {
       };
     }
 
+    if (filters.actDays) where.actDays = { gt: filters.actDays };
+
+    const loanIdsToFilter: Set<string> = new Set();
+
     if (filters.collateralstatus?.length) {
-      where.LoanCollateralStatus = { some: { CollateralStatus: { id: { in: filters.collateralstatus } } } };
-    }
-    if (filters.litigationstage?.length) {
-      where.LoanLitigationStage = { some: { LitigationStage: { id: { in: filters.litigationstage } } } };
-    }
-    if (filters.legalstage?.length) {
-      where.LoanLegalStage = { some: { LegalStage: { id: { in: filters.legalstage } } } };
-    }
-    if (filters.marks?.length) {
-      where.LoanMarks = { some: { Marks: { id: { in: filters.marks } } } };
+      const ids = await getLatestLoanIds(this.prisma, 'LoanCollateralStatus', 'collateralStatus', filters.collateralstatus);
+      ids.forEach((id) => loanIdsToFilter.add(id));
     }
 
-    if (filters.actDays) {
-      where.actDays = { gt: filters.actDays };
+    if (filters.city?.length) {
+      const ids = await getLatestLoanIds(this.prisma, 'LoanAddress', 'city', filters.city);
+      ids.forEach((id) => loanIdsToFilter.add(id));
+    }
+
+    if (filters.visitStatus?.length) {
+      const ids = await getLatestLoanIds(this.prisma, 'LoanVisit', 'status', filters.visitStatus);
+      ids.forEach((id) => loanIdsToFilter.add(id));
+    }
+
+    if (filters.litigationstage?.length) {
+      const ids = await getLatestLoanIds(this.prisma, 'LoanLitigationStage', 'litigationStage', filters.litigationstage);
+      ids.forEach((id) => loanIdsToFilter.add(id));
+    }
+
+    if (filters.legalstage?.length) {
+      const ids = await getLatestLoanIds(this.prisma, 'LoanLegalStage', 'legalStage', filters.legalstage);
+      ids.forEach((id) => loanIdsToFilter.add(id));
+    }
+
+    if (filters.marks?.length) {
+      const ids = await getLatestLoanIds(this.prisma, 'LoanMarks', 'mark', filters.marks);
+      ids.forEach((id) => loanIdsToFilter.add(id));
+    }
+
+    // Apply the subquery filter result (if any filters triggered)
+    if (loanIdsToFilter.size > 0) {
+      where.id = { in: Array.from(loanIdsToFilter) };
+    } else if (filters.legalstage?.length) {
+      return this.paginationService.createPaginatedResult([], 0, { page, limit });
     }
 
     const [data, total] = await Promise.all([
@@ -152,84 +190,50 @@ export class LoanService {
             select: {
               id: true,
               name: true,
-              portfolioSeller: {
-                select: {
-                  id: true,
-                  name: true,
-                }
-              }
-            }
+              portfolioSeller: { select: { id: true, name: true } },
+            },
           },
-          PortfolioCaseGroup: {
-            select: {
-              id: true,
-              groupName: true,
-            }
-          },
+          PortfolioCaseGroup: { select: { id: true, groupName: true } },
           Debtor: {
             select: {
               firstName: true,
               lastName: true,
               idNumber: true,
-              DebtorStatus: {
-                select: {
-                  id: true,
-                  name: true,
-                }
-              }
-            }
+              DebtorStatus: { select: { id: true, name: true } },
+            },
           },
-          LoanStatus: {
-            select: {
-              id: true,
-              name: true,
-            }
-          },
+          LoanStatus: { select: { id: true, name: true } },
           LoanAssignment: {
             where: { isActive: true },
             select: {
               createdAt: true,
-              User: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-              Role: {
-                select: {
-                  name: true,
-                }
-              }
+              User: { select: { id: true, firstName: true, lastName: true } },
+              Role: { select: { name: true } },
             },
           },
           LoanCollateralStatus: {
+            where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: {
-              CollateralStatus: { select: { id: true, title: true } },
-            }
+            select: { CollateralStatus: { select: { id: true, title: true } } },
           },
           LoanLitigationStage: {
+            where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: {
-              LitigationStage: { select: { id: true, title: true } },
-            }
+            select: { LitigationStage: { select: { id: true, title: true } } },
           },
           LoanLegalStage: {
+            where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: {
-              LegalStage: { select: { id: true, title: true } },
-            }
+            select: { LegalStage: { select: { id: true, title: true } } },
           },
           LoanMarks: {
+            where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: {
-              Marks: { select: { id: true, title: true } },
-            }
+            select: { Marks: { select: { id: true, title: true } } },
           },
           LoanAddress: {
             where: { deletedAt: null },
@@ -239,7 +243,7 @@ export class LoanService {
               address: true,
               type: true,
               City: { select: { id: true, city: true } },
-            }
+            },
           },
           LoanVisit: {
             orderBy: { createdAt: 'desc' },
@@ -250,16 +254,13 @@ export class LoanService {
               status: true,
               comment: true,
               LoanAddress: { select: { id: true, address: true } },
-            }
-          }
-        }
+            },
+          },
+        },
       }),
-      this.permissionsHelper.loan.count({
-        where,
-      }),
+      this.permissionsHelper.loan.count({ where }),
     ]);
 
-    // If columns provided, it's export mode (return data without pagination meta)
     if (columns) {
       return this.paginationService.getAllWithoutPagination(data, total);
     }
@@ -267,31 +268,22 @@ export class LoanService {
     if (showOnlyClosedLoans) {
       await Promise.all(
         data.map(async (loan) => {
-          const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
-          loan.totalPayments = totalPayments;
+          loan.totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
         })
       );
 
       await Promise.all(
         data.map(async (loan) => {
           const remainingHistory = await this.prisma.loanRemaining.findMany({
-            where: {
-              loanId: loan.id
-            },
+            where: { loanId: loan.id },
             orderBy: { createdAt: 'asc' },
           });
-
           loan.remainingChanges = calculateRemainingChanges(remainingHistory);
         })
       );
     }
 
-    // Return paginated result
-    return this.paginationService.createPaginatedResult(
-      data,
-      total,
-      { page, limit },
-    );
+    return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
@@ -320,6 +312,7 @@ export class LoanService {
             mainEmail: true,
             mainPhone: true,
             mainAddress: true,
+            idNumber: true,
             DebtorStatus: {
               select: {
                 name: true,
@@ -1501,7 +1494,6 @@ export class LoanService {
         userId: userId,
       },
     });
-
 
     return {
       message: 'Loan litigation stage added successfully'
