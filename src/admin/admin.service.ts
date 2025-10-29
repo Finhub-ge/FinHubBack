@@ -24,6 +24,7 @@ import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
+import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -851,76 +852,120 @@ export class AdminService {
     }
   }
 
-  async getCharges(getChargeDto: GetChargeWithPaginationDto) {
+  async getCharges(getChargeDto: GetChargeWithPaginationDto | GetChargeReportWithPaginationDto, options?: { isReport?: boolean }) {
     const { page, limit, caseId } = getChargeDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
-    const data = await this.prisma.charges.findMany({
-      where: {
-        deletedAt: null,
-        ...(caseId && {
-          Loan: {
-            caseId: caseId
-          }
-        })
-      },
-      include: {
-        Loan: {
-          select: {
-            caseId: true,
-            Debtor: {
-              select: {
-                firstName: true,
-                lastName: true,
-                idNumber: true
-              }
-            },
-            LoanAssignment: {
-              select: {
-                User: {
-                  select: {
-                    firstName: true,
-                    lastName: true
-                  }
-                }
-              }
+
+    const includes = {
+      Loan: {
+        select: {
+          caseId: true,
+          Debtor: {
+            select: {
+              firstName: true,
+              lastName: true,
+              idNumber: true
             }
-          }
-        },
-        ChargeType: {
-          select: {
-            title: true
-          }
-        },
-        User: {
-          select: {
-            firstName: true,
-            lastName: true
-          }
-        },
-        TransactionChannelAccounts: {
-          select: {
-            TransactionChannels: {
-              select: {
-                name: true
+          },
+          LoanAssignment: {
+            select: {
+              User: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true
+                }
+              },
+              Role: {
+                select: {
+                  name: true
+                }
               }
             }
           }
         }
       },
-      ...paginationParams,
-      orderBy: {
-        createdAt: 'desc'
+      ChargeType: {
+        select: {
+          title: true
+        }
+      },
+      User: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      },
+      TransactionChannelAccounts: {
+        select: {
+          TransactionChannels: {
+            select: {
+              name: true
+            }
+          }
+        }
       }
+    }
+    if (options?.isReport) {
+      Object.assign(includes.Loan.select, {
+        Portfolio: {
+          select: {
+            portfolioSeller: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      });
+    }
+    const where: any = {
+      deletedAt: null,
+    };
+
+    const loanFilter: any = {};
+    if (caseId) loanFilter.caseId = caseId;
+
+    if (options?.isReport) {
+      const filters = getChargeDto as GetChargeReportWithPaginationDto;
+
+      if (filters.chargeDateStart || filters.chargeDateEnd) {
+        console.log(filters.chargeDateStart, filters.chargeDateEnd);
+        where.paymentDate = {
+          ...(filters.chargeDateStart
+            ? { gte: dayjs(filters.chargeDateStart).startOf('day').toDate() }
+            : {}),
+          ...(filters.chargeDateEnd
+            ? { lte: dayjs(filters.chargeDateEnd).endOf('day').toDate() }
+            : {}),
+        };
+      }
+
+      const assignments: any[] = [];
+      if (filters.assignedCollector?.length) {
+        assignments.push({ userId: { in: filters.assignedCollector } });
+      }
+      if (filters.assignedLawyer?.length) {
+        assignments.push({ userId: { in: filters.assignedLawyer } });
+      }
+      if (assignments.length) {
+        loanFilter.LoanAssignment = { some: { OR: assignments } };
+      }
+    }
+
+    if (Object.keys(loanFilter).length) {
+      where.Loan = { is: loanFilter };
+    }
+
+    const data = await this.prisma.charges.findMany({
+      where,
+      include: includes,
+      ...paginationParams,
+      orderBy: { id: 'desc' },
     })
     const total = await this.prisma.charges.count({
-      where: {
-        deletedAt: null,
-        ...(caseId && {
-          Loan: {
-            caseId: caseId
-          }
-        })
-      }
+      where
     });
     return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
