@@ -22,6 +22,7 @@ import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
+import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -301,5 +302,19 @@ export class AdminController {
   @Get('getVisitStatus')
   async getVisitStatus() {
     return await this.adminService.getVisitStatus();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('channelAccounts')
+  async getChannelAccounts() {
+    return await this.adminService.getChannelAccounts();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('report/payments')
+  async getPaymentsReport(@Query() getPaymentReportDto: GetPaymentReportWithPaginationDto) {
+    return await this.adminService.getTransactionList(getPaymentReportDto, { isReport: true });
   }
 }

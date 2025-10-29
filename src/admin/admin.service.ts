@@ -23,6 +23,7 @@ import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
+import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -141,51 +142,105 @@ export class AdminService {
     return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
-  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto) {
+  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, options?: { isReport?: boolean }) {
     const { page, limit, caseId } = getPaymentDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
-    const data = await this.prisma.transaction.findMany({
-      where: {
-        deleted: 0,
-        ...(caseId && {
-          Loan: {
-            caseId: caseId
-          }
-        })
-      },
-      include: {
-        TransactionChannelAccounts: {
-          include: {
-            TransactionChannels: true
-          }
-        },
-        User: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        Loan: {
-          include: {
-            Debtor: true
-          }
+
+    const includes = {
+      TransactionChannelAccounts: {
+        include: {
+          TransactionChannels: true
         }
       },
+      User: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true
+        }
+      },
+      Loan: {
+        include: {
+          Debtor: true
+        }
+      }
+    };
+    if (options?.isReport) {
+      Object.assign(includes.Loan.include, {
+        PortfolioCaseGroup: {
+          select: {
+            groupName: true,
+          },
+        },
+        Portfolio: {
+          select: {
+            portfolioSeller: true,
+          },
+        },
+        LoanAssignment: {
+          where: { isActive: true },
+          select: {
+            createdAt: true,
+            User: { select: { id: true, firstName: true, lastName: true } },
+            Role: { select: { name: true } },
+          },
+        },
+      });
+    }
+
+    const where: any = {
+      deleted: 0,
+    };
+
+    const loanFilter: any = {};
+    if (caseId) loanFilter.caseId = caseId;
+
+    if (options?.isReport) {
+      const filters = getPaymentDto as GetPaymentReportWithPaginationDto;
+      if (filters.portfolioId?.length) {
+        loanFilter.groupId = { in: filters.portfolioId };
+      }
+      if (filters.portfolioseller?.length) {
+        loanFilter.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
+      }
+      if (filters.assignedCollector?.length) {
+        loanFilter.LoanAssignment = {
+          some: {
+            userId: { in: filters.assignedCollector },
+          },
+        };
+      }
+      if (filters.paymentDateStart || filters.paymentDateEnd) {
+        where.paymentDate = {
+          ...(filters.paymentDateStart
+            ? { gte: dayjs(filters.paymentDateStart).startOf('day').toDate() }
+            : {}),
+          ...(filters.paymentDateEnd
+            ? { lte: dayjs(filters.paymentDateEnd).endOf('day').toDate() }
+            : {}),
+        };
+      }
+      if (filters.accountNumber?.length) {
+        where.transactionChannelAccountId = { in: filters.accountNumber };
+      }
+      if (filters.currency) {
+        where.currency = filters.currency;
+      }
+    }
+
+    if (Object.keys(loanFilter).length) {
+      where.Loan = { is: loanFilter };
+    }
+
+    const data = await this.prisma.transaction.findMany({
+      where,
+      include: includes,
       ...paginationParams,
-      orderBy: {
-        id: 'desc'
-      }
+      orderBy: { id: 'desc' },
     });
+
     const total = await this.prisma.transaction.count({
-      where: {
-        deleted: 0,
-        ...(caseId && {
-          Loan: {
-            caseId: caseId
-          }
-        })
-      }
+      where,
     });
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
@@ -1031,6 +1086,12 @@ export class AdminService {
   async getVisitStatus() {
     return await this.prisma.visitStatus.findMany({
       where: { deletedAt: null }
+    });
+  }
+
+  async getChannelAccounts() {
+    return await this.prisma.transactionChannelAccounts.findMany({
+      where: { active: 1 }
     });
   }
 }
