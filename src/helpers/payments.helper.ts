@@ -375,6 +375,7 @@ export class PaymentsHelper {
   async applyPaymentToSchedule(
     loanId: number,
     paymentAmount: number,
+    paidDate: string,
     prisma: Prisma.TransactionClient | PrismaClient = this.prisma
   ) {
     // Get active AGREEMENT commitments for this loan (only agreements have schedules)

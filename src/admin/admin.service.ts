@@ -349,6 +349,7 @@ export class AdminService {
           await this.paymentHelper.applyPaymentToSchedule(
             loan.id,
             Number(data.amount || 0),
+            data.paymentDate,
             tx
           );
         }
