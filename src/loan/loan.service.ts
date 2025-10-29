@@ -255,6 +255,9 @@ export class LoanService {
               LoanAddress: { select: { id: true, address: true } },
             },
           },
+          LoanRemaining: {
+            where: { deletedAt: null },
+          },
         },
       }),
       this.permissionsHelper.loan.count({ where }),
