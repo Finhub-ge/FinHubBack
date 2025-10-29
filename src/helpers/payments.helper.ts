@@ -440,7 +440,7 @@ export class PaymentsHelper {
         where: { id: schedule.id },
         data: {
           paidAmount: newPaidAmount,
-          paidDate: newStatus === 'PAID' ? new Date() : schedule.paidDate,
+          paidDate: newStatus === 'PAID' ? new Date(paidDate) : schedule.paidDate,
           status: newStatus
         }
       });
