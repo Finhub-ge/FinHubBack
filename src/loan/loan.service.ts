@@ -8,9 +8,9 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, calculateRemainingChanges, buildLoanSearchWhere, getLatestLoanIds } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -25,12 +25,12 @@ import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoa
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
-import { statusToId } from 'src/enums/visitStatus.enum';
+import { idToStatus, statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import dayjs from 'dayjs';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, hydrateClosedLoansData, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 
 @Injectable()
 export class LoanService {
@@ -47,245 +47,67 @@ export class LoanService {
   async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
+    // Setup pagination
     const paginationParams = columns
       ? {}
       : this.paginationService.getPaginationParams({ page, limit });
 
-    const where: any = { deletedAt: null };
+    // Build base query
+    const where = buildInitialWhereClause();
 
+    // Apply appropriate filters
     if (showOnlyClosedLoans) {
-      where.statusId = { in: LoanStatusGroups.CLOSED };
+      applyClosedLoansFilter(where, filters);
+      applyClosedDateRangeFilter(where, filters);
+    } else {
+      applyOpenLoansFilter(where, filters, showClosedLoans);
+    }
 
-      if (filters.search) {
-        const searchWhere = buildLoanSearchWhere(filters.search);
+    applyCommonFilters(where, filters);
+    applyUserAssignmentFilter(where, filters);
 
-        where.AND = where.AND || [];
-        where.AND.push({ OR: searchWhere });
-      }
-      if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
-      if (filters.portfolioseller?.length) {
-        where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
-      }
+    // Handle complex filters with intersection ONLY if there are complex filters
+    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
 
-      // Assigned users (collectors, lawyers, etc.)
-      if (
-        filters.assigneduser?.length ||
-        filters.assignedlawyer?.length ||
-        filters.assignedjuniorLawyer?.length ||
-        filters.assignedexecutionLawyer?.length
-      ) {
-        const assignedIds = [
-          ...(filters.assigneduser || []),
-          ...(filters.assignedlawyer || []),
-          ...(filters.assignedjuniorLawyer || []),
-          ...(filters.assignedexecutionLawyer || []),
-        ];
-
-        where.LoanAssignment = {
-          some: {
-            isActive: true,
-            User: { id: { in: assignedIds } },
-          },
-        };
+    // Only process intersection if there are complex filters
+    if (shouldProcessIntersection(relatedFilterIds)) {
+      // If any filter returned empty results, return empty
+      if (hasEmptyFilterResults(relatedFilterIds)) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit });
       }
 
-      if (filters.closedDateStart || filters.closedDateEnd) {
-        const closedDateCondition: any = {};
-        if (filters.closedDateStart)
-          closedDateCondition.gte = dayjs(filters.closedDateStart).startOf('day').toDate();
-        if (filters.closedDateEnd)
-          closedDateCondition.lte = dayjs(filters.closedDateEnd).endOf('day').toDate();
-        where.closedAt = closedDateCondition;
+      // Calculate intersection
+      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+
+      // If no loans match all filters, return empty
+      if (intersectedIds.length === 0) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit });
       }
-    } else if (!showClosedLoans && !filters.search) {
-      where.statusId = { notIn: LoanStatusGroups.CLOSED };
+
+      // Apply intersection to where clause
+      applyIntersectedIds(where, intersectedIds);
     }
 
-    if (filters.search) {
-      const searchWhere = buildLoanSearchWhere(filters.search);
-      where.AND = where.AND || [];
-      where.AND.push({ OR: searchWhere });
-    }
-    if (filters.portfolio?.length) where.groupId = { in: filters.portfolio };
-    if (filters.loanstatus?.length) where.statusId = { in: filters.loanstatus };
-    if (filters.portfolioseller?.length) {
-      where.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
-    }
-
-    if (filters.clientStatus?.length) {
-      where.Debtor = { DebtorStatus: { id: { in: filters.clientStatus } } };
-    }
-
-    // Active assignment filter
-    if (
-      filters.assigneduser?.length ||
-      filters.assignedlawyer?.length ||
-      filters.assignedjuniorLawyer?.length ||
-      filters.assignedexecutionLawyer?.length
-    ) {
-      const assignedIds = [
-        ...(filters.assigneduser || []),
-        ...(filters.assignedlawyer || []),
-        ...(filters.assignedjuniorLawyer || []),
-        ...(filters.assignedexecutionLawyer || []),
-      ];
-
-      where.LoanAssignment = {
-        some: {
-          isActive: true,
-          User: { id: { in: assignedIds } },
-        },
-      };
-    }
-
-    if (filters.actDays) where.actDays = { gt: filters.actDays };
-
-    const loanIdsToFilter: Set<string> = new Set();
-
-    if (filters.collateralstatus?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanCollateralStatus', 'collateralStatus', filters.collateralstatus);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    if (filters.city?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanAddress', 'city', filters.city);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    if (filters.visitStatus?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanVisit', 'status', filters.visitStatus);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    if (filters.litigationstage?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanLitigationStage', 'litigationStage', filters.litigationstage);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    if (filters.legalstage?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanLegalStage', 'legalStage', filters.legalstage);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    if (filters.marks?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanMarks', 'mark', filters.marks);
-      ids.forEach((id) => loanIdsToFilter.add(id));
-    }
-
-    // Apply the subquery filter result (if any filters triggered)
-    if (loanIdsToFilter.size > 0) {
-      where.id = { in: Array.from(loanIdsToFilter) };
-    } else if (filters.legalstage?.length) {
-      return this.paginationService.createPaginatedResult([], 0, { page, limit });
-    }
-
-    const [data, total] = await Promise.all([
-      this.permissionsHelper.loan.findMany({
-        where,
-        ...paginationParams,
-        orderBy: { actDays: 'desc' },
-        include: {
-          Portfolio: {
-            select: {
-              id: true,
-              name: true,
-              portfolioSeller: { select: { id: true, name: true } },
-            },
-          },
-          PortfolioCaseGroup: { select: { id: true, groupName: true } },
-          Debtor: {
-            select: {
-              firstName: true,
-              lastName: true,
-              idNumber: true,
-              DebtorStatus: { select: { id: true, name: true } },
-            },
-          },
-          LoanStatus: { select: { id: true, name: true } },
-          LoanAssignment: {
-            where: { isActive: true },
-            select: {
-              createdAt: true,
-              User: { select: { id: true, firstName: true, lastName: true } },
-              Role: { select: { name: true } },
-            },
-          },
-          LoanCollateralStatus: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { CollateralStatus: { select: { id: true, title: true } } },
-          },
-          LoanLitigationStage: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { LitigationStage: { select: { id: true, title: true } } },
-          },
-          LoanLegalStage: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { LegalStage: { select: { id: true, title: true } } },
-          },
-          LoanMarks: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { Marks: { select: { id: true, title: true } } },
-          },
-          LoanAddress: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              address: true,
-              type: true,
-              City: { select: { id: true, city: true } },
-            },
-          },
-          LoanVisit: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            where: { deletedAt: null },
-            select: {
-              id: true,
-              status: true,
-              comment: true,
-              LoanAddress: { select: { id: true, address: true } },
-            },
-          },
-          LoanRemaining: {
-            where: { deletedAt: null },
-          },
-        },
-      }),
+    // Fetch loans
+    const includeConfig = getLoanIncludeConfig();
+    const [loans, totalCount] = await Promise.all([
+      this.permissionsHelper.loan.findMany(
+        buildLoanQuery(where, paginationParams, includeConfig)
+      ),
       this.permissionsHelper.loan.count({ where }),
     ]);
 
+    // Handle CSV export
     if (columns) {
-      return this.paginationService.getAllWithoutPagination(data, total);
+      return this.paginationService.getAllWithoutPagination(loans, totalCount);
     }
 
+    // Enrich closed loans with additional data
     if (showOnlyClosedLoans) {
-      await Promise.all(
-        data.map(async (loan) => {
-          loan.totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
-        })
-      );
-
-      await Promise.all(
-        data.map(async (loan) => {
-          const remainingHistory = await this.prisma.loanRemaining.findMany({
-            where: { loanId: loan.id },
-            orderBy: { createdAt: 'asc' },
-          });
-          loan.remainingChanges = calculateRemainingChanges(remainingHistory);
-        })
-      );
+      await hydrateClosedLoansData(loans, this.prisma, this.paymentsHelper);
     }
 
-    return this.paginationService.createPaginatedResult(data, total, { page, limit });
+    return this.paginationService.createPaginatedResult(loans, totalCount, { page, limit });
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {

@@ -136,8 +136,8 @@ export class GetLoansFilterDto {
     type: String
   })
   @IsOptional()
-  // @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
-  visitStatus?: string[];
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  visitStatus?: number[];
 
   @ApiProperty({
     description: 'Search by act days',

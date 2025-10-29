@@ -1,7 +1,7 @@
 export enum VisitStatus {
   n_a = 1,
   pending = 2,
-  complete = 3,
+  completed = 3,
   canceled = 4,
 }
 
@@ -9,6 +9,10 @@ export enum VisitStatus {
 export const statusToId: Record<string, number> = {
   'n_a': VisitStatus.n_a,
   'pending': VisitStatus.pending,
-  'complete': VisitStatus.complete,
+  'completed': VisitStatus.completed,
   'canceled': VisitStatus.canceled,
 };
+
+export const idToStatus: Record<number, string> = Object.fromEntries(
+  Object.entries(statusToId).map(([k, v]) => [v, k])
+);

@@ -23,6 +23,7 @@ import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
+import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -316,5 +317,12 @@ export class AdminController {
   @Get('report/payments')
   async getPaymentsReport(@Query() getPaymentReportDto: GetPaymentReportWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentReportDto, { isReport: true });
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('report/charges')
+  async getChargesReport(@Query() getChargeReportDto: GetChargeReportWithPaginationDto) {
+    return await this.adminService.getCharges(getChargeReportDto, { isReport: true });
   }
 }
