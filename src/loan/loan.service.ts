@@ -25,7 +25,7 @@ import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoa
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
-import { statusToId } from 'src/enums/visitStatus.enum';
+import { idToStatus, statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
@@ -153,7 +153,11 @@ export class LoanService {
     }
 
     if (filters.visitStatus?.length) {
-      const ids = await getLatestLoanIds(this.prisma, 'LoanVisit', 'status', filters.visitStatus);
+      const statusStrings = filters.visitStatus
+        .map((id) => idToStatus[Number(id)])
+        .filter(Boolean);
+
+      const ids = await getLatestLoanIds(this.prisma, 'LoanVisit', 'status', statusStrings);
       ids.forEach((id) => loanIdsToFilter.add(id));
     }
 
