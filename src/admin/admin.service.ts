@@ -829,58 +829,52 @@ export class AdminService {
         }
       });
 
-      // await tx.loanRemaining.update({
-      //   where: { id: loanRemaining.id },
-      //   data: {
-      //     deletedAt: new Date()
-      //   }
-      // });
+      await tx.loanRemaining.update({
+        where: { id: loanRemaining.id },
+        data: {
+          deletedAt: new Date()
+        }
+      });
 
-      // const newLoanRemaining = await tx.loanRemaining.create({
-      //   data: {
-      //     loanId: loan.id,
-      //     principal: loanRemaining.principal,
-      //     interest: loanRemaining.interest,
-      //     penalty: loanRemaining.penalty,
-      //     otherFee: loanRemaining.otherFee,
-      //     legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
-      //     currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
-      //     agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
-      //   }
-      // });
+      const newLoanRemaining = await tx.loanRemaining.create({
+        data: {
+          loanId: loan.id,
+          principal: loanRemaining.principal,
+          interest: loanRemaining.interest,
+          penalty: loanRemaining.penalty,
+          otherFee: loanRemaining.otherFee,
+          legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
+          currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
+          agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
+        }
+      });
 
-      const allocationResult = await this.paymentHelper.allocatePayment(
-        charge.id,
-        'LEGAL_CHARGES_ADDED',
-        Number(data.amount || 0),
-        loanRemaining,
-        tx
-      );
+      await tx.paymentAllocationDetail.create({
+        data: {
+          loanId: loan.id,
+          sourceType: 'LEGAL_CHARGES_ADDED',
+          sourceId: charge.id,
+          componentType: 'LEGAL_CHARGES',
+          amountAllocated: Number(data.amount || 0),
+          balanceBefore: Number(loanRemaining.legalCharges),
+          balanceAfter: Number(newLoanRemaining.legalCharges),
+          allocationOrder: 1,
+        }
+      });
 
-      await this.paymentHelper.updateLoanRemaining(
-        loanRemaining.id,
-        allocationResult.newBalances,
-        allocationResult.newCurrentDebt,
-        loanRemaining,
-        tx
-      );
-
-      await this.paymentHelper.createBalanceHistory(
-        loan.id,
-        charge.id,
-        allocationResult.newBalances,
-        allocationResult.newCurrentDebt,
-        'LEGAL_CHARGES_ADDED',
-        tx
-      );
-      // await this.paymentHelper.createBalanceHistory(
-      //   loan.id,
-      //   charge.id,
-      //   allocationResult.newBalances,
-      //   allocationResult.newCurrentDebt,
-      //   'PAYMENT',
-      //   tx
-      // );
+      await tx.loanBalanceHistory.create({
+        data: {
+          loanId: loan.id,
+          principal: newLoanRemaining.principal,
+          interest: newLoanRemaining.interest,
+          penalty: newLoanRemaining.penalty,
+          otherFee: newLoanRemaining.otherFee,
+          legalCharges: newLoanRemaining.legalCharges,
+          totalDebt: newLoanRemaining.currentDebt,
+          sourceType: 'LEGAL_CHARGES_ADDED',
+          sourceId: charge.id,
+        }
+      });
     });
 
     return {
