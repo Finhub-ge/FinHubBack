@@ -166,53 +166,54 @@ model DebtorStatusHistory {
 }
 
 model Loan {
-  id                    Int                     @id @default(autoincrement())
-  publicId              String                  @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
-  portfolioId           Int
-  groupId               Int?
-  debtorId              Int
-  caseId                Int?
-  principal             Decimal                 @db.Decimal(12, 2)
-  interest              Decimal?                @default(0.00) @db.Decimal(12, 2)
-  penalty               Decimal?                @default(0.00) @db.Decimal(12, 2)
-  otherFee              Decimal?                @default(0.00) @db.Decimal(12, 2)
-  legalCharges          Decimal?                @default(0.00) @db.Decimal(12, 2)
-  totalDebt             Decimal?                @default(0.00) @db.Decimal(12, 2)
-  purchasedAmount       Decimal                 @db.Decimal(12, 2)
-  loanStartDate         DateTime                @db.Date
-  loanDueDate           DateTime                @db.Date
-  closedAt              DateTime?               @db.DateTime(0)
-  statusId              Int
-  actDays               Int                     @default(0)
-  createdAt             DateTime                @default(now()) @db.DateTime(0)
-  updatedAt             DateTime                @default(now()) @db.DateTime(0)
-  deletedAt             DateTime?               @db.DateTime(0)
-  currency              String?                 @db.VarChar(45)
-  olDbId                Int?
-  Charges               Charges[]
-  Comments              Comments[]
-  Committee             Committee[]
-  Debtor                Debtor                  @relation(fields: [debtorId], references: [id], onDelete: Cascade)
-  Portfolio             Portfolio               @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  LoanStatus            LoanStatus              @relation(fields: [statusId], references: [id])
-  PortfolioCaseGroup    PortfolioCaseGroup?     @relation(fields: [groupId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Loan_groupId")
-  LoanAddress           LoanAddress[]
-  LoanAssignment        LoanAssignment[]
-  LoanAssignmentHistory LoanAssignmentHistory[]
-  LoanAttribute         LoanAttribute[]
-  LoanBalanceHistory    LoanBalanceHistory[]
-  LoanCollateralStatus  LoanCollateralStatus[]
-  LoanLegalStage        LoanLegalStage[]
-  LoanLitigationStage   LoanLitigationStage[]
-  LoanMarks             LoanMarks[]
-  LoanRemaining         LoanRemaining[]
-  LoanStatusHistory     LoanStatusHistory[]
-  LoanVisit             LoanVisit[]
-  PastPayments          PastPayments[]
-  PaymentCommitment     PaymentCommitment[]
-  SmsHistory            SmsHistory[]
-  Tasks                 Tasks[]
-  Transaction           Transaction[]
+  id                      Int                       @id @default(autoincrement())
+  publicId                String                    @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  portfolioId             Int
+  groupId                 Int?
+  debtorId                Int
+  caseId                  Int?
+  principal               Decimal                   @db.Decimal(12, 2)
+  interest                Decimal?                  @default(0.00) @db.Decimal(12, 2)
+  penalty                 Decimal?                  @default(0.00) @db.Decimal(12, 2)
+  otherFee                Decimal?                  @default(0.00) @db.Decimal(12, 2)
+  legalCharges            Decimal?                  @default(0.00) @db.Decimal(12, 2)
+  totalDebt               Decimal?                  @default(0.00) @db.Decimal(12, 2)
+  purchasedAmount         Decimal                   @db.Decimal(12, 2)
+  loanStartDate           DateTime                  @db.Date
+  loanDueDate             DateTime                  @db.Date
+  closedAt                DateTime?                 @db.DateTime(0)
+  statusId                Int
+  actDays                 Int                       @default(0)
+  createdAt               DateTime                  @default(now()) @db.DateTime(0)
+  updatedAt               DateTime                  @default(now()) @db.DateTime(0)
+  deletedAt               DateTime?                 @db.DateTime(0)
+  currency                String?                   @db.VarChar(45)
+  olDbId                  Int?
+  Charges                 Charges[]
+  Comments                Comments[]
+  Committee               Committee[]
+  Debtor                  Debtor                    @relation(fields: [debtorId], references: [id], onDelete: Cascade)
+  Portfolio               Portfolio                 @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  LoanStatus              LoanStatus                @relation(fields: [statusId], references: [id])
+  PortfolioCaseGroup      PortfolioCaseGroup?       @relation(fields: [groupId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Loan_groupId")
+  LoanAddress             LoanAddress[]
+  LoanAssignment          LoanAssignment[]
+  LoanAssignmentHistory   LoanAssignmentHistory[]
+  LoanAttribute           LoanAttribute[]
+  LoanBalanceHistory      LoanBalanceHistory[]
+  LoanCollateralStatus    LoanCollateralStatus[]
+  LoanLegalStage          LoanLegalStage[]
+  LoanLitigationStage     LoanLitigationStage[]
+  LoanMarks               LoanMarks[]
+  LoanRemaining           LoanRemaining[]
+  LoanStatusHistory       LoanStatusHistory[]
+  LoanVisit               LoanVisit[]
+  PastPayments            PastPayments[]
+  PaymentAllocationDetail PaymentAllocationDetail[]
+  PaymentCommitment       PaymentCommitment[]
+  SmsHistory              SmsHistory[]
+  Tasks                   Tasks[]
+  Transaction             Transaction[]
 
   @@index([createdAt])
   @@index([debtorId])
@@ -366,8 +367,6 @@ model Transaction {
   comment                     String?                     @db.VarChar(255)
   createdAt                   DateTime?                   @default(now()) @db.DateTime(0)
   deleted                     Int?                        @default(0) @db.TinyInt
-  LoanBalanceHistory          LoanBalanceHistory[]
-  PaymentAllocationDetail     PaymentAllocationDetail[]
   Loan                        Loan?                       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
   User                        User?                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
   TransactionChannelAccounts  TransactionChannelAccounts? @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_3")
@@ -957,45 +956,48 @@ model VisitStatus {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model LoanBalanceHistory {
-  id            Int          @id @default(autoincrement())
-  loanId        Int
-  principal     Decimal      @db.Decimal(12, 2)
-  interest      Decimal      @db.Decimal(12, 2)
-  penalty       Decimal      @db.Decimal(12, 2)
-  otherFee      Decimal      @db.Decimal(12, 2)
-  legalCharges  Decimal      @db.Decimal(12, 2)
-  totalDebt     Decimal      @db.Decimal(12, 2)
-  reason        String       @db.VarChar(100)
-  transactionId Int?
-  createdAt     DateTime     @default(now()) @db.DateTime(0)
-  updatedAt     DateTime     @default(now()) @db.DateTime(0)
-  deletedAt     DateTime?    @db.DateTime(0)
-  Loan          Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_LoanBalanceHistory_Loan")
-  Transaction   Transaction? @relation(fields: [transactionId], references: [id], onUpdate: NoAction, map: "fk_LoanBalanceHistory_Transaction")
+  id           Int       @id @default(autoincrement())
+  loanId       Int
+  principal    Decimal   @db.Decimal(12, 2)
+  interest     Decimal   @db.Decimal(12, 2)
+  penalty      Decimal   @db.Decimal(12, 2)
+  otherFee     Decimal   @db.Decimal(12, 2)
+  legalCharges Decimal   @db.Decimal(12, 2)
+  totalDebt    Decimal   @db.Decimal(12, 2)
+  sourceType   String    @db.VarChar(100)
+  sourceId     Int?
+  createdAt    DateTime  @default(now()) @db.DateTime(0)
+  updatedAt    DateTime  @default(now()) @db.DateTime(0)
+  deletedAt    DateTime? @db.DateTime(0)
+  Loan         Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_LoanBalanceHistory_Loan")
 
   @@index([createdAt], map: "idx_createdAt")
   @@index([loanId], map: "idx_loanId")
-  @@index([reason], map: "idx_reason")
-  @@index([transactionId], map: "idx_transactionId")
+  @@index([sourceType, sourceId], map: "idx_source")
+  @@index([sourceType], map: "idx_sourceType")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model PaymentAllocationDetail {
-  id              Int         @id @default(autoincrement())
-  transactionId   Int
-  componentType   String      @db.VarChar(50)
-  amountAllocated Decimal     @db.Decimal(12, 2)
-  balanceBefore   Decimal     @db.Decimal(12, 2)
-  balanceAfter    Decimal     @db.Decimal(12, 2)
+  id              Int       @id @default(autoincrement())
+  loanId          Int
+  sourceType      String    @default("transaction") @db.VarChar(50)
+  sourceId        Int
+  componentType   String    @db.VarChar(50)
+  amountAllocated Decimal   @db.Decimal(12, 2)
+  balanceBefore   Decimal   @db.Decimal(12, 2)
+  balanceAfter    Decimal   @db.Decimal(12, 2)
   allocationOrder Int
-  createdAt       DateTime    @default(now()) @db.DateTime(0)
-  updatedAt       DateTime    @default(now()) @db.DateTime(0)
-  deletedAt       DateTime?   @db.DateTime(0)
-  Transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_PaymentAllocationDetail_Transaction")
+  createdAt       DateTime  @default(now()) @db.DateTime(0)
+  updatedAt       DateTime  @default(now()) @db.DateTime(0)
+  deletedAt       DateTime? @db.DateTime(0)
+  Loan            Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_PaymentAllocationDetail_Loan")
 
   @@index([componentType], map: "idx_componentType")
   @@index([createdAt], map: "idx_createdAt")
-  @@index([transactionId], map: "idx_transactionId")
+  @@index([sourceType, sourceId], map: "idx_source")
+  @@index([sourceType], map: "idx_sourceType")
+  @@index([loanId], map: "idx_loanId")
 }
 
 model PortfolioCaseGroup {
