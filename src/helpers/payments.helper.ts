@@ -202,7 +202,8 @@ export class PaymentsHelper {
   }
 
   async allocatePayment(
-    transactionId: number,
+    sourceId: number,
+    sourceType: 'PAYMENT' | 'PENALTY_ADDED' | 'INTEREST_ACCRUED' | 'ADJUSTMENT' | 'FEE_ADDED' | 'LEGAL_CHARGES_ADDED',
     amount: number,
     loanRemaining: LoanRemaining,
     prisma: Prisma.TransactionClient | PrismaClient = this.prisma
@@ -249,7 +250,9 @@ export class PaymentsHelper {
         // Store allocation detail (only if amount > 0)
         if (amountToAllocate > 0) {
           allocationDetails.push({
-            transactionId: transactionId,
+            loanId: loanRemaining.loanId,
+            sourceId: sourceId,
+            sourceType: sourceType,
             componentType: allocation.type,
             amountAllocated: amountToAllocate,
             balanceBefore: balanceBefore,
@@ -345,7 +348,7 @@ export class PaymentsHelper {
 
   async createBalanceHistory(
     loanId: number,
-    transactionId: number,
+    sourceId: number,
     balances: {
       principal: number;
       interest: number;
@@ -354,7 +357,7 @@ export class PaymentsHelper {
       legalCharges: number;
     },
     totalDebt: number,
-    reason: 'PAYMENT' | 'PENALTY_ADDED' | 'INTEREST_ACCRUED' | 'ADJUSTMENT' | 'FEE_ADDED' | 'LEGAL_CHARGES_ADDED',
+    sourceType: 'PAYMENT' | 'PENALTY_ADDED' | 'INTEREST_ACCRUED' | 'ADJUSTMENT' | 'FEE_ADDED' | 'LEGAL_CHARGES_ADDED',
     prisma: Prisma.TransactionClient | PrismaClient = this.prisma
   ) {
     await prisma.loanBalanceHistory.create({
@@ -366,8 +369,8 @@ export class PaymentsHelper {
         otherFee: balances.otherFee,
         legalCharges: balances.legalCharges,
         totalDebt: totalDebt,
-        reason: reason,
-        transactionId: transactionId
+        sourceType: sourceType,
+        sourceId: sourceId
       }
     });
   }

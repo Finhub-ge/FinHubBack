@@ -316,6 +316,7 @@ export class AdminService {
         // If LoanRemaining doesn't exist, create it with initial values from Loan implement later
         const allocationResult = await this.paymentHelper.allocatePayment(
           transaction.id,
+          'PAYMENT',
           Number(data.amount || 0),
           loanRemaining,
           tx
@@ -814,7 +815,7 @@ export class AdminService {
     });
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.charges.create({
+      const charge = await tx.charges.create({
         data: {
           loanId: loan.id,
           chargeTypeId: data.chargeTypeId,
@@ -828,24 +829,58 @@ export class AdminService {
         }
       });
 
-      await tx.loanRemaining.update({
-        where: { id: loanRemaining.id },
-        data: {
-          deletedAt: new Date()
-        }
-      });
-      await tx.loanRemaining.create({
-        data: {
-          loanId: loan.id,
-          principal: loanRemaining.principal,
-          interest: loanRemaining.interest,
-          penalty: loanRemaining.penalty,
-          otherFee: loanRemaining.otherFee,
-          legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
-          currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
-          agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
-        }
-      });
+      // await tx.loanRemaining.update({
+      //   where: { id: loanRemaining.id },
+      //   data: {
+      //     deletedAt: new Date()
+      //   }
+      // });
+
+      // const newLoanRemaining = await tx.loanRemaining.create({
+      //   data: {
+      //     loanId: loan.id,
+      //     principal: loanRemaining.principal,
+      //     interest: loanRemaining.interest,
+      //     penalty: loanRemaining.penalty,
+      //     otherFee: loanRemaining.otherFee,
+      //     legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
+      //     currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
+      //     agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
+      //   }
+      // });
+
+      const allocationResult = await this.paymentHelper.allocatePayment(
+        charge.id,
+        'LEGAL_CHARGES_ADDED',
+        Number(data.amount || 0),
+        loanRemaining,
+        tx
+      );
+
+      await this.paymentHelper.updateLoanRemaining(
+        loanRemaining.id,
+        allocationResult.newBalances,
+        allocationResult.newCurrentDebt,
+        loanRemaining,
+        tx
+      );
+
+      await this.paymentHelper.createBalanceHistory(
+        loan.id,
+        charge.id,
+        allocationResult.newBalances,
+        allocationResult.newCurrentDebt,
+        'LEGAL_CHARGES_ADDED',
+        tx
+      );
+      // await this.paymentHelper.createBalanceHistory(
+      //   loan.id,
+      //   charge.id,
+      //   allocationResult.newBalances,
+      //   allocationResult.newCurrentDebt,
+      //   'PAYMENT',
+      //   tx
+      // );
     });
 
     return {
