@@ -539,8 +539,8 @@ export class AdminService {
 
     const where: any = { deletedAt: null };
 
-    if (filters.caseId) {
-      where.Loan = { caseId: filters.caseId };
+    if (filters.search) {
+      where.Loan = { caseId: filters.search };
     }
 
     if (filters.type) {
