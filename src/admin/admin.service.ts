@@ -883,7 +883,7 @@ export class AdminService {
   }
 
   async getCharges(getChargeDto: GetChargeWithPaginationDto | GetChargeReportWithPaginationDto, options?: { isReport?: boolean }) {
-    const { page, limit, caseId } = getChargeDto;
+    const { page, limit, search } = getChargeDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const includes = {
@@ -955,13 +955,12 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (caseId) loanFilter.caseId = caseId;
+    if (search) loanFilter.caseId = search;
 
     if (options?.isReport) {
       const filters = getChargeDto as GetChargeReportWithPaginationDto;
 
       if (filters.chargeDateStart || filters.chargeDateEnd) {
-        console.log(filters.chargeDateStart, filters.chargeDateEnd);
         where.paymentDate = {
           ...(filters.chargeDateStart
             ? { gte: dayjs(filters.chargeDateStart).startOf('day').toDate() }
