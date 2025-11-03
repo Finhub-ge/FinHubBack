@@ -25,12 +25,12 @@ import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoa
 import { UploadsHelper } from 'src/helpers/upload.helper';
 import { generatePdfFromHtml, getPaymentScheduleHtml } from 'src/helpers/pdf.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
-import { idToStatus, statusToId } from 'src/enums/visitStatus.enum';
+import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, hydrateClosedLoansData, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 
 @Injectable()
 export class LoanService {
@@ -104,7 +104,7 @@ export class LoanService {
 
     // Enrich closed loans with additional data
     if (showOnlyClosedLoans) {
-      await hydrateClosedLoansData(loans, this.prisma, this.paymentsHelper);
+      await mapClosedLoansDataToPaymentWriteoff(loans, this.paymentsHelper);
     }
 
     return this.paginationService.createPaginatedResult(loans, totalCount, { page, limit });

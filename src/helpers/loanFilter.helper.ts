@@ -2,9 +2,8 @@
 
 import dayjs from 'dayjs';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { buildLoanSearchWhere } from './loan.helper';
+import { buildLoanSearchWhere, calculateWriteoff } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
-import { calculateRemainingChanges } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -317,57 +316,16 @@ export const getLatestRecordConfig = (relationName: string) => {
 
 // ==================== DATA ENRICHMENT ====================
 
-export const hydrateClosedLoansData = async (
+export const mapClosedLoansDataToPaymentWriteoff = async (
   loans: any[],
-  prisma: PrismaService,
   paymentsHelper: any
 ): Promise<void> => {
   await Promise.all([
-    calculatePaymentTotals(loans, paymentsHelper),
-    calculateRemainingBalanceHistory(loans, prisma),
+    Promise.all(loans.map(async (loan) => {
+      loan.remainingChanges = await calculateWriteoff(loan.publicId, paymentsHelper);
+    }))
   ]);
-};
-
-export const calculatePaymentTotals = async (
-  loans: any[],
-  paymentsHelper: any
-): Promise<void> => {
-  await Promise.all(
-    loans.map(async (loan) => {
-      loan.totalPayments = await paymentsHelper.getTotalPaymentsByPublicId(
-        loan.publicId
-      );
-    })
-  );
-};
-
-export const calculateRemainingBalanceHistory = async (
-  loans: any[],
-  prisma: PrismaService
-): Promise<void> => {
-  await Promise.all(
-    loans.map(async (loan) => {
-      const history = await fetchRemainingBalanceHistory(loan.id, prisma);
-      loan.remainingChanges = calculateRemainingChanges(history);
-    })
-  );
-};
-
-export const fetchRemainingBalanceHistory = async (
-  loanId: number,
-  prisma: PrismaService
-) => {
-  return prisma.loanRemaining.findMany({
-    where: { loanId },
-    orderBy: { createdAt: 'asc' },
-  });
-};
-
-// ==================== VALIDATION HELPERS ====================
-
-export const shouldApplyIntersection = (filterResults: Map<string, number[]>): boolean => {
-  return filterResults.size > 0;
-};
+}
 
 export const hasAssignmentFilters = (filters: any): boolean => {
   return !!(
