@@ -679,8 +679,8 @@ export class AdminService {
     where.Loan = {};
     where.LoanAssignment = undefined;
 
-    if (filters.caseId) {
-      where.Loan.caseId = filters.caseId;
+    if (filters.search) {
+      where.Loan.caseId = filters.search;
     }
     if (filters.assigneduser?.length) {
       where.Loan.LoanAssignment = {

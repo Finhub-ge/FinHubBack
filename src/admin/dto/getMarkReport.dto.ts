@@ -11,7 +11,7 @@ export class GetMarkReportDto {
   })
   @IsOptional()
   @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  search?: number;
 
   @ApiProperty({
     description: 'Filter by assigned user IDs',
