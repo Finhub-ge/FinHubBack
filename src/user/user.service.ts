@@ -370,4 +370,43 @@ export class UserService {
       }
     });
   }
+
+  async getMarks(user: User) {
+    return await this.prisma.loanMarks.findMany({
+      where: {
+        Loan: {
+          LoanAssignment: {
+            some: {
+              User: { id: user.id }
+            }
+          }
+        },
+        deletedAt: null,
+      },
+      include: {
+        Marks: {
+          select: {
+            id: true,
+            title: true
+          }
+        },
+        Loan: {
+          select: {
+            id: true,
+            caseId: true,
+            publicId: true,
+            Debtor: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        },
+      },
+      orderBy: {
+        deadline: 'desc'
+      }
+    });
+  }
 }
