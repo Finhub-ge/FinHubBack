@@ -736,9 +736,14 @@ export class AdminService {
     if (filters.search) {
       where.Loan.caseId = filters.search;
     }
-    if (filters.assigneduser?.length) {
+    if (filters.assignedCollector?.length) {
       where.Loan.LoanAssignment = {
-        some: { User: { id: { in: filters.assigneduser } } },
+        some: { User: { id: { in: filters.assignedCollector } } },
+      };
+    }
+    if (filters.assignedLawyer?.length) {
+      where.Loan.LoanAssignment = {
+        some: { User: { id: { in: filters.assignedLawyer } } },
       };
     }
     if (filters.portfolio?.length) {
