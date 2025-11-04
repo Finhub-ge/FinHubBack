@@ -491,15 +491,44 @@ export class AdminService {
   async createTaskResponse(taskId: number, data: CreateTaskResponseDto, userId: number) {
     const task = await this.prisma.tasks.findUnique({
       where: {
-        id: taskId,
-        taskStatusId: 1
+        id: taskId
       },
       include: {
-        User_Tasks_toUserIdToUser: true
+        User_Tasks_toUserIdToUser: true,
+        TaskStatus: true
       }
     })
+
+    if (!task) {
+      throw new BadRequestException('Task not found');
+    }
+
     if (task.User_Tasks_toUserIdToUser.id !== userId) {
       throw new BadRequestException('Task does not belong to you');
+    }
+
+    const fiveDaysLater = addDays(new Date(), 5);
+
+    const taskStatus = await this.prisma.taskStatus.findUnique({
+      where: { id: data.taskStatusId }
+    });
+
+    if (taskStatus.title === 'Postpone' && data.deadline && dayjs(data.deadline).isAfter(fiveDaysLater)) {
+      throw new BadRequestException('Deadline is too far in the future, it must be within 5 days');
+    }
+
+    const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
+      where: {
+        entityType: 'TASK',
+        fromStatusId: task.taskStatusId,
+        toStatusId: data.taskStatusId,
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!isTransitionAllowed) {
+      throw new BadRequestException(`Status transition from ${task.TaskStatus.title} status to ${taskStatus.title} is not allowed`);
     }
 
     await this.prisma.tasks.update({
@@ -707,9 +736,14 @@ export class AdminService {
     if (filters.search) {
       where.Loan.caseId = filters.search;
     }
-    if (filters.assigneduser?.length) {
+    if (filters.assignedCollector?.length) {
       where.Loan.LoanAssignment = {
-        some: { User: { id: { in: filters.assigneduser } } },
+        some: { User: { id: { in: filters.assignedCollector } } },
+      };
+    }
+    if (filters.assignedLawyer?.length) {
+      where.Loan.LoanAssignment = {
+        some: { User: { id: { in: filters.assignedLawyer } } },
       };
     }
     if (filters.portfolio?.length) {

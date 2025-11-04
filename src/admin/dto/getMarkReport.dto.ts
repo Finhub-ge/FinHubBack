@@ -14,13 +14,22 @@ export class GetMarkReportDto {
   search?: number;
 
   @ApiProperty({
-    description: 'Filter by assigned user IDs',
+    description: 'Filter by assigned collector IDs',
     required: false,
     type: String
   })
   @IsOptional()
   @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
-  assigneduser?: number[];
+  assignedCollector?: number[];
+
+  @ApiProperty({
+    description: 'Filter by assigned lawyer IDs',
+    required: false,
+    type: String
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  assignedLawyer?: number[];
 
   @ApiProperty({
     description: 'Filter by portfolio IDs',
