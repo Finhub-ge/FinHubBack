@@ -68,4 +68,11 @@ export class UserController {
   getTasks(@GetUser() user: User,) {
     return this.userService.getTasks(user)
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/marks')
+  getMarks(@GetUser() user: User) {
+    return this.userService.getMarks(user)
+  }
 }
