@@ -8,7 +8,7 @@ import { AllRoles, ExceptRoles, Roles } from "src/auth/decorator/role.decorator"
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { GetUser } from "src/auth/decorator/get-user.decorator";
-import { User } from "@prisma/client";
+import { StatusMatrix_entityType, User } from "@prisma/client";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
@@ -324,5 +324,12 @@ export class AdminController {
   @Get('report/charges')
   async getChargesReport(@Query() getChargeReportDto: GetChargeReportWithPaginationDto) {
     return await this.adminService.getCharges(getChargeReportDto, { isReport: true });
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':taskId/availableTaskStatuses')
+  async getAvailableTaskStatuses(@Param('taskId') taskId: number, @Query('entityType') entityType: StatusMatrix_entityType,) {
+    return await this.adminService.getAvailableTaskStatuses(taskId, entityType);
   }
 }
