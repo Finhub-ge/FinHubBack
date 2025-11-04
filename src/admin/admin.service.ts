@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { Tasks_status, User, Committee_status } from '@prisma/client';
+import { User, Committee_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -441,7 +441,7 @@ export class AdminService {
       toUserId: data.toUserId,
       task: data.task,
       deadline: data.deadline,
-      status: Tasks_status.pending
+      taskStatusId: 1
     }
 
     if (data.publicId) {
@@ -467,7 +467,7 @@ export class AdminService {
     const task = await this.prisma.tasks.findUnique({
       where: {
         id: taskId,
-        status: Tasks_status.pending
+        taskStatusId: 1
       },
       include: {
         User_Tasks_toUserIdToUser: true
@@ -481,7 +481,7 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        status: Tasks_status.complete
+        taskStatusId: 2
       }
     })
 
