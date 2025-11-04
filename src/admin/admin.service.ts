@@ -25,6 +25,8 @@ import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
+import { addDays } from "src/helpers/date.helper";
+import { Role } from "src/enums/role.enum";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -449,18 +451,21 @@ export class AdminService {
 
   async createTask(data: CreateTaskDto, userId: number) {
     const user = await this.prisma.user.findUnique({
-      where: { id: data.toUserId, deletedAt: null }
+      where: { id: data.toUserId, deletedAt: null },
+      include: { Role: true }
     });
 
     if (!user) {
       throw new Error(`User not found: ${data.toUserId}`);
     }
 
+    const deadline = user.Role.name === Role.JUNIOR_LAWYER ? addDays(new Date(), 5) : data.deadline ? data.deadline : new Date();
+
     const newTask = {
       fromUser: userId,
       toUserId: data.toUserId,
       task: data.task,
-      deadline: data.deadline,
+      deadline: deadline,
       taskStatusId: 1
     }
 
