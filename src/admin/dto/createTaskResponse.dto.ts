@@ -1,7 +1,17 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsNotEmpty, IsNumber, IsString } from "class-validator";
 
 export class CreateTaskResponseDto {
+  task
+  @ApiProperty({
+    description: 'Task status ID',
+    required: true,
+    type: Number
+  })
+  @IsNotEmpty()
+  @IsNumber()
+  taskStatusId: number;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()

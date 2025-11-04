@@ -328,6 +328,13 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
+  @Get('taskStatuses')
+  async getTaskStatuses() {
+    return await this.adminService.getTaskStatuses();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
   @Get(':taskId/availableTaskStatuses')
   async getAvailableTaskStatuses(@Param('taskId') taskId: number, @Query('entityType') entityType: StatusMatrix_entityType,) {
     return await this.adminService.getAvailableTaskStatuses(taskId, entityType);

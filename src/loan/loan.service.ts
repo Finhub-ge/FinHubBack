@@ -400,7 +400,8 @@ export class LoanService {
             updatedAt: true,
             LoanAddress: { select: { id: true, address: true } },
           }
-        }
+        },
+        Charges: true,
       }
     });
 

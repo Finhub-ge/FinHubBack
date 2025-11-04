@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
 import { User, Committee_status, StatusMatrix_entityType } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
+import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
@@ -73,6 +73,21 @@ export class AdminService {
       conditions.push({ Loan: { caseId: filters.caseId } });
     }
 
+    if (filters.type === TaskType.ASSIGNED_TO_ME) {
+      conditions.push({ toUserId: user.id });
+    }
+
+    if (filters.type === TaskType.ASSIGNED_BY_ME) {
+      conditions.push({ fromUser: user.id });
+    }
+
+    if (filters.employeeId) {
+      conditions.push({ toUserId: filters.employeeId });
+    }
+
+    if (filters.statusId) {
+      conditions.push({ taskStatusId: filters.statusId });
+    }
     // Created date range
     if (filters.createdDateStart || filters.createdDateEnd) {
       const createdDateCondition: any = {};
@@ -486,7 +501,7 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        taskStatusId: 2
+        taskStatusId: data.taskStatusId
       }
     })
 
@@ -1171,6 +1186,12 @@ export class AdminService {
   async getChannelAccounts() {
     return await this.prisma.transactionChannelAccounts.findMany({
       where: { active: 1 }
+    });
+  }
+
+  async getTaskStatuses() {
+    return await this.prisma.taskStatus.findMany({
+      where: { deletedAt: null }
     });
   }
 
