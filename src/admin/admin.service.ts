@@ -869,6 +869,12 @@ export class AdminService {
 
     if (!loan) throw new HttpException('Loan not found', 404)
 
+    const chargeType = await this.prisma.chargeType.findUnique({
+      where: { id: data.chargeTypeId }
+    });
+
+    if (!chargeType) throw new HttpException('Charge type not found', 404)
+
     const loanRemaining = await this.prisma.loanRemaining.findFirst({
       where: { loanId: loan.id, deletedAt: null }
     });
@@ -895,28 +901,67 @@ export class AdminService {
         }
       });
 
+      // Determine which field to update
+      const isLegalCharge = ['Court', 'Execution'].includes(chargeType.title);
+      const isOtherFee = ['Other', 'Post', 'Registry'].includes(chargeType.title);
+
+      // Compute new balances
+      const newLoanRemainingData: any = {
+        loanId: loan.id,
+        principal: loanRemaining.principal,
+        interest: loanRemaining.interest,
+        penalty: loanRemaining.penalty,
+        otherFee: loanRemaining.otherFee,
+        legalCharges: loanRemaining.legalCharges,
+        currentDebt: loanRemaining.currentDebt,
+        agreementMin: loanRemaining.agreementMin,
+      };
+
+      if (isLegalCharge) {
+        newLoanRemainingData.legalCharges = Number(loanRemaining.legalCharges) + Number(data.amount);
+      }
+
+      if (isOtherFee) {
+        newLoanRemainingData.otherFee = Number(loanRemaining.otherFee) + Number(data.amount);
+      }
+
+      newLoanRemainingData.currentDebt = Number(loanRemaining.currentDebt) + Number(data.amount);
+      newLoanRemainingData.agreementMin = Number(loanRemaining.agreementMin) + Number(data.amount);
+
       const newLoanRemaining = await tx.loanRemaining.create({
-        data: {
-          loanId: loan.id,
-          principal: loanRemaining.principal,
-          interest: loanRemaining.interest,
-          penalty: loanRemaining.penalty,
-          otherFee: loanRemaining.otherFee,
-          legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
-          currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
-          agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
-        }
+        data: newLoanRemainingData,
       });
+
+      // const newLoanRemaining = await tx.loanRemaining.create({
+      //   data: {
+      //     loanId: loan.id,
+      //     principal: loanRemaining.principal,
+      //     interest: loanRemaining.interest,
+      //     penalty: loanRemaining.penalty,
+      //     otherFee: loanRemaining.otherFee,
+      //     legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
+      //     currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
+      //     agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
+      //   }
+      // });
+
+      // Determine allocation type
+      const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';
+      const sourceType = isLegalCharge ? 'LEGAL_CHARGES_ADDED' : 'OTHER_FEE_ADDED';
 
       await tx.paymentAllocationDetail.create({
         data: {
           loanId: loan.id,
-          sourceType: 'LEGAL_CHARGES_ADDED',
+          sourceType: sourceType,
           sourceId: charge.id,
-          componentType: 'LEGAL_CHARGES',
+          componentType: componentType,
           amountAllocated: Number(data.amount || 0),
-          balanceBefore: Number(loanRemaining.legalCharges),
-          balanceAfter: Number(newLoanRemaining.legalCharges),
+          balanceBefore: isLegalCharge
+            ? Number(loanRemaining.legalCharges)
+            : Number(loanRemaining.otherFee),
+          balanceAfter: isLegalCharge
+            ? Number(newLoanRemaining.legalCharges)
+            : Number(newLoanRemaining.otherFee),
           allocationOrder: 1,
         }
       });
@@ -930,7 +975,7 @@ export class AdminService {
           otherFee: newLoanRemaining.otherFee,
           legalCharges: newLoanRemaining.legalCharges,
           totalDebt: newLoanRemaining.currentDebt,
-          sourceType: 'LEGAL_CHARGES_ADDED',
+          sourceType: sourceType,
           sourceId: charge.id,
         }
       });

@@ -401,7 +401,11 @@ export class LoanService {
             LoanAddress: { select: { id: true, address: true } },
           }
         },
-        Charges: true,
+        Charges: {
+          include: {
+            ChargeType: { select: { title: true } },
+          },
+        },
       }
     });
 
