@@ -5,9 +5,9 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status } from '@prisma/client';
+import { User, Committee_status, StatusMatrix_entityType } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
-import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
+import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
@@ -73,6 +73,21 @@ export class AdminService {
       conditions.push({ Loan: { caseId: filters.caseId } });
     }
 
+    if (filters.type === TaskType.ASSIGNED_TO_ME) {
+      conditions.push({ toUserId: user.id });
+    }
+
+    if (filters.type === TaskType.ASSIGNED_BY_ME) {
+      conditions.push({ fromUser: user.id });
+    }
+
+    if (filters.employeeId) {
+      conditions.push({ toUserId: filters.employeeId });
+    }
+
+    if (filters.statusId) {
+      conditions.push({ taskStatusId: filters.statusId });
+    }
     // Created date range
     if (filters.createdDateStart || filters.createdDateEnd) {
       const createdDateCondition: any = {};
@@ -486,7 +501,7 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        taskStatusId: 2
+        taskStatusId: data.taskStatusId
       }
     })
 
@@ -1172,5 +1187,58 @@ export class AdminService {
     return await this.prisma.transactionChannelAccounts.findMany({
       where: { active: 1 }
     });
+  }
+
+  async getTaskStatuses() {
+    return await this.prisma.taskStatus.findMany({
+      where: { deletedAt: null }
+    });
+  }
+
+  async getAvailableTaskStatuses(taskId: number, entityType: StatusMatrix_entityType) {
+    let currentStatusId: number;
+
+    const task = await this.prisma.tasks.findUnique({
+      where: { id: taskId },
+      include: {
+        TaskStatus: {
+          select: {
+            id: true,
+            title: true
+          }
+        }
+      }
+    });
+    if (!task) {
+      throw new BadRequestException('Task not found');
+    }
+    currentStatusId = task.TaskStatus.id;
+
+    // Get allowed transitions from StatusMatrix
+    const allowedStatuses = await this.prisma.statusMatrix.findMany({
+      where: {
+        entityType,
+        fromStatusId: currentStatusId,
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    const toStatusIds = allowedStatuses.map(t => t.toStatusId);
+    const statusDetails = await this.prisma.taskStatus.findMany({
+      where: { id: { in: toStatusIds } },
+    });
+    // return statusDetails;
+    return {
+      allowedStatuses: allowedStatuses.map(transition => {
+        const status = statusDetails.find(s => s.id === transition.toStatusId);
+        return {
+          statusId: transition.toStatusId,
+          status: status?.title,
+          requiresReason: transition.requiresReason === true,
+          description: transition.description,
+        };
+      }),
+    };
   }
 }

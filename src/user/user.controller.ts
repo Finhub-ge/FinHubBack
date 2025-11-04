@@ -8,6 +8,8 @@ import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
 import { AllRoles, Roles } from "src/auth/decorator/role.decorator";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
+import { GetUser } from "src/auth/decorator/get-user.decorator";
+import { User } from "@prisma/client";
 
 @ApiTags('User')
 @ApiBearerAuth('access-token')
@@ -58,5 +60,12 @@ export class UserController {
   @Get('groupedBy/teamLeader')
   getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto) {
     return this.userService.getUsersGroupedByTeamLeader(getUsersFilterDto)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/tasks')
+  getTasks(@GetUser() user: User,) {
+    return this.userService.getTasks(user)
   }
 }

@@ -8,7 +8,7 @@ import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 import { PaginationService } from "src/common/services/pagination.service";
-import { TeamMembership_teamRole } from "@prisma/client";
+import { TeamMembership_teamRole, User } from "@prisma/client";
 
 @Injectable()
 export class UserService {
@@ -335,5 +335,13 @@ export class UserService {
     }
 
     return result
+  }
+
+  async getTasks(user: User) {
+    return await this.prisma.tasks.findMany({
+      where: {
+        toUserId: user.id
+      }
+    });
   }
 }

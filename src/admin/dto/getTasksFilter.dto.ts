@@ -3,7 +3,7 @@ import { Transform } from 'class-transformer';
 import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
-enum TaskType {
+export enum TaskType {
   ASSIGNED_BY_ME = 'ASSIGNED_BY_ME',
   ASSIGNED_TO_ME = 'ASSIGNED_TO_ME'
 }
