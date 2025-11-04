@@ -98,6 +98,53 @@ export class CronService {
       this.logger.error('Error cancelling agreement:', error);
     }
   }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
+  async taskReminder() {
+    try {
+      this.logger.log('Starting task reminder...');
+
+      const tasks = await this.prisma.tasks.findMany({
+        where: {
+          deadline: { lt: new Date() },
+          deletedAt: null
+        },
+        include: {
+          TaskStatus: {
+            select: {
+              id: true,
+              title: true
+            }
+          }
+        }
+      });
+
+      if (tasks.length > 0) {
+        for (const task of tasks) {
+          // Check StatusMatrix - is this transition allowed?
+          const isTransitionAllowed = await this.prisma.statusMatrixAutomatic.findFirst({
+            where: {
+              entityType: 'TASK',
+              fromStatusId: task.taskStatusId,
+              toStatusId: 3,
+              isActive: true,
+              deletedAt: null,
+            },
+          });
+
+          if (!isTransitionAllowed) {
+            this.logger.log(`Status transition from ${task?.TaskStatus?.title} status to 'Failed Task' is not allowed`);
+          }
+          await this.prisma.tasks.update({
+            where: { id: task.id },
+            data: { taskStatusId: 3 }
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error reminding tasks:', error);
+    }
+  }
   // @Cron('* * * * *') // Runs every minute
   // @Cron('30 * * * * *') // Runs every 30 seconds
   // async testCron() {
