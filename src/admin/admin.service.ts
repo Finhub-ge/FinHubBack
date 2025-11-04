@@ -129,6 +129,11 @@ export class AdminService {
             lastName: true
           }
         },
+        TaskStatus: {
+          select: {
+            title: true,
+          }
+        },
         Loan: {
           select: {
             caseId: true,
