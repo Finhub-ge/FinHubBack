@@ -11,7 +11,7 @@ export class GetChargeDto {
   })
   @IsOptional()
   @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  search?: number;
 }
 
 // Combine with pagination

@@ -251,12 +251,17 @@ export class LoanService {
             fromUser: true,
             toUserId: true,
             deadline: true,
-            status: true,
+            taskStatusId: true,
             createdAt: true,
             User_Tasks_fromUserToUser: {
               select: {
                 firstName: true,
                 lastName: true,
+              }
+            },
+            TaskStatus: {
+              select: {
+                title: true,
               }
             },
             User_Tasks_toUserIdToUser: {

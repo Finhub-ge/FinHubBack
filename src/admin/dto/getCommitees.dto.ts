@@ -12,7 +12,7 @@ export class GetCommiteesDto {
   })
   @IsOptional()
   @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  search?: number;
 
   @ApiProperty({ enum: Committee_type, description: 'Type of the committee', required: false })
   @IsEnum(Committee_type)

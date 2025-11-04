@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { Tasks_status, User, Committee_status } from '@prisma/client';
+import { User, Committee_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -127,6 +127,11 @@ export class AdminService {
           select: {
             firstName: true,
             lastName: true
+          }
+        },
+        TaskStatus: {
+          select: {
+            title: true,
           }
         },
         Loan: {
@@ -441,7 +446,7 @@ export class AdminService {
       toUserId: data.toUserId,
       task: data.task,
       deadline: data.deadline,
-      status: Tasks_status.pending
+      taskStatusId: 1
     }
 
     if (data.publicId) {
@@ -467,7 +472,7 @@ export class AdminService {
     const task = await this.prisma.tasks.findUnique({
       where: {
         id: taskId,
-        status: Tasks_status.pending
+        taskStatusId: 1
       },
       include: {
         User_Tasks_toUserIdToUser: true
@@ -481,7 +486,7 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        status: Tasks_status.complete
+        taskStatusId: 2
       }
     })
 
@@ -539,8 +544,8 @@ export class AdminService {
 
     const where: any = { deletedAt: null };
 
-    if (filters.caseId) {
-      where.Loan = { caseId: filters.caseId };
+    if (filters.search) {
+      where.Loan = { caseId: filters.search };
     }
 
     if (filters.type) {
@@ -679,8 +684,8 @@ export class AdminService {
     where.Loan = {};
     where.LoanAssignment = undefined;
 
-    if (filters.caseId) {
-      where.Loan.caseId = filters.caseId;
+    if (filters.search) {
+      where.Loan.caseId = filters.search;
     }
     if (filters.assigneduser?.length) {
       where.Loan.LoanAssignment = {
@@ -883,7 +888,7 @@ export class AdminService {
   }
 
   async getCharges(getChargeDto: GetChargeWithPaginationDto | GetChargeReportWithPaginationDto, options?: { isReport?: boolean }) {
-    const { page, limit, caseId } = getChargeDto;
+    const { page, limit, search } = getChargeDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const includes = {
@@ -955,13 +960,12 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (caseId) loanFilter.caseId = caseId;
+    if (search) loanFilter.caseId = search;
 
     if (options?.isReport) {
       const filters = getChargeDto as GetChargeReportWithPaginationDto;
 
       if (filters.chargeDateStart || filters.chargeDateEnd) {
-        console.log(filters.chargeDateStart, filters.chargeDateEnd);
         where.paymentDate = {
           ...(filters.chargeDateStart
             ? { gte: dayjs(filters.chargeDateStart).startOf('day').toDate() }

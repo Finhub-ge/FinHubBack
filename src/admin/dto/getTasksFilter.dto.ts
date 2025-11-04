@@ -1,5 +1,4 @@
 import { ApiProperty, IntersectionType } from '@nestjs/swagger';
-import { Tasks_status } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
@@ -25,10 +24,10 @@ export class GetTasksFilterDto {
   @IsOptional()
   type?: TaskType;
 
-  @ApiProperty({ enum: Tasks_status, description: 'Status of the task', required: false })
-  @IsEnum(Tasks_status)
+  @ApiProperty({ description: 'Status of the task', required: false })
+  @Transform(({ value }) => value ? Number(value) : undefined)
   @IsOptional()
-  status?: Tasks_status;
+  statusId?: number;
 
   @ApiProperty({ description: 'Employee user ID', required: false })
   @IsString()

@@ -468,24 +468,26 @@ model portfolioSeller {
 }
 
 model Tasks {
-  id                        Int          @id @default(autoincrement())
+  id                        Int        @id @default(autoincrement())
   loanId                    Int?
-  task                      String?      @db.VarChar(255)
-  response                  String?      @db.VarChar(255)
+  task                      String?    @db.VarChar(255)
+  response                  String?    @db.VarChar(255)
   fromUser                  Int
   toUserId                  Int
-  deadline                  DateTime     @db.Date
-  status                    Tasks_status @default(pending)
-  createdAt                 DateTime     @default(now()) @db.DateTime(0)
-  updatedAt                 DateTime     @default(now()) @db.DateTime(0)
-  deletedAt                 DateTime?    @db.DateTime(0)
-  Loan                      Loan?        @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_1")
-  User_Tasks_fromUserToUser User         @relation("Tasks_fromUserToUser", fields: [fromUser], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_2")
-  User_Tasks_toUserIdToUser User         @relation("Tasks_toUserIdToUser", fields: [toUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_3")
+  deadline                  DateTime   @db.Date
+  taskStatusId              Int
+  createdAt                 DateTime   @default(now()) @db.DateTime(0)
+  updatedAt                 DateTime   @default(now()) @db.DateTime(0)
+  deletedAt                 DateTime?  @db.DateTime(0)
+  Loan                      Loan?      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_1")
+  User_Tasks_fromUserToUser User       @relation("Tasks_fromUserToUser", fields: [fromUser], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_2")
+  User_Tasks_toUserIdToUser User       @relation("Tasks_toUserIdToUser", fields: [toUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_3")
+  TaskStatus                TaskStatus @relation(fields: [taskStatusId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Tasks_4")
 
   @@index([loanId], map: "fk_Tasks_1_idx")
   @@index([fromUser], map: "fk_Tasks_2")
   @@index([toUserId], map: "fk_Tasks_3")
+  @@index([taskStatusId], map: "fk_Tasks_4")
 }
 
 model SmsHistory {
@@ -1011,14 +1013,20 @@ model PortfolioCaseGroup {
   @@index([deletedAt], map: "idx_deletedAt")
 }
 
+model TaskStatus {
+  id        Int       @id @default(autoincrement())
+  title     String    @db.VarChar(500)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  Tasks     Tasks[]
+
+  @@index([deletedAt], map: "idx_deletedAt")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
-}
-
-enum Tasks_status {
-  pending
-  complete
 }
 
 enum SmsHistory_status {
