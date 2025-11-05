@@ -486,6 +486,17 @@ export class AdminService {
         throw new Error(`Loan not found for publicId: ${data.publicId}`);
       }
 
+      const existingTasks = await this.prisma.tasks.count({
+        where: {
+          loanId: loan.id,
+          deletedAt: null
+        }
+      });
+
+      if (existingTasks >= 5) {
+        throw new BadRequestException(`Loan already has 5 tasks`);
+      }
+
       newTask['loanId'] = loan.id;
     }
 
@@ -1001,6 +1012,7 @@ export class AdminService {
       Loan: {
         select: {
           caseId: true,
+          publicId: true,
           Debtor: {
             select: {
               firstName: true,
