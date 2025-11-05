@@ -8,7 +8,7 @@ import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 import { PaginationService } from "src/common/services/pagination.service";
-import { TeamMembership_teamRole, User } from "@prisma/client";
+import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 
 @Injectable()
 export class UserService {
@@ -408,5 +408,71 @@ export class UserService {
         deadline: 'desc'
       }
     });
+  }
+
+  async getReminders(user: User, type: any) {
+    console.log(type);
+    if (type.type === 'reminders') {
+      return await this.prisma.reminders.findMany({
+        where: {
+          toUserId: user.id,
+          deletedAt: null,
+          status: true,
+          deadline: {
+            gte: new Date()
+          },
+          type: {
+            in: [Reminders_type.Callback]
+          },
+        },
+        include: {
+          User_Reminders_toUserIdToUser: {
+            select: { id: true, firstName: true, lastName: true }
+          },
+          Loan: {
+            select: {
+              id: true,
+              caseId: true,
+              publicId: true,
+              Debtor: { select: { firstName: true, lastName: true } }
+            }
+          }
+        },
+        orderBy: {
+          deadline: 'desc'
+        }
+      });
+    }
+    if (type.type === 'payments') {
+      return await this.prisma.reminders.findMany({
+        where: {
+          fromUserId: user.id,
+          deletedAt: null,
+          status: true,
+          deadline: {
+            gte: new Date()
+          },
+          type: {
+            in: [Reminders_type.Agreement, Reminders_type.Promised_to_pay]
+          }
+        },
+        include: {
+          User_Reminders_toUserIdToUser: {
+            select: { id: true, firstName: true, lastName: true }
+          },
+          Loan: {
+            select: {
+              id: true,
+              caseId: true,
+              publicId: true,
+              Debtor: { select: { firstName: true, lastName: true } }
+            }
+          }
+        },
+        orderBy: {
+          deadline: 'desc'
+        }
+      });
+    }
   }
 }

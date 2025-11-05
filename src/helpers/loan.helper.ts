@@ -1,8 +1,9 @@
-import { Prisma, PrismaClient, TeamMembership_teamRole } from "@prisma/client";
+import { Prisma, PrismaClient, Reminders_type, TeamMembership_teamRole } from "@prisma/client";
 import { PrismaService } from "src/prisma/prisma.service";
 import * as dayjs from "dayjs";
 import { statusToId } from "src/enums/visitStatus.enum";
 import { BadRequestException } from "@nestjs/common";
+import { PaymentScheduleItemDto } from "src/loan/dto/updateLoanStatus.dto";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -617,3 +618,59 @@ export const calculateWriteoff = async (
     totalWriteOff: writeoffDebt,
   };
 };
+
+export const saveScheduleReminders = async (
+  data: { loanId: number, commitmentId: number; userId: number, type: Reminders_type },
+  prisma: Prisma.TransactionClient | PrismaClient,
+) => {
+  const { loanId, commitmentId, userId, type } = data;
+
+  const paymentCommitment = await prisma.paymentCommitment.findUnique({
+    where: { id: commitmentId },
+    select: { paymentDate: true, amount: true, PaymentSchedule: true },
+  });
+
+  const { paymentDate, amount, PaymentSchedule } = paymentCommitment;
+
+  let remindersData: Array<{
+    loanId: number;
+    type: Reminders_type;
+    comment: string;
+    status: boolean;
+    fromUserId: number;
+    toUserId: number;
+    deadline: Date;
+  }> = [];
+
+  if (type === Reminders_type.Agreement) {
+    if (!PaymentSchedule || PaymentSchedule.length === 0) {
+      throw new Error('PaymentSchedule is empty for Agreement type');
+    }
+
+    remindersData = PaymentSchedule.map(item => ({
+      loanId,
+      type,
+      comment: `${type}: ${item.amount.toString()}`,
+      status: true,
+      fromUserId: userId,
+      toUserId: userId,
+      deadline: item.paymentDate,
+    }));
+  } else if (type === Reminders_type.Promised_to_pay) {
+    remindersData = [{
+      loanId,
+      type,
+      comment: `${type}: ${amount.toString()}`,
+      status: true,
+      fromUserId: userId,
+      toUserId: userId,
+      deadline: paymentDate,
+    }];
+  }
+
+  if (remindersData.length > 0) {
+    await prisma.reminders.createMany({
+      data: remindersData,
+    });
+  }
+}

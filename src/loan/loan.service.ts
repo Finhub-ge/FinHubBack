@@ -4,13 +4,13 @@ import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
-import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
+import { PaymentScheduleItemDto, UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, Loan, LoanVisit_status, Reminders_type, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { Role } from 'src/enums/role.enum';
@@ -32,6 +32,7 @@ import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
 import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
+import { DefaultArgs } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class LoanService {
@@ -417,6 +418,7 @@ export class LoanService {
             createdAt: true,
             User_Reminders_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
           },
+          where: { deletedAt: null, status: true },
           orderBy: { deadline: 'desc' }
         },
       }
@@ -946,6 +948,13 @@ export class LoanService {
           },
           tx
         );
+
+        await saveScheduleReminders({
+          loanId: loan.id,
+          commitmentId: commitment.id,
+          userId: userId,
+          type: Reminders_type.Agreement,
+        }, tx);
       }
 
       // Handle Promise status
@@ -955,7 +964,7 @@ export class LoanService {
           data: { isActive: 0 },
         });
 
-        await this.paymentsHelper.createPaymentCommitment(
+        const commitment = await this.paymentsHelper.createPaymentCommitment(
           {
             loanId: loan.id,
             amount: updateLoanStatusDto.promise.agreedAmount,
@@ -966,12 +975,24 @@ export class LoanService {
           },
           tx
         );
+
+        await saveScheduleReminders({
+          loanId: loan.id,
+          commitmentId: commitment.id,
+          userId: userId,
+          type: Reminders_type.Promised_to_pay,
+        }, tx);
       }
 
       if (status.name === 'Agreement Canceled') {
         await tx.paymentCommitment.updateMany({
           where: { loanId: loan.id, isActive: 1 },
           data: { isActive: 0 },
+        });
+
+        await tx.reminders.updateMany({
+          where: { loanId: loan.id, type: Reminders_type.Agreement, status: true },
+          data: { status: false },
         });
       }
 
@@ -1071,6 +1092,12 @@ export class LoanService {
       // user.id is the new user id
       // userId is the assigned by user id
       await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, currentAssignment, tx);
+
+      // Update reminders to new user
+      await tx.reminders.updateMany({
+        where: { loanId: loan.id, status: true },
+        data: { toUserId: assignLoanDto?.userId ?? null },
+      });
 
       return await this.assign({
         loanId: loan.id,
