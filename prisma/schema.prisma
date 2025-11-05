@@ -211,6 +211,7 @@ model Loan {
   PastPayments            PastPayments[]
   PaymentAllocationDetail PaymentAllocationDetail[]
   PaymentCommitment       PaymentCommitment[]
+  Reminders               Reminders[]
   SmsHistory              SmsHistory[]
   Tasks                   Tasks[]
   Transaction             Transaction[]
@@ -444,6 +445,8 @@ model User {
   LoanStatusHistory                                           LoanStatusHistory[]
   LoanVisit                                                   LoanVisit[]
   PaymentCommitment                                           PaymentCommitment[]
+  Reminders_Reminders_fromUserIdToUser                        Reminders[]             @relation("Reminders_fromUserIdToUser")
+  Reminders_Reminders_toUserIdToUser                          Reminders[]             @relation("Reminders_toUserIdToUser")
   Tasks_Tasks_fromUserToUser                                  Tasks[]                 @relation("Tasks_fromUserToUser")
   Tasks_Tasks_toUserIdToUser                                  Tasks[]                 @relation("Tasks_toUserIdToUser")
   TeamMembership                                              TeamMembership[]
@@ -1026,6 +1029,29 @@ model TaskStatus {
   @@index([deletedAt], map: "idx_deletedAt")
 }
 
+model Reminders {
+  id                              Int            @id @default(autoincrement())
+  loanId                          Int?
+  type                            Reminders_type
+  comment                         String?        @db.VarChar(500)
+  status                          Boolean        @default(true)
+  fromUserId                      Int
+  toUserId                        Int
+  deadline                        DateTime       @db.Date
+  createdAt                       DateTime       @default(now()) @db.DateTime(0)
+  updatedAt                       DateTime       @default(now()) @db.DateTime(0)
+  deletedAt                       DateTime?      @db.DateTime(0)
+  Loan                            Loan?          @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Reminders_1")
+  User_Reminders_fromUserIdToUser User           @relation("Reminders_fromUserIdToUser", fields: [fromUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Reminders_2")
+  User_Reminders_toUserIdToUser   User           @relation("Reminders_toUserIdToUser", fields: [toUserId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Reminders_3")
+
+  @@index([loanId], map: "fk_Reminders_1_idx")
+  @@index([fromUserId], map: "fk_Reminders_2_idx")
+  @@index([toUserId], map: "fk_Reminders_3_idx")
+  @@index([deletedAt], map: "idx_deletedAt")
+  @@index([status], map: "idx_status")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -1097,4 +1123,10 @@ enum Charges_status {
   UNPAID
   PARTIALLY_PAID
   PAID
+}
+
+enum Reminders_type {
+  Callback
+  Agreement
+  Promised_to_pay @map("Promised to pay")
 }

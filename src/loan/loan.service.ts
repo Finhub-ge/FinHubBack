@@ -8,7 +8,7 @@ import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, Loan, LoanVisit_status, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, Reminders_type, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
@@ -31,6 +31,7 @@ import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
 import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 
 @Injectable()
 export class LoanService {
@@ -405,6 +406,18 @@ export class LoanService {
           include: {
             ChargeType: { select: { title: true } },
           },
+        },
+        Reminders: {
+          select: {
+            id: true,
+            type: true,
+            comment: true,
+            status: true,
+            deadline: true,
+            createdAt: true,
+            User_Reminders_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
+          },
+          orderBy: { deadline: 'desc' }
         },
       }
     });
@@ -1714,5 +1727,31 @@ export class LoanService {
     const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 
     return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+  }
+
+  async addLoanReminder(publicId: ParseUUIDPipe, data: AddLoanReminderDto, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    await this.prisma.reminders.create({
+      data: {
+        loanId: loan.id,
+        type: Reminders_type.Callback,
+        comment: data.comment,
+        status: true,
+        fromUserId: userId,
+        toUserId: userId,
+        deadline: data.deadLine
+      },
+    });
+
+    return {
+      message: 'Loan reminder added successfully'
+    };
   }
 }

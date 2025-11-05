@@ -26,6 +26,7 @@ import { AddVisitDto } from './dto/addVisit.dto';
 import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
+import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 
 
 @ApiTags('Loans')
@@ -369,5 +370,17 @@ export class LoanController {
   @Patch(':publicId/updatePortfolioGroup')
   async updatePortfolioGroup(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() updatePortfolioGroupDto: UpdatePortfolioGroupDto) {
     return this.loanService.updatePortfolioGroup(publicId, user.id, updatePortfolioGroupDto);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @Post(':publicId/loanReminder')
+  addLoanReminder(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @Body() data: AddLoanReminderDto
+  ) {
+    return this.loanService.addLoanReminder(publicId, data, user.id);
   }
 }
