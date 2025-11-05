@@ -75,4 +75,18 @@ export class UserController {
   getMarks(@GetUser() user: User) {
     return this.userService.getMarks(user)
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/reminders')
+  getReminders(@GetUser() user: User) {
+    return this.userService.getReminders(user, { type: 'reminders' })
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/payments')
+  getPayments(@GetUser() user: User) {
+    return this.userService.getReminders(user, { type: 'payments' })
+  }
 }
