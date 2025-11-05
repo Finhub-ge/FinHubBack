@@ -406,6 +406,7 @@ export class LoanService {
         Charges: {
           include: {
             ChargeType: { select: { title: true } },
+            TransactionChannels: { select: { name: true } },
           },
         },
         Reminders: {
