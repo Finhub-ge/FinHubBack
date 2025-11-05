@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { CreatePaymentCommitment } from "src/interface/createPaymentCommitment";
 import { CreatePaymentSchedule } from "src/interface/createPaymentSchedule";
 import { PrismaService } from "src/prisma/prisma.service";
-import { PrismaClient, Prisma, LoanRemaining } from '@prisma/client';
+import { PrismaClient, Prisma, LoanRemaining, Charges_status } from '@prisma/client';
 import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
@@ -450,5 +450,69 @@ export class PaymentsHelper {
 
       paymentToApply -= amountForSchedule;
     }
+  }
+  async applyPaymentToCharges(data: any) {
+    const { loanId, allocationResult } = data;
+    const { transactionSummary } = allocationResult;
+
+    // Allocation amounts for each category
+    let remainingOtherFee = Number(transactionSummary.fees || 0);
+    let remainingLegalCharges = Number(transactionSummary.legal || 0);
+
+    // Skip if nothing allocated
+    if (remainingOtherFee <= 0 && remainingLegalCharges <= 0) return;
+
+    // Define charge type mapping
+    const legalTypeIds = [1, 2]; // Court, Execution
+    const otherTypeIds = [3, 4, 5]; // Post, Registry, Other
+
+    try {
+      const unpaidCharges = await this.prisma.charges.findMany({
+        where: {
+          loanId: data.loanId,
+          deletedAt: null,
+          paymentDate: null
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      for (const charge of unpaidCharges) {
+        const chargeAmount = Number(charge.amount) - Number(charge.paidAmount || 0);
+
+        if (legalTypeIds.includes(charge.chargeTypeId) && remainingLegalCharges > 0) {
+          const coverAmount = Math.min(remainingLegalCharges, chargeAmount);
+          remainingLegalCharges -= coverAmount;
+          await this.updateChargeStatus(charge.id, coverAmount);
+        }
+
+        if (otherTypeIds.includes(charge.chargeTypeId) && remainingOtherFee > 0) {
+          const coverAmount = Math.min(remainingOtherFee, chargeAmount);
+          remainingOtherFee -= coverAmount;
+          await this.updateChargeStatus(charge.id, coverAmount);
+        }
+
+        if (remainingLegalCharges <= 0 && remainingOtherFee <= 0) break;
+      }
+
+    } catch (error) {
+      console.error('applyPaymentToCharges failed:', error);
+    }
+  }
+
+  private async updateChargeStatus(chargeId: number, covered: number) {
+    const chargeRecord = await this.prisma.charges.findUnique({ where: { id: chargeId } });
+    if (!chargeRecord) return;
+
+    const previousPaid = Number(chargeRecord.paidAmount || 0);
+    const newPaidAmount = previousPaid + covered;
+    const isFullyPaid = newPaidAmount >= Number(chargeRecord.amount);
+
+    await this.prisma.charges.update({
+      where: { id: chargeId },
+      data: {
+        status: isFullyPaid ? Charges_status.PAID : Charges_status.PARTIALLY_PAID,
+        paidAmount: newPaidAmount,
+        paymentDate: isFullyPaid ? new Date() : chargeRecord.paymentDate,
+      },
+    });
   }
 }
