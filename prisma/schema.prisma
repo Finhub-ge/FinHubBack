@@ -746,6 +746,8 @@ model Charges {
   publicId                    String                      @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
   loanId                      Int?
   amount                      Decimal?                    @db.Decimal(12, 2)
+  paidAmount                  Decimal                     @default(0.00) @db.Decimal(12, 2)
+  status                      Charges_status              @default(UNPAID)
   userId                      Int?
   paymentDate                 DateTime?                   @db.Date
   transactionChannelAccountId Int?
@@ -1089,4 +1091,10 @@ enum StatusMatrixAutomatic_entityType {
   DEBTOR
   TASK
   COMMITTEE
+}
+
+enum Charges_status {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
 }

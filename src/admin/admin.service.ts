@@ -293,7 +293,7 @@ export class AdminService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         if (Number(data.amount) > Number(loanRemaining.currentDebt)) {
           const remainingAmount = Number(data.amount) - Number(loanRemaining.currentDebt);
           await tx.loanRemaining.update({
@@ -399,11 +399,19 @@ export class AdminService {
             },
           });
         }
-
         return {
-          message: 'Payment added successfully'
-        };
+          loanId: loan.id,
+          transactionId: transaction.id,
+          allocationResult
+        }
       });
+
+      this.paymentHelper.applyPaymentToCharges(result)
+        .catch((error) => console.error('Error applying payment to charges:', error));
+
+      return {
+        message: 'Payment added successfully'
+      };
     } catch (error) {
       // Transaction automatically rolled back
       console.error('Payment processing failed:', error);
@@ -885,7 +893,6 @@ export class AdminService {
           loanId: loan.id,
           chargeTypeId: data.chargeTypeId,
           amount: Number(data.amount),
-          paymentDate: data.chargeDate,
           comment: data.comment,
           currency: loan.currency,
           transactionChannelAccountId: data.accountId,
