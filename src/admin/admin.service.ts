@@ -27,6 +27,7 @@ import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
 import { Role } from "src/enums/role.enum";
+import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1343,5 +1344,137 @@ export class AdminService {
         };
       }),
     };
+  }
+
+  async getFuturePayments(getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
+    const { page, limit, search, skip } = getFuturePaymentsDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    const where: any = {
+      deletedAt: null,
+      isActive: 1,
+      PaymentSchedule: {
+        some: {
+          paymentDate: {
+            gte: dayjs().startOf('day').toDate()
+          }
+        }
+      }
+    };
+
+    let schedulePaymentDateFilter: any = {
+      gte: dayjs().startOf('day').toDate()
+    };
+
+    if (search) {
+      where.Loan = { caseId: search };
+    }
+
+    if (getFuturePaymentsDto.type) {
+      where.type = getFuturePaymentsDto.type;
+    }
+
+    if (getFuturePaymentsDto.assignedCollector?.length) {
+      where.Loan = {
+        ...where.Loan,
+        LoanAssignment: { some: { User: { id: { in: getFuturePaymentsDto.assignedCollector } } } }
+      };
+    }
+
+    const portfolioFilter: any = {};
+    if (getFuturePaymentsDto.portfolio?.length) {
+      portfolioFilter.id = { in: getFuturePaymentsDto.portfolio };
+    }
+    if (getFuturePaymentsDto.portfolioseller?.length) {
+      portfolioFilter.portfolioSeller = { id: { in: getFuturePaymentsDto.portfolioseller } };
+    }
+    if (Object.keys(portfolioFilter).length > 0) {
+      where.Loan = {
+        ...where.Loan,
+        Portfolio: portfolioFilter
+      };
+    }
+
+    if (getFuturePaymentsDto.paymentDateStart || getFuturePaymentsDto.paymentDateEnd) {
+      schedulePaymentDateFilter = {
+        ...(getFuturePaymentsDto.paymentDateStart
+          ? { gte: dayjs(getFuturePaymentsDto.paymentDateStart).startOf('day').toDate() }
+          : { gte: dayjs().startOf('day').toDate() }),
+        ...(getFuturePaymentsDto.paymentDateEnd
+          ? { lte: dayjs(getFuturePaymentsDto.paymentDateEnd).endOf('day').toDate() }
+          : {}),
+      };
+
+      where.PaymentSchedule.some.paymentDate = schedulePaymentDateFilter;
+    }
+
+    const data = await this.prisma.paymentCommitment.findMany({
+      where,
+      select: {
+        id: true,
+        type: true,
+        Loan: {
+          select: {
+            id: true,
+            publicId: true,
+            caseId: true,
+            currency: true,
+            LoanAssignment: {
+              select: {
+                User: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    Role: {
+                      select: {
+                        name: true,
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            Portfolio: {
+              select: {
+                id: true,
+                name: true,
+                portfolioSeller: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
+              }
+            },
+            Debtor: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                idNumber: true,
+              }
+            },
+          }
+        },
+        PaymentSchedule: {
+          where: {
+            paymentDate: schedulePaymentDateFilter
+          },
+          select: {
+            id: true,
+            paymentDate: true,
+            amount: true,
+          }
+        }
+      },
+      ...paginationParams,
+    });
+
+    const total = await this.prisma.paymentCommitment.count({
+      where,
+    });
+
+    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 }

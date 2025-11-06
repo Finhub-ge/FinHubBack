@@ -24,6 +24,7 @@ import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
+import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -338,5 +339,12 @@ export class AdminController {
   @Get(':taskId/availableTaskStatuses')
   async getAvailableTaskStatuses(@Param('taskId') taskId: number, @Query('entityType') entityType: StatusMatrix_entityType,) {
     return await this.adminService.getAvailableTaskStatuses(taskId, entityType);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('future-payments')
+  async getFuturePayments(@Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
+    return await this.adminService.getFuturePayments(getFuturePaymentsDto);
   }
 }
