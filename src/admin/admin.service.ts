@@ -459,6 +459,24 @@ export class AdminService {
   }
 
   async createTask(data: CreateTaskDto, userId: number) {
+    const todayStart = dayjs().startOf('day').toDate();
+    const todayEnd = dayjs().endOf('day').toDate();
+
+    const tasksCreatedToday = await this.prisma.tasks.count({
+      where: {
+        fromUser: userId,
+        createdAt: {
+          gte: todayStart,
+          lte: todayEnd
+        },
+        deletedAt: null
+      }
+    });
+
+    if (tasksCreatedToday >= 5) {
+      throw new BadRequestException('You have reached the daily limit of 5 tasks');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: data.toUserId, deletedAt: null },
       include: { Role: true }
@@ -485,17 +503,6 @@ export class AdminService {
 
       if (!loan) {
         throw new Error(`Loan not found for publicId: ${data.publicId}`);
-      }
-
-      const existingTasks = await this.prisma.tasks.count({
-        where: {
-          loanId: loan.id,
-          deletedAt: null
-        }
-      });
-
-      if (existingTasks >= 5) {
-        throw new BadRequestException(`Loan already has 5 tasks`);
       }
 
       newTask['loanId'] = loan.id;
