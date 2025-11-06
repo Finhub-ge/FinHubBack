@@ -977,6 +977,18 @@ export class LoanService {
           tx
         );
 
+        // Save the schedule
+        await this.paymentsHelper.savePaymentSchedule(
+          {
+            commitmentId: commitment.id,
+            schedules: [{
+              paymentDate: updateLoanStatusDto.promise.paymentDate,
+              amount: updateLoanStatusDto.promise.agreedAmount,
+            }],
+          },
+          tx
+        );
+
         await saveScheduleReminders({
           loanId: loan.id,
           commitmentId: commitment.id,
