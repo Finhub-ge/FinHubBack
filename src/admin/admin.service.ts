@@ -77,15 +77,15 @@ export class AdminService {
     }
 
     if (filters.type === TaskType.ASSIGNED_TO_ME) {
-      conditions.push({ toUserId: user.id });
+      conditions.push({ toUserId: Number(user.id) });
     }
 
     if (filters.type === TaskType.ASSIGNED_BY_ME) {
-      conditions.push({ fromUser: user.id });
+      conditions.push({ fromUser: Number(user.id) });
     }
 
     if (filters.employeeId) {
-      conditions.push({ toUserId: filters.employeeId });
+      conditions.push({ toUserId: Number(filters.employeeId) });
     }
 
     if (filters.statusId) {
