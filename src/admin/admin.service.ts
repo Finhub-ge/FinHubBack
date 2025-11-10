@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable, ParseUUIDPipe } from "@nestjs/common";
+import { BadRequestException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from "@nestjs/common";
 import { PaymentsHelper } from "src/helpers/payments.helper";
 import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
@@ -28,6 +28,9 @@ import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
 import { Role } from "src/enums/role.enum";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
+import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
+import { parseExcelBuffer } from "src/helpers/excel.helper";
+import { normalizeName } from "src/helpers/accountId.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1483,5 +1486,53 @@ export class AdminService {
     });
 
     return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
+  }
+
+  async importPlan(fileBuffer: Buffer, userId: number) {
+    const parsedData = await parseExcelBuffer(fileBuffer);
+
+    // Prefetch all users once to avoid N+1 queries
+    const users = await this.prisma.user.findMany({
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    // Build a map of normalized full names -> user id
+    const userMap = new Map(
+      users.map(u => [normalizeName(`${u.firstName} ${u.lastName}`), u.id])
+    );
+
+    const dataToInsert = [];
+    const unmatchedCollectors: string[] = [];
+
+    for (const row of parsedData) {
+      const collectorId = userMap.get(row.collector);
+
+      if (!collectorId) {
+        unmatchedCollectors.push(row.collector); // log missing users
+        continue; // skip unmatched rows
+      }
+
+      dataToInsert.push({
+        collectorId,
+        targetAmount: row.targetAmount,
+        year: row.year,
+        month: row.month,
+      });
+    }
+
+    // Bulk insert in one request
+    let insertedCount = 0;
+    if (dataToInsert.length > 0) {
+      const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
+        data: dataToInsert,
+        skipDuplicates: true, // avoids errors for unique constraints
+      });
+      insertedCount = insertedRows.count;
+    }
+    return {
+      message: 'Excel imported successfully',
+      insertedCount,
+      skippedCollectors: unmatchedCollectors, // shows unmatched names
+    };
   }
 }

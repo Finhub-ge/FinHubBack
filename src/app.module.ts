@@ -9,6 +9,7 @@ import { AminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
 import { CommonModule } from './common/common.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 
 @Module({
@@ -23,7 +24,8 @@ import { CommonModule } from './common/common.module';
     AuthModule,
     UserModule,
     LoanModule,
-    AminModule
+    AminModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [CronService],

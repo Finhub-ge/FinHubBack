@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete, UseInterceptors, UploadedFile } from "@nestjs/common";
 import { AdminService } from "./admin.service";
-import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiConsumes, ApiParam, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
@@ -25,6 +25,8 @@ import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -346,5 +348,18 @@ export class AdminController {
   @Get('future-payments')
   async getFuturePayments(@Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
     return await this.adminService.getFuturePayments(getFuturePaymentsDto);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('plan/import')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async importPlan(
+    @GetUser() user: User,
+    @Body() data: UploadPlanDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return await this.adminService.importPlan(file.buffer, user.id);
   }
 }
