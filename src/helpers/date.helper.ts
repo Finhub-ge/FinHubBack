@@ -11,6 +11,10 @@ export const getStartOfDay = (date: Date | string): Date => {
   return dayjs(date).tz(TIMEZONE).startOf('day').toDate();
 }
 
+export const getEndOfDay = (date: Date | string): Date => {
+  return dayjs(date).tz(TIMEZONE).endOf('day').toDate();
+}
+
 export const getTodayAtMidnight = (): Date => {
   return dayjs().tz(TIMEZONE).startOf('day').toDate();
 }
@@ -51,7 +55,6 @@ export const isAfterDay = (date1: Date | string, date2: Date | string): boolean 
     .isAfter(dayjs(date2).tz(TIMEZONE).startOf('day'));
 }
 
-
 export const formatDate = (date: Date | string, format: string = 'YYYY-MM-DD HH:mm:ss'): string => {
   return dayjs(date).tz(TIMEZONE).format(format);
 }
@@ -62,4 +65,12 @@ export const formatDateTime = (date: Date | string): string => {
 
 export const getTimezone = (): string => {
   return TIMEZONE;
+}
+
+export const getYear = (date: Date | string): string => {
+  return dayjs(date).tz(TIMEZONE).year().toString();
+}
+
+export const getMonth = (date: Date | string): string => {
+  return (dayjs(date).tz(TIMEZONE).month() + 1).toString();
 }

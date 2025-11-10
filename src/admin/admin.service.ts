@@ -413,6 +413,9 @@ export class AdminService {
       this.paymentHelper.applyPaymentToCharges(result)
         .catch((error) => console.error('Error applying payment to charges:', error));
 
+      await this.paymentHelper.saveTransactionAssignments(result.transactionId)
+        .catch((error) => console.error('Error saving transaction assignments:', error));
+
       return {
         message: 'Payment added successfully'
       };

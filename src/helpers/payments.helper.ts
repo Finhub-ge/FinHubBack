@@ -7,6 +7,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { PaymentScheduleItemDto } from "src/loan/dto/updateLoanStatus.dto";
+import { getEndOfDay, getMonth, getStartOfDay, getYear } from "./date.helper";
 
 
 dayjs.extend(utc);
@@ -451,6 +452,7 @@ export class PaymentsHelper {
       paymentToApply -= amountForSchedule;
     }
   }
+
   async applyPaymentToCharges(data: any) {
     const { loanId, allocationResult } = data;
     const { transactionSummary } = allocationResult;
@@ -513,6 +515,51 @@ export class PaymentsHelper {
         paidAmount: newPaidAmount,
         paymentDate: isFullyPaid ? new Date() : chargeRecord.paymentDate,
       },
+    });
+  }
+
+  async saveTransactionAssignments(transactionId: number) {
+    // Fetch the transaction
+    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (!transaction) return;
+
+    // Fetch the loan
+    const loan = await this.prisma.loan.findUnique({ where: { id: transaction.loanId } });
+    if (!loan) return;
+
+    // Calculate the full day range for the payment date
+    const startOfDay = getStartOfDay(transaction.paymentDate);
+    const endOfDay = getEndOfDay(transaction.paymentDate);
+
+    // Fetch active assignments for this loan at the transaction date
+    const loanAssignment = await this.prisma.loanAssignment.findMany({
+      where: {
+        loanId: loan.id,
+        assignedAt: { lte: endOfDay },
+        OR: [
+          { unassignedAt: null },
+          { unassignedAt: { gte: startOfDay } },
+        ],
+      },
+      select: {
+        userId: true,
+        roleId: true,
+      },
+    });
+    if (loanAssignment.length === 0) return;
+
+    // Prepare insert data
+    const insertData = loanAssignment.map((assignment) => ({
+      transactionId: transaction.id,
+      userId: assignment.userId,
+      roleId: assignment.roleId,
+      amount: Number(transaction.amount || 0),
+      year: Number(getYear(transaction.paymentDate)),
+      month: Number(getMonth(transaction.paymentDate)),
+    }));
+
+    await this.prisma.transactionUserAssignments.createMany({
+      data: insertData,
     });
   }
 }

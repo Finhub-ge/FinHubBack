@@ -338,40 +338,42 @@ model Portfolio {
 }
 
 model Role {
-  id                    Int                     @id @default(autoincrement())
-  name                  String                  @unique
-  createdAt             DateTime                @default(now()) @db.DateTime(0)
-  updatedAt             DateTime                @default(now()) @db.DateTime(0)
-  deletedAt             DateTime?               @db.DateTime(0)
-  LoanAssignment        LoanAssignment[]
-  LoanAssignmentHistory LoanAssignmentHistory[]
-  User                  User[]
+  id                         Int                          @id @default(autoincrement())
+  name                       String                       @unique
+  createdAt                  DateTime                     @default(now()) @db.DateTime(0)
+  updatedAt                  DateTime                     @default(now()) @db.DateTime(0)
+  deletedAt                  DateTime?                    @db.DateTime(0)
+  LoanAssignment             LoanAssignment[]
+  LoanAssignmentHistory      LoanAssignmentHistory[]
+  TransactionUserAssignments TransactionUserAssignments[]
+  User                       User[]
 
   @@index([deletedAt])
   @@index([name])
 }
 
 model Transaction {
-  id                          Int                         @id @default(autoincrement())
-  publicId                    String                      @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  id                          Int                          @id @default(autoincrement())
+  publicId                    String                       @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
   loanId                      Int?
-  amount                      Decimal?                    @db.Decimal(12, 2)
+  amount                      Decimal?                     @db.Decimal(12, 2)
   userId                      Int?
-  paymentDate                 DateTime?                   @db.Date
-  principal                   Decimal?                    @db.Decimal(12, 2)
-  interest                    Decimal?                    @db.Decimal(12, 2)
-  penalty                     Decimal?                    @db.Decimal(12, 2)
-  fees                        Decimal?                    @db.Decimal(12, 2)
-  legal                       Decimal?                    @db.Decimal(12, 2)
+  paymentDate                 DateTime?                    @db.Date
+  principal                   Decimal?                     @db.Decimal(12, 2)
+  interest                    Decimal?                     @db.Decimal(12, 2)
+  penalty                     Decimal?                     @db.Decimal(12, 2)
+  fees                        Decimal?                     @db.Decimal(12, 2)
+  legal                       Decimal?                     @db.Decimal(12, 2)
   transactionChannelAccountId Int?
-  currency                    String?                     @default("GEL") @db.VarChar(45)
-  comment                     String?                     @db.VarChar(255)
-  createdAt                   DateTime?                   @default(now()) @db.DateTime(0)
-  deleted                     Int?                        @default(0) @db.TinyInt
-  Loan                        Loan?                       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
-  User                        User?                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
-  TransactionChannelAccounts  TransactionChannelAccounts? @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_3")
+  currency                    String?                      @default("GEL") @db.VarChar(45)
+  comment                     String?                      @db.VarChar(255)
+  createdAt                   DateTime?                    @default(now()) @db.DateTime(0)
+  deleted                     Int?                         @default(0) @db.TinyInt
+  Loan                        Loan?                        @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_1")
+  User                        User?                        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_2")
+  TransactionChannelAccounts  TransactionChannelAccounts?  @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Transactions_3")
   TransactionDeleted          TransactionDeleted[]
+  TransactionUserAssignments  TransactionUserAssignments[]
 
   @@index([loanId], map: "fk_Transactions_1_idx")
   @@index([userId], map: "fk_Transactions_2_idx")
@@ -415,45 +417,46 @@ model TransactionDeleted {
 }
 
 model User {
-  id                                                          Int                       @id @default(autoincrement())
-  publicId                                                    String                    @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
-  accountId                                                   String                    @unique
-  email                                                       String                    @unique
+  id                                                          Int                          @id @default(autoincrement())
+  publicId                                                    String                       @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  accountId                                                   String                       @unique
+  email                                                       String                       @unique
   firstName                                                   String
   lastName                                                    String
   hash                                                        String
-  isActive                                                    Boolean                   @default(true)
+  isActive                                                    Boolean                      @default(true)
   roleId                                                      Int
-  mustChangePassword                                          Boolean                   @default(true)
-  createdAt                                                   DateTime                  @default(now()) @db.DateTime(0)
-  updatedAt                                                   DateTime                  @default(now()) @db.DateTime(0)
-  deletedAt                                                   DateTime?                 @db.DateTime(0)
+  mustChangePassword                                          Boolean                      @default(true)
+  createdAt                                                   DateTime                     @default(now()) @db.DateTime(0)
+  updatedAt                                                   DateTime                     @default(now()) @db.DateTime(0)
+  deletedAt                                                   DateTime?                    @db.DateTime(0)
   Charges                                                     Charges[]
   CollectorsMonthlyTarget                                     CollectorsMonthlyTarget[]
   Comments                                                    Comments[]
-  Comments_Comments_archivedByToUser                          Comments[]                @relation("Comments_archivedByToUser")
-  Committee_Committee_requesterIdToUser                       Committee[]               @relation("Committee_requesterIdToUser")
-  Committee_Committee_responderIdToUser                       Committee[]               @relation("Committee_responderIdToUser")
+  Comments_Comments_archivedByToUser                          Comments[]                   @relation("Comments_archivedByToUser")
+  Committee_Committee_requesterIdToUser                       Committee[]                  @relation("Committee_requesterIdToUser")
+  Committee_Committee_responderIdToUser                       Committee[]                  @relation("Committee_responderIdToUser")
   DebtorContact                                               DebtorContact[]
   DebtorStatusHistory                                         DebtorStatusHistory[]
   LoanAddress                                                 LoanAddress[]
   LoanAssignment                                              LoanAssignment[]
-  LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[]   @relation("LoanAssignmentHistory_userIdToUser")
-  LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[]   @relation("LoanAssignmentHistory_createdByToUser")
+  LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
+  LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_createdByToUser")
   LoanCollateralStatus                                        LoanCollateralStatus[]
   LoanLegalStage                                              LoanLegalStage[]
   LoanLitigationStage                                         LoanLitigationStage[]
   LoanStatusHistory                                           LoanStatusHistory[]
   LoanVisit                                                   LoanVisit[]
   PaymentCommitment                                           PaymentCommitment[]
-  Reminders_Reminders_fromUserIdToUser                        Reminders[]               @relation("Reminders_fromUserIdToUser")
-  Reminders_Reminders_toUserIdToUser                          Reminders[]               @relation("Reminders_toUserIdToUser")
-  Tasks_Tasks_fromUserToUser                                  Tasks[]                   @relation("Tasks_fromUserToUser")
-  Tasks_Tasks_toUserIdToUser                                  Tasks[]                   @relation("Tasks_toUserIdToUser")
+  Reminders_Reminders_fromUserIdToUser                        Reminders[]                  @relation("Reminders_fromUserIdToUser")
+  Reminders_Reminders_toUserIdToUser                          Reminders[]                  @relation("Reminders_toUserIdToUser")
+  Tasks_Tasks_fromUserToUser                                  Tasks[]                      @relation("Tasks_fromUserToUser")
+  Tasks_Tasks_toUserIdToUser                                  Tasks[]                      @relation("Tasks_toUserIdToUser")
   TeamMembership                                              TeamMembership[]
   Transaction                                                 Transaction[]
   TransactionDeleted                                          TransactionDeleted[]
-  Role                                                        Role                      @relation(fields: [roleId], references: [id])
+  TransactionUserAssignments                                  TransactionUserAssignments[]
+  Role                                                        Role                         @relation(fields: [roleId], references: [id])
 
   @@index([accountId])
   @@index([deletedAt])
@@ -1065,6 +1068,26 @@ model CollectorsMonthlyTarget {
   User         User      @relation(fields: [collectorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_collector")
 
   @@unique([collectorId, year, month], map: "uc_collector_year_month")
+}
+
+model TransactionUserAssignments {
+  id            Int         @id @default(autoincrement())
+  transactionId Int
+  userId        Int
+  roleId        Int
+  amount        Decimal?    @default(0.00) @db.Decimal(12, 2)
+  year          Int
+  month         Int         @db.TinyInt
+  createdAt     DateTime    @default(now()) @db.DateTime(0)
+  updatedAt     DateTime    @default(now()) @db.DateTime(0)
+  deletedAt     DateTime?   @db.DateTime(0)
+  Role          Role        @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_role")
+  Transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_transaction")
+  User          User        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_user")
+
+  @@index([roleId], map: "fk_role")
+  @@index([transactionId], map: "fk_transaction")
+  @@index([userId], map: "fk_user")
 }
 
 enum PaymentCommitment_type {
