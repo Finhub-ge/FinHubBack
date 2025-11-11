@@ -12,14 +12,14 @@ export class GetPlanChartDto {
   @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
   year?: number[];
 
-  @ApiProperty({
-    description: 'Month',
-    required: false,
-    type: String
-  })
-  @IsOptional()
-  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
-  month?: number[];
+  // @ApiProperty({
+  //   description: 'Month',
+  //   required: false,
+  //   type: String
+  // })
+  // @IsOptional()
+  // @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  // month?: number[];
 
   @ApiProperty({
     description: 'Collector ID',
