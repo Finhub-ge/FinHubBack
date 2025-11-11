@@ -9,6 +9,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 import { PaginationService } from "src/common/services/pagination.service";
 import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
+import { getUserExport } from "src/helpers/excel.helper";
 
 @Injectable()
 export class UserService {
@@ -474,5 +475,13 @@ export class UserService {
         }
       });
     }
+  }
+
+  async exportUsers(filters: GetUsersFilterDto) {
+    const filter = { skip: true, ...filters }
+    const users = await this.getAllUsers(filter);
+    const columns = ['id', 'firstName', 'lastName', 'plan', 'planYear', 'planMonth']
+
+    return await getUserExport(users.data, columns, 'Users');
   }
 }

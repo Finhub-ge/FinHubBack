@@ -199,3 +199,33 @@ export const parseExcelBuffer = async (buffer: Buffer): Promise<any[]> => {
   }));
 }
 
+export const getUserExport = async (
+  data: any[],
+  columns: string[],
+  sheetName = 'Sheet1',
+): Promise<Buffer> => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // Add header row
+  worksheet.addRow(columns);
+
+  // Style header row
+  styleHeaderRow(worksheet);
+
+  // Format and add data rows ONCE
+  const formattedData = formatData(data, columns);
+  formattedData.forEach((row) => {
+    worksheet.addRow(row);
+  });
+
+  // Format cells (numbers, dates, etc.)
+  formatCells(worksheet);
+
+  // Auto-fit columns
+  autoFitColumns(worksheet, columns);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as unknown as Buffer;
+}
+
