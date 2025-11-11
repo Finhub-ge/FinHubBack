@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { getScheduledVisits, markSchedulesAsOverdue, updateVisitsToNA, agreementsToCancel, cancelCommitment, cancelSchedules, cancelLoan } from '../helpers/loan.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
 import { getStartOfDay, getTodayAtMidnight, subtractDays } from 'src/helpers/date.helper';
+import { Committee_status } from '@prisma/client';
 
 @Injectable()
 export class CronService {
@@ -143,6 +144,93 @@ export class CronService {
       }
     } catch (error) {
       this.logger.error('Error reminding tasks:', error);
+    }
+  }
+
+  // @Cron('30 * * * * *') // Runs every 30 seconds
+  async ommitteeReversion() {
+    try {
+      const before7Days = subtractDays(new Date(), 7);
+
+      const committees = await this.prisma.committee.findMany({
+        where: {
+          responseDate: { lt: before7Days },
+          status: Committee_status.complete,
+          deletedAt: null,
+          Loan: {
+            // Only include loans that do NOT have any payment schedule
+            PaymentCommitment: {
+              none: {
+                PaymentSchedule: {
+                  some: {} // means it has at least one schedule — we use `none` to exclude them
+                }
+              }
+            }
+          }
+        },
+        include: {
+          Loan: {
+            include: {
+              PaymentCommitment: {
+                include: {
+                  PaymentSchedule: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      //todo when committee response is made have to save recotd in paymentAllocationDetail table
+
+      for (const committee of committees) {
+        const loanId = committee.Loan?.id;
+        if (!loanId) continue;
+
+        // Check if the loan has any payments
+        const paymentsCount = await this.prisma.transaction.count({
+          where: { loanId },
+        });
+        console.log(paymentsCount)
+        if (paymentsCount > 0) {
+          const currentLoanRemaining = await this.prisma.loanRemaining.findFirst({
+            where: { loanId, deletedAt: null },
+          });
+          await this.prisma.$transaction(async (tx) => {
+            await tx.loanRemaining.update({
+              where: { id: currentLoanRemaining.id },
+              data: { deletedAt: new Date() },
+            });
+          });
+          await this.prisma.loanRemaining.create({
+            data: {
+              loanId,
+              agreementMin: Number(currentLoanRemaining.principal) + Number(currentLoanRemaining.interest),
+              otherFee: Number(currentLoanRemaining.otherFee),
+              penalty: Number(currentLoanRemaining.penalty),
+              interest: Number(currentLoanRemaining.interest),
+              principal: Number(currentLoanRemaining.principal),
+              legalCharges: Number(currentLoanRemaining.legalCharges),
+              currentDebt: Number(currentLoanRemaining.currentDebt),
+            },
+          });
+          await this.prisma.committee.update({
+            where: { id: committee.id },
+            data: {
+              deletedAt: new Date(),
+            },
+          });
+
+          this.logger.log(
+            `Reverted committee ID ${committee.id} (Loan ID ${loanId}) because it has ${paymentsCount} payments.`
+          );
+        }
+      }
+
+      // console.log(committees);
+      this.logger.log('Starting ommittee reversion...');
+    } catch (error) {
+      this.logger.error('Error reverting ommittee:', error);
     }
   }
   // @Cron('* * * * *') // Runs every minute

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { getLoanExportHeaders } from './loan.helper';
+import { normalizeName } from './accountId.helper';
 
 export const generateExcel = async (
   data: any[],
@@ -165,3 +166,36 @@ const getDisplayHeaders = (
 ): string[] => {
   return columns.map((col) => headerMap[col] || col);
 };
+
+export const parseExcelBuffer = async (buffer: Buffer): Promise<any[]> => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+
+  const worksheet = workbook.worksheets[0];
+  const rows: any[] = [];
+  let headers: string[] = [];
+
+  worksheet.eachRow((row, rowNumber) => {
+    const values = row.values as any[];
+    values.shift(); // remove first undefined element
+
+    if (rowNumber === 1) {
+      // Header row
+      headers = values.map(v => v?.toString().trim());
+    } else {
+      const obj: Record<string, any> = {};
+      values.forEach((cell, i) => {
+        obj[headers[i]] = cell ?? null;
+      });
+      rows.push(obj);
+    }
+  });
+
+  return rows.map(r => ({
+    collector: normalizeName(r.collector || ''),
+    targetAmount: Number(r.Plan?.result ?? 0),
+    year: Number(r.planYear ?? 0),
+    month: Number(r.planMonth ?? 0),
+  }));
+}
+
