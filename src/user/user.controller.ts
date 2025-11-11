@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, Param, ParseIntPipe, Patch, Post, Query, StreamableFile, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { UserService } from "./user.service";
 import { CreateUserDto } from "./dto/createUser.dto";
@@ -38,6 +38,19 @@ export class UserController {
   @Get('getAll')
   getAllUsers(@Query() getUsersFilterDto: GetUsersWithPaginationDto) {
     return this.userService.getAllUsers(getUsersFilterDto)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('exportExcel')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportUsers(@Query() filterDto: GetUsersFilterDto) {
+    const excelBuffer = await this.userService.exportUsers(filterDto);
+
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=Users_list_${Date.now()}.xlsx`
+    });
   }
 
   @UseGuards(JwtGuard, RolesGuard)
