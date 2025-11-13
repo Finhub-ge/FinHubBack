@@ -417,46 +417,49 @@ model TransactionDeleted {
 }
 
 model User {
-  id                                                          Int                          @id @default(autoincrement())
-  publicId                                                    String                       @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
-  accountId                                                   String                       @unique
-  email                                                       String                       @unique
-  firstName                                                   String
-  lastName                                                    String
-  hash                                                        String
-  isActive                                                    Boolean                      @default(true)
-  roleId                                                      Int
-  mustChangePassword                                          Boolean                      @default(true)
-  createdAt                                                   DateTime                     @default(now()) @db.DateTime(0)
-  updatedAt                                                   DateTime                     @default(now()) @db.DateTime(0)
-  deletedAt                                                   DateTime?                    @db.DateTime(0)
-  Charges                                                     Charges[]
-  CollectorsMonthlyTarget                                     CollectorsMonthlyTarget[]
-  Comments                                                    Comments[]
-  Comments_Comments_archivedByToUser                          Comments[]                   @relation("Comments_archivedByToUser")
-  Committee_Committee_requesterIdToUser                       Committee[]                  @relation("Committee_requesterIdToUser")
-  Committee_Committee_responderIdToUser                       Committee[]                  @relation("Committee_responderIdToUser")
-  DebtorContact                                               DebtorContact[]
-  DebtorStatusHistory                                         DebtorStatusHistory[]
-  LoanAddress                                                 LoanAddress[]
-  LoanAssignment                                              LoanAssignment[]
-  LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser    LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
-  LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_createdByToUser")
-  LoanCollateralStatus                                        LoanCollateralStatus[]
-  LoanLegalStage                                              LoanLegalStage[]
-  LoanLitigationStage                                         LoanLitigationStage[]
-  LoanStatusHistory                                           LoanStatusHistory[]
-  LoanVisit                                                   LoanVisit[]
-  PaymentCommitment                                           PaymentCommitment[]
-  Reminders_Reminders_fromUserIdToUser                        Reminders[]                  @relation("Reminders_fromUserIdToUser")
-  Reminders_Reminders_toUserIdToUser                          Reminders[]                  @relation("Reminders_toUserIdToUser")
-  Tasks_Tasks_fromUserToUser                                  Tasks[]                      @relation("Tasks_fromUserToUser")
-  Tasks_Tasks_toUserIdToUser                                  Tasks[]                      @relation("Tasks_toUserIdToUser")
-  TeamMembership                                              TeamMembership[]
-  Transaction                                                 Transaction[]
-  TransactionDeleted                                          TransactionDeleted[]
-  TransactionUserAssignments                                  TransactionUserAssignments[]
-  Role                                                        Role                         @relation(fields: [roleId], references: [id])
+  id                                                              Int                          @id @default(autoincrement())
+  publicId                                                        String                       @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  accountId                                                       String                       @unique
+  email                                                           String                       @unique
+  firstName                                                       String
+  lastName                                                        String
+  hash                                                            String
+  isActive                                                        Boolean                      @default(true)
+  roleId                                                          Int
+  mustChangePassword                                              Boolean                      @default(true)
+  createdAt                                                       DateTime                     @default(now()) @db.DateTime(0)
+  updatedAt                                                       DateTime                     @default(now()) @db.DateTime(0)
+  deletedAt                                                       DateTime?                    @db.DateTime(0)
+  Charges                                                         Charges[]
+  CollectorMonthlyReport_CollectorMonthlyReport_generatedByToUser CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_generatedByToUser")
+  CollectorMonthlyReport_CollectorMonthlyReport_lockedByToUser    CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_lockedByToUser")
+  CollectorMonthlyReport_CollectorMonthlyReport_collectorIdToUser CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_collectorIdToUser")
+  CollectorsMonthlyTarget                                         CollectorsMonthlyTarget[]
+  Comments                                                        Comments[]
+  Comments_Comments_archivedByToUser                              Comments[]                   @relation("Comments_archivedByToUser")
+  Committee_Committee_requesterIdToUser                           Committee[]                  @relation("Committee_requesterIdToUser")
+  Committee_Committee_responderIdToUser                           Committee[]                  @relation("Committee_responderIdToUser")
+  DebtorContact                                                   DebtorContact[]
+  DebtorStatusHistory                                             DebtorStatusHistory[]
+  LoanAddress                                                     LoanAddress[]
+  LoanAssignment                                                  LoanAssignment[]
+  LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser        LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
+  LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser     LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_createdByToUser")
+  LoanCollateralStatus                                            LoanCollateralStatus[]
+  LoanLegalStage                                                  LoanLegalStage[]
+  LoanLitigationStage                                             LoanLitigationStage[]
+  LoanStatusHistory                                               LoanStatusHistory[]
+  LoanVisit                                                       LoanVisit[]
+  PaymentCommitment                                               PaymentCommitment[]
+  Reminders_Reminders_fromUserIdToUser                            Reminders[]                  @relation("Reminders_fromUserIdToUser")
+  Reminders_Reminders_toUserIdToUser                              Reminders[]                  @relation("Reminders_toUserIdToUser")
+  Tasks_Tasks_fromUserToUser                                      Tasks[]                      @relation("Tasks_fromUserToUser")
+  Tasks_Tasks_toUserIdToUser                                      Tasks[]                      @relation("Tasks_toUserIdToUser")
+  TeamMembership                                                  TeamMembership[]
+  Transaction                                                     Transaction[]
+  TransactionDeleted                                              TransactionDeleted[]
+  TransactionUserAssignments                                      TransactionUserAssignments[]
+  Role                                                            Role                         @relation(fields: [roleId], references: [id])
 
   @@index([accountId])
   @@index([deletedAt])
@@ -1090,6 +1093,57 @@ model TransactionUserAssignments {
   @@index([userId], map: "fk_user")
 }
 
+model CollectorMonthlyReport {
+  id                                            Int                           @id @default(autoincrement())
+  collectorId                                   Int
+  year                                          Int
+  month                                         Int
+  openingPrincipal                              Decimal                       @default(0.00) @db.Decimal(12, 2)
+  monthlyPlan                                   Decimal                       @default(0.00) @db.Decimal(12, 2)
+  adjustedPlan                                  Decimal                       @default(0.00) @db.Decimal(12, 2)
+  collectedAmount                               Decimal                       @default(0.00) @db.Decimal(12, 2)
+  collectionRatePercent                         Decimal                       @default(0.00) @db.Decimal(5, 2)
+  paidLoanCount                                 Int                           @default(0)
+  paymentSuccessRate                            Decimal                       @default(0.00) @db.Decimal(5, 2)
+  newLoanCount                                  Int                           @default(0)
+  communicatedCount                             Int                           @default(0)
+  unreachableCount                              Int                           @default(0)
+  agreementCount                                Int                           @default(0)
+  agreementCancelledCount                       Int                           @default(0)
+  refuseToPayCount                              Int                           @default(0)
+  promiseToPayCount                             Int                           @default(0)
+  totalLoanCount                                Int                           @default(0)
+  callCount                                     Int                           @default(0)
+  totalCallDurationSec                          Int                           @default(0)
+  smsCount                                      Int                           @default(0)
+  markCount                                     Int                           @default(0)
+  commentCount                                  Int                           @default(0)
+  committeeRequestCount                         Int                           @default(0)
+  inactiveOver40DaysCount                       Int                           @default(0)
+  totalLegalCharges                             Decimal                       @default(0.00) @db.Decimal(12, 2)
+  totalOtherCharges                             Decimal                       @default(0.00) @db.Decimal(12, 2)
+  courtCaseCount                                Int                           @default(0)
+  courtPrincipalSum                             Decimal                       @default(0.00) @db.Decimal(12, 2)
+  executionCaseCount                            Int                           @default(0)
+  executionPrincipalSum                         Decimal                       @default(0.00) @db.Decimal(12, 2)
+  status                                        CollectorMonthlyReport_status @default(ACTIVE)
+  snapshotDate                                  DateTime                      @default(now()) @db.DateTime(0)
+  generatedBy                                   Int?
+  lockedBy                                      Int?
+  createdAt                                     DateTime                      @default(now()) @db.DateTime(0)
+  updatedAt                                     DateTime                      @default(now()) @db.DateTime(0)
+  deletedAt                                     DateTime?                     @db.DateTime(0)
+  User_CollectorMonthlyReport_generatedByToUser User?                         @relation("CollectorMonthlyReport_generatedByToUser", fields: [generatedBy], references: [id], map: "fk_collector_monthly_report_generated_by")
+  User_CollectorMonthlyReport_lockedByToUser    User?                         @relation("CollectorMonthlyReport_lockedByToUser", fields: [lockedBy], references: [id], map: "fk_collector_monthly_report_locked_by")
+  User_CollectorMonthlyReport_collectorIdToUser User                          @relation("CollectorMonthlyReport_collectorIdToUser", fields: [collectorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_collector_monthly_report_user")
+
+  @@unique([collectorId, year, month], map: "uq_collector_month")
+  @@index([generatedBy], map: "fk_collector_monthly_report_generated_by")
+  @@index([lockedBy], map: "fk_collector_monthly_report_locked_by")
+  @@index([collectorId], map: "idx_collector")
+  @@index([year, month], map: "idx_month_year")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -1167,4 +1221,10 @@ enum Reminders_type {
   Callback
   Agreement
   Promised_to_pay @map("Promised to pay")
+}
+
+enum CollectorMonthlyReport_status {
+  ACTIVE
+  FROZEN
+  CLOSED
 }

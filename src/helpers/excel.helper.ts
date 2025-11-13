@@ -192,8 +192,8 @@ export const parseExcelBuffer = async (buffer: Buffer): Promise<any[]> => {
   });
 
   return rows.map(r => ({
-    collector: normalizeName(r.collector || ''),
-    targetAmount: Number(r.Plan?.result ?? 0),
+    collectorId: Number(r.id || ''),
+    targetAmount: Number(r.plan ?? 0),
     year: Number(r.planYear ?? 0),
     month: Number(r.planMonth ?? 0),
   }));
