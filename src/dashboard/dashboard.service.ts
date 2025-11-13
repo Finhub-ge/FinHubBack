@@ -1,16 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { GetPlanChartDto } from './dto/getPlanChart.dto';
+import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { Role } from 'src/enums/role.enum';
+import { PaginationService } from 'src/common/services/pagination.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private prisma: PrismaService,
+    private readonly paginationService: PaginationService,
   ) { }
-  async getPlanChart(getPlanChartDto: GetPlanChartDto) {
-    const { collectorId, year } = getPlanChartDto;
+  async getPlanChart(getPlanReportDto: GetPlanReportDto) {
+    const { collectorId, year } = getPlanReportDto;
 
     // Build Prisma where clause
     const where: any = {};
@@ -73,5 +74,37 @@ export class DashboardService {
       targetAmounts,
       collectedAmounts,
     };
+  }
+
+  async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto) {
+    // const { collectorId, year, month } = getPlanReportDto;
+    const { page, limit, skip, ...filters } = getPlanReportDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    // Build Prisma where clause
+    const where: any = {};
+    if (filters.year && filters.year.length > 0) where.year = { in: filters.year };
+    if (filters.month && filters.month.length > 0) where.month = { in: filters.month };
+
+    // const targetWhere: any = { ...where };
+    if (filters.collectorId && filters.collectorId.length > 0) where.collectorId = { in: filters.collectorId };
+
+    // Fetch targets matching filters
+    const data = await this.prisma.collectorMonthlyReport.findMany({
+      where,
+      include: {
+        User_CollectorMonthlyReport_collectorIdToUser: {
+          select: {
+            firstName: true,
+            lastName: true,
+          }
+        }
+      },
+      ...paginationParams,
+    });
+    const total = await this.prisma.collectorMonthlyReport.count({
+      where,
+    });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 }

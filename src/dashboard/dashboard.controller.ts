@@ -4,7 +4,7 @@ import { AllRoles } from 'src/auth/decorator/role.decorator';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { GetPlanChartDto } from './dto/getPlanChart.dto';
+import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth('access-token')
@@ -15,7 +15,14 @@ export class DashboardController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('planChart')
-  getPlanChart(@Query() getPlanChartDto: GetPlanChartDto) {
+  getPlanChart(@Query() getPlanChartDto: GetPlanReportDto) {
     return this.dashboardService.getPlanChart(getPlanChartDto);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('planReport')
+  getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
+    return this.dashboardService.getPlanReport(getPlanReportDto);
   }
 }

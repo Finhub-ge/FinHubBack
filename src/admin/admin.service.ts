@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, StatusMatrix_entityType } from '@prisma/client';
+import { User, Committee_status, StatusMatrix_entityType, CollectorMonthlyReport_status } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -31,6 +31,7 @@ import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto"
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
+import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, prepareDataForInsert, separateCreatesAndUpdates } from "src/helpers/reports.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1494,48 +1495,51 @@ export class AdminService {
   async importPlan(fileBuffer: Buffer, userId: number) {
     const parsedData = await parseExcelBuffer(fileBuffer);
 
-    // Prefetch all users once to avoid N+1 queries
-    const users = await this.prisma.user.findMany({
-      select: { id: true, firstName: true, lastName: true },
+    // Validate and prepare data
+    const dataToInsert = prepareDataForInsert(parsedData);
+
+    if (dataToInsert.length === 0) {
+      return { message: 'No valid records found', insertedCount: 0 };
+    }
+
+    // Insert targets in bulk
+    const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
+      data: dataToInsert,
+      skipDuplicates: true,
     });
 
-    // Build a map of normalized full names -> user id
-    const userMap = new Map(
-      users.map(u => [normalizeName(`${u.firstName} ${u.lastName}`), u.id])
+    // Get unique collector IDs
+    const collectorIds = [...new Set(dataToInsert.map(d => d.collectorId))];
+
+    // Fetch existing reports and identify frozen ones
+    const existingReports = await fetchExistingReports(dataToInsert, collectorIds);
+
+    const frozenKeys = new Set(
+      existingReports
+        .filter(r => r.status === CollectorMonthlyReport_status.FROZEN)
+        .map(r => `${r.collectorId}-${r.year}-${r.month}`)
     );
 
-    const dataToInsert = [];
-    const unmatchedCollectors: string[] = [];
+    const collectorStats = await calculateCollectorLoanStats(collectorIds);
 
-    for (const row of parsedData) {
-      const collectorId = userMap.get(row.collector);
+    // Separate data into creates and updates
+    const { toCreate, toUpdate } = await separateCreatesAndUpdates(
+      dataToInsert,
+      existingReports,
+      frozenKeys,
+      collectorStats,
+      userId
+    );
 
-      if (!collectorId) {
-        unmatchedCollectors.push(row.collector); // log missing users
-        continue; // skip unmatched rows
-      }
+    // Execute batch operations
+    await executeBatchOperations(toCreate, toUpdate);
 
-      dataToInsert.push({
-        collectorId,
-        targetAmount: row.targetAmount,
-        year: row.year,
-        month: row.month,
-      });
-    }
-
-    // Bulk insert in one request
-    let insertedCount = 0;
-    if (dataToInsert.length > 0) {
-      const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
-        data: dataToInsert,
-        skipDuplicates: true, // avoids errors for unique constraints
-      });
-      insertedCount = insertedRows.count;
-    }
     return {
       message: 'Excel imported successfully',
-      insertedCount,
-      skippedCollectors: unmatchedCollectors, // shows unmatched names
+      insertedCount: insertedRows.count,
+      totalRecords: parsedData.length,
+      skippedRecords: parsedData.length - dataToInsert.length,
+      processedReports: toCreate.length + toUpdate.length,
     };
   }
 }
