@@ -34,6 +34,9 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
       userId: { in: collectorIds },
       assignedAt: { lte: uploadDate },
       OR: [{ unassignedAt: null }, { unassignedAt: { gte: uploadDate } }],
+      Loan: {
+        closedAt: null
+      }
     },
     select: { userId: true, loanId: true },
   });
@@ -140,8 +143,8 @@ export const separateCreatesAndUpdates = (
 
     // Map status names to report field names
     const statusFields = {};
-    if (stats?.byStatusId) {
-      for (const [statusName, count] of Object.entries(stats.byStatusId)) {
+    if (stats?.byStatusName) {
+      for (const [statusName, count] of Object.entries(stats.byStatusName)) {
         const fieldName = STATUS_TO_FIELD_MAP[statusName];
         if (fieldName) {
           statusFields[fieldName] = count;
@@ -202,9 +205,17 @@ export const executeBatchOperations = async (toCreate: any[], toUpdate: any[]) =
           status: { not: 'FROZEN' },
         },
         data: {
-          monthlyPlan: record.monthlyPlan,
-          adjustedPlan: record.adjustedPlan,
-          openingPrincipal: record.openingPrincipal,
+          monthlyPlan: record?.monthlyPlan,
+          adjustedPlan: record?.adjustedPlan,
+          openingPrincipal: record?.openingPrincipal,
+          totalLoanCount: record?.totalLoanCount,
+          newLoanCount: record?.newLoanCount || 0,
+          agreementCount: record?.agreementCount || 0,
+          communicatedCount: record?.communicatedCount || 0,
+          unreachableCount: record?.unreachableCount || 0,
+          agreementCancelledCount: record?.agreementCancelledCount || 0,
+          refuseToPayCount: record?.refuseToPayCount || 0,
+          promiseToPayCount: record?.promiseToPayCount || 0,
           updatedAt: new Date(),
         },
       })
