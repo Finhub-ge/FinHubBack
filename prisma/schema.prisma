@@ -1130,6 +1130,7 @@ model CollectorMonthlyReport {
   snapshotDate                                  DateTime                      @default(now()) @db.DateTime(0)
   generatedBy                                   Int?
   lockedBy                                      Int?
+  loanIds                                       Json?
   createdAt                                     DateTime                      @default(now()) @db.DateTime(0)
   updatedAt                                     DateTime                      @default(now()) @db.DateTime(0)
   deletedAt                                     DateTime?                     @db.DateTime(0)
@@ -1142,6 +1143,478 @@ model CollectorMonthlyReport {
   @@index([lockedBy], map: "fk_collector_monthly_report_locked_by")
   @@index([collectorId], map: "idx_collector")
   @@index([year, month], map: "idx_month_year")
+}
+
+model Old_db_additional_contact {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  number           String    @db.VarChar(255)
+  loan_id          BigInt    @db.UnsignedBigInt
+  communication_id BigInt?   @db.UnsignedBigInt
+  relation         String?   @db.VarChar(255)
+  comment          String?   @db.Text
+  created_at       DateTime? @db.Timestamp(0)
+  updated_at       DateTime? @db.Timestamp(0)
+  type_id          Int       @default(1)
+  source           Int       @default(0)
+
+  @@index([number], map: "NewIndex1")
+  @@index([loan_id], map: "additional_contact_loan_id_index")
+}
+
+model Old_db_agreement {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt    @db.UnsignedBigInt
+  loan_id    BigInt    @db.UnsignedBigInt
+  comment    String?   @db.Text
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  amount     Float
+  active     Int       @db.TinyInt
+
+  @@index([loan_id], map: "agreement_loan_id_index")
+}
+
+model Old_db_agreement_schedule {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  agreement_id BigInt    @db.UnsignedBigInt
+  payment_date DateTime  @db.Date
+  amount       Float
+  status_id    BigInt    @db.UnsignedBigInt
+  created_at   DateTime? @db.Timestamp(0)
+  updated_at   DateTime? @db.Timestamp(0)
+}
+
+model Old_db_aml_activity {
+  id      BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  name    String  @db.VarChar(100)
+  comment String? @db.Text
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Old_db_call_log {
+  ID           Int       @id @default(autoincrement())
+  IDN          Int?
+  User_ID      Int       @default(0)
+  User_Name    String    @default("") @db.VarChar(100)
+  CallID       Int?
+  Caller       String?   @db.VarChar(50)
+  Called       String?   @db.VarChar(50)
+  Name         String?   @db.VarChar(100)
+  CallStartStr String?   @db.VarChar(30)
+  CallStart    DateTime? @db.DateTime(0)
+  CallMonth    Int       @default(1)
+  Time         String?   @db.VarChar(30)
+  Duration     Int       @default(0)
+  BilledTime   String?   @db.VarChar(30)
+  Rate         String?   @db.VarChar(30)
+  Price        String?   @db.VarChar(30)
+  UserField    String?   @db.VarChar(30)
+  Destination  String?   @db.VarChar(255)
+  Created_At   DateTime? @db.DateTime(0)
+}
+
+model Old_db_case_visit_history {
+  ID              Int       @id @default(autoincrement()) @db.UnsignedInt
+  Visit_Status_ID Int       @default(0) @db.UnsignedInt
+  LoanID          Int       @db.UnsignedInt
+  Comment         String?   @db.VarChar(500)
+  User_ID         Int       @default(1)
+  Created_At      DateTime? @db.Timestamp(0)
+  Updated_At      DateTime? @db.Timestamp(0)
+
+  @@index([Visit_Status_ID], map: "index2")
+  @@index([LoanID], map: "index3")
+}
+
+model Old_db_case_visit_statuses {
+  Visit_Status_ID Int    @id @default(autoincrement())
+  Visit_Status    String @db.VarChar(50)
+}
+
+model Old_db_clients {
+  ID               Int       @id @default(autoincrement())
+  loanid           BigInt    @default(0) @db.UnsignedBigInt
+  case             String?   @db.VarChar(100)
+  portfolio_id     Int?      @default(0)
+  portfolio        String?   @default("0") @db.VarChar(100)
+  Full_Name        String?   @default("-") @db.VarChar(255)
+  ID_Number        String?   @default("-") @db.VarChar(50)
+  Client_Status_ID Int?      @default(5)
+  Client_Status    String?   @default("0") @db.VarChar(50)
+  FirstName        String    @default("-") @db.VarChar(100)
+  LastName         String    @default("-") @db.VarChar(100)
+  BirthDate        String?   @db.VarChar(20)
+  Gender           String    @default("N/A") @db.VarChar(10)
+  Borrower_Status  String    @default("ფ/პ") @db.VarChar(15)
+  Residence        String?   @db.VarChar(10)
+  Address          String?   @db.VarChar(1024)
+  Phone1           String    @db.VarChar(100)
+  Phone2           String?   @db.VarChar(100)
+  Phone3           String?   @db.VarChar(100)
+  Status           String    @db.VarChar(30)
+  CaseINN          Int       @default(0)
+  Role_Of_Customer String    @default("-") @db.VarChar(30)
+  City             String?   @db.VarChar(100)
+  Email            String    @default("N/A") @db.VarChar(100)
+  Updated_At       DateTime? @db.Timestamp(0)
+
+  @@index([Full_Name], map: "full_name")
+  @@index([ID_Number], map: "id_number")
+  @@index([loanid], map: "loanid")
+}
+
+model Old_db_clients_address {
+  ID         Int       @id @default(autoincrement())
+  ID_Number  String    @default("0") @db.VarChar(11)
+  Full_Name  String?   @db.VarChar(200)
+  Address    String?   @db.VarChar(200)
+  Info_Data  String?   @db.VarChar(4096)
+  Created_At DateTime? @db.DateTime(0)
+  Updated_At DateTime? @db.Timestamp(0)
+
+  @@index([ID_Number], map: "ID_Number")
+  @@index([ID_Number], map: "ID_Number_2")
+}
+
+model Old_db_clients_contact_relation {
+  myID         Int    @id @default(autoincrement())
+  Relation_ID  Int
+  Relation_ENG String @default("") @db.VarChar(100)
+  Relation_GE  String @default("") @db.VarChar(100)
+}
+
+model Old_db_clients_contact_type {
+  id   BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  name String @db.VarChar(255)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Old_db_clients_debts {
+  ID            Int       @id @default(autoincrement())
+  ID_Number     String    @db.VarChar(15)
+  Info_Type     Int       @default(1)
+  Info_Data     String    @default("") @db.VarChar(8096)
+  Employee_ID   Int       @default(0)
+  Employee_Name String?   @db.VarChar(100)
+  Created_At    DateTime? @db.DateTime(0)
+  Updated_At    DateTime? @db.Timestamp(0)
+  count         Int       @default(0)
+  Full_Name     String    @db.VarChar(100)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Old_db_clients_public_data {
+  ID               Int       @id @default(autoincrement())
+  ID_Number        String    @default("0") @db.VarChar(11)
+  Full_Name        String?   @db.VarChar(200)
+  Address          String?   @db.VarChar(200)
+  City             String    @default("") @db.VarChar(200)
+  Info_Data        String?   @db.VarChar(4096)
+  Info_Created_At  DateTime? @db.DateTime(0)
+  Executor         String?   @db.VarChar(150)
+  Enforcement_Case String?   @db.VarChar(128)
+
+  @@index([ID_Number], map: "ID_Number")
+  @@index([ID_Number], map: "ID_Number_2")
+}
+
+model Old_db_comment {
+  id         BigInt    @id @default(autoincrement())
+  case_id    Int?
+  user_id    Int?
+  comment    String?   @db.VarChar(3072)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  edited     Int       @default(0)
+  Attachment String    @default("") @db.VarChar(4096)
+  File_Name  String    @default("") @db.VarChar(1024)
+
+  @@index([case_id], map: "NewIndex1")
+  @@index([user_id], map: "NewIndex2")
+  @@index([created_at], map: "created_at")
+}
+
+model Old_db_loanDebts {
+  id         BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  case_id    BigInt @unique(map: "case_id_UNIQUE") @db.UnsignedBigInt
+  legal      Float? @default(0.00)
+  other_fee  Float? @default(0.00)
+  penalty    Float? @default(0.00)
+  interest   Float? @default(0.00)
+  principal  Float? @default(0.00)
+  total_debt Float? @default(0.00)
+
+  @@index([case_id], map: "index2")
+}
+
+model Old_db_loans {
+  LoanID                 BigInt    @default(0) @db.UnsignedBigInt
+  myID                   Int       @id @default(autoincrement())
+  Case                   String?   @db.VarChar(100)
+  CaseGroup_ID           Int?      @default(0)
+  CaseGroup              String?   @default("None") @db.VarChar(50)
+  Portfolio_ID           Int?      @default(0)
+  Portfolio_Parent       Int?      @default(0)
+  Portfolio              String?   @default("0") @db.VarChar(100)
+  Lender_ID              Int       @default(0)
+  Lender                 String    @db.VarChar(100)
+  Full_Name              String?   @db.VarChar(255)
+  ID_Number              String?   @db.VarChar(50)
+  Client_Status_ID       Int?      @default(5)
+  Client_Status          String?   @default("N/A") @db.VarChar(100)
+  Current_Debt           Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Current_Principal      Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Currency               String?   @default("GEL") @db.VarChar(45)
+  Legal_Stage_ID         Int?      @default(0)
+  Legal_Stage            String?   @default("N/A") @db.VarChar(100)
+  Stage_Update           DateTime? @db.DateTime(0)
+  Litigation_Stage_ID    Int       @default(0)
+  Litigation_Stage       String    @default("N/A") @db.VarChar(60)
+  Collateral_Status_ID   Int?      @default(1)
+  Collateral_Status      String?   @default("None") @db.VarChar(100)
+  CollateralINN          Int       @default(0)
+  Collection_Status_ID   Int?      @default(1)
+  Collection_Status      String?   @default("NEW") @db.VarChar(100)
+  Collection_Status_Date DateTime? @db.DateTime(0)
+  Mark_ID                Int       @default(0)
+  Mark                   String    @default("None") @db.VarChar(100)
+  MarkINN                Int       @default(0)
+  Collector_ID           Int?      @default(0)
+  Collector              String?   @db.VarChar(255)
+  Lawyer_ID              Int?      @default(0)
+  Lawyer                 String?   @default("N/A") @db.VarChar(100)
+  Assign_Date            DateTime? @db.DateTime(0)
+  Last_Activity          DateTime? @db.DateTime(0)
+  Lawyer_Assign_Date     DateTime? @db.DateTime(0)
+  lawyer_Last_Activity   DateTime? @db.DateTime(0)
+  JuniorLawyer_ID        Int       @default(0)
+  JuniorLawyer           String    @default("None") @db.VarChar(120)
+  JuniorLawyer_Date      DateTime? @db.DateTime(0)
+  ExecLawyer_ID          Int       @default(0)
+  ExecLawyer             String    @default("None") @db.VarChar(120)
+  ExecLawyer_Date        DateTime? @db.DateTime(0)
+  AML_Activity_ID        Int?      @default(0)
+  AML_Activity           String?   @default("N/A") @db.VarChar(50)
+  AML_Risk_Level_ID      Int?      @default(0)
+  AML_Risk_Level         String?   @default("N/A") @db.VarChar(50)
+  AML_Source_Income_ID   Int?      @default(0)
+  AML_Source_Income      String?   @default("N/A") @db.VarChar(50)
+  AML_Trans_Type_ID      Int?      @default(0)
+  AML_Trans_Type         String?   @default("N/A") @db.VarChar(50)
+  CL                     Int?      @default(0)
+  City_ID                Int       @default(0)
+  City                   String    @default("N/A") @db.VarChar(100)
+  Visit_Status_ID        Int       @default(1)
+  Visit_Status           String    @default("N/A") @db.VarChar(50)
+  Visit_Status_Date      DateTime? @db.DateTime(0)
+  Principal              Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Interest               Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Penalty                Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Other_Fees             Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Legal_Charges          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paid_Principal         Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paid_Interest          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paid_Other_Fees        Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paid_Penalty           Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paid_Legal_Charges     Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Agreement         Decimal   @default(0.00) @db.Decimal(15, 2)
+  Total_Payments         Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Agreement_Debt         Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Agreement_Date         DateTime? @db.DateTime(0)
+  Agreement_Min          Decimal   @default(0.00) @db.Decimal(15, 2)
+  Last_View              DateTime? @db.Date
+  CaseINN                Int
+  Status                 Int       @default(1)
+  Close_Date             DateTime? @db.DateTime(0)
+  tmp_pay                Decimal   @default(0.00) @db.Decimal(15, 2)
+  Last_Payment_Date      DateTime? @db.Date
+  Phone                  String    @default("0") @db.VarChar(50)
+  IsComitee              Int       @default(0)
+  Ex_Debt                Decimal   @default(0.00) @db.Decimal(15, 2)
+  Rate                   Decimal   @default(1.0000) @db.Decimal(15, 4)
+
+  @@index([Collection_Status_ID], map: "Collection_Status_ID")
+  @@index([Collector_ID], map: "Collector_ID")
+  @@index([ID_Number], map: "ID_Number")
+  @@index([Lawyer_ID], map: "Lawyer_ID")
+  @@index([LoanID], map: "NewIndex1")
+  @@fulltext([Case, Full_Name, ID_Number, Collector], map: "idx_loans_search")
+}
+
+model Old_db_paymentnew {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  LoanID             BigInt    @db.UnsignedBigInt
+  amount             Float
+  payment_date       DateTime  @db.Date
+  comment            String?   @db.Text
+  created_at         DateTime? @db.Timestamp(0)
+  updated_at         DateTime? @db.Timestamp(0)
+  portfolio_id       BigInt    @db.UnsignedBigInt
+  channel_id         BigInt    @db.UnsignedBigInt
+  user_id            BigInt    @db.UnsignedBigInt
+  currency           String    @db.VarChar(15)
+  employee_id        Int?      @default(0)
+  Paid_Principal     Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Interest      Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Penalty       Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Other_Fees    Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Legal_Charges Decimal   @default(0.00) @db.Decimal(15, 2)
+  Paid_Agreement     Decimal   @default(0.00) @db.Decimal(15, 2)
+  Debt               Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Debt_Old           Decimal   @default(0.00) @db.Decimal(15, 2)
+  Account_N          String    @default(" ") @db.VarChar(150)
+  Lawyer_ID          Int       @default(0)
+  Legal_Stage_ID     Int       @default(0)
+  AmountGEL          Decimal   @default(0.00) @db.Decimal(15, 2)
+  Rate               Decimal   @default(1.0000) @db.Decimal(15, 4)
+
+  @@index([Account_N], map: "Account_N")
+  @@index([Lawyer_ID], map: "Lawyer_ID")
+  @@index([Legal_Stage_ID], map: "Legal_Stage_ID")
+  @@index([currency], map: "currency")
+  @@index([employee_id, payment_date], map: "idx_employee_date")
+  @@index([Legal_Stage_ID], map: "idx_legal_stage")
+  @@index([LoanID], map: "idx_loanid")
+  @@index([employee_id], map: "index4")
+  @@index([LoanID], map: "payment_loan_id_index")
+  @@index([payment_date], map: "payment_payment_date_index")
+  @@index([portfolio_id], map: "portfolio_id")
+  @@index([user_id], map: "user_id")
+  @@fulltext([comment], map: "idx_payment_comment")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Old_db_plan_collection {
+  ID              Int       @id @default(autoincrement())
+  Collector_ID    Int       @default(0)
+  Collector       String    @db.VarChar(100)
+  UserType        Int       @default(0)
+  TeamLeader      Int       @default(0)
+  Teams           Int       @default(0)
+  TeamsGroup      Int       @default(0)
+  PlanYear        Int       @default(2025)
+  PlanMonth       Int       @default(7)
+  PlanSumm        Decimal   @default(0.00) @db.Decimal(15, 2)
+  PlanCollection  Decimal   @default(0.00) @db.Decimal(15, 2)
+  Principal       Decimal   @default(0.00) @db.Decimal(15, 2)
+  Portfolio0Pay   Decimal   @default(0.00) @db.Decimal(15, 2)
+  Percent         Decimal   @default(0.00) @db.Decimal(15, 2)
+  PaymentsCount   Int       @default(0)
+  CaseCount       Int       @default(0)
+  PaymentsRate    Decimal   @default(0.00) @db.Decimal(15, 2)
+  Calls           Int       @default(0)
+  Duration        Int       @default(0)
+  DurationTime    DateTime  @default(dbgenerated("'00:00:00'")) @db.Time(0)
+  SMS             Int?      @default(0)
+  Marks           Int       @default(0)
+  Day40           Int       @default(0)
+  Committee       Int       @default(0)
+  Comment         Int       @default(0)
+  Clients         Int       @default(0)
+  Total           Int       @default(0)
+  LegalCharges    Decimal   @default(0.00) @db.Decimal(15, 2)
+  CourtCaseCount  Int       @default(0)
+  CourtCaseAmount Decimal   @default(0.00) @db.Decimal(15, 2)
+  ExecCaseCount   Int       @default(0)
+  ExecCaseAmount  Decimal   @default(0.00) @db.Decimal(15, 2)
+  New             Int       @default(0)
+  Communication   Int       @default(0)
+  Unreachable     Int       @default(0)
+  RefusedToPay    Int       @default(0)
+  PromisedToPay   Int       @default(0)
+  Agreement       Int       @default(0)
+  AgreementCancel Int       @default(0)
+  Salary          Decimal   @default(0.00) @db.Decimal(15, 2)
+  Created_At      DateTime? @db.DateTime(0)
+  Updated_At      DateTime? @db.Timestamp(0)
+  AdminID         Int       @default(63)
+  AdminName       String    @default("Wbendela") @db.VarChar(100)
+}
+
+model Old_db_portfolio {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name          String    @db.VarChar(255)
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+  parent        String?   @db.VarChar(45)
+  Purchase_Year String?   @db.VarChar(4)
+  Purchase_Date DateTime? @db.Date
+  LenderID      Int       @default(0)
+  Lender        String?   @db.VarChar(50)
+  Company       String?   @db.VarChar(50)
+}
+
+model Old_db_portfolio_casegroup {
+  CaseGroup_ID BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  CaseGroup    String    @db.VarChar(255)
+  created_at   DateTime? @db.Timestamp(0)
+  updated_at   DateTime? @db.Timestamp(0)
+  parent       String?   @default("0") @db.VarChar(45)
+}
+
+model Old_db_promised {
+  promised_id  Int       @id @default(autoincrement())
+  Collector_ID Int?      @db.UnsignedInt
+  LoanID       Int?      @db.UnsignedInt
+  Payment_Date DateTime? @db.Date
+  Amount       Decimal?  @db.Decimal(15, 2)
+  fStatus      String    @default("") @db.VarChar(15)
+  Description  String?   @db.MediumText
+  Active       Int?      @default(1)
+  type         Int?      @default(2)
+}
+
+model Old_db_reminder {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id       BigInt    @db.UnsignedBigInt
+  reminder_date DateTime  @db.Date
+  comment       String?   @db.Text
+  priority      Int       @db.TinyInt
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+  loan_id       BigInt    @db.UnsignedBigInt
+  active        Int       @default(1) @db.TinyInt
+  type          Int       @default(0)
+
+  @@index([loan_id], map: "reminder_loan_id_index")
+  @@index([reminder_date], map: "reminder_reminder_date_index")
+}
+
+model Old_db_tasks {
+  id         Int       @id @default(autoincrement())
+  from_user  Int
+  to_user    Int
+  task       String    @default("") @db.VarChar(2048)
+  response   String?   @default("") @db.VarChar(2048)
+  dead_line  DateTime  @db.Date
+  status     Int       @default(1)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  LoanID     Int       @default(0)
+  Case       String?   @default("None") @db.VarChar(50)
+
+  @@index([from_user], map: "index2")
+  @@index([to_user], map: "index3")
+  @@index([status], map: "index4")
+  @@index([dead_line], map: "index5")
+}
+
+model Old_db_users {
+  id              Int       @id @default(autoincrement())
+  name            String?   @db.VarChar(255)
+  user            String?   @db.VarChar(255)
+  password        String?   @db.VarChar(255)
+  created_at      DateTime? @db.DateTime(0)
+  updated_at      DateTime? @db.DateTime(0)
+  admin           Int?
+  active          Int?      @default(1)
+  team_leader     Int       @default(0)
+  teams           Int       @default(0)
+  SIP             String?   @db.VarChar(3)
+  Phone           String?   @db.VarChar(12)
+  RegionalManager Int       @default(0)
+  RegionalTeams   String    @default("") @db.VarChar(300)
+  Region          Int       @default(0)
 }
 
 enum PaymentCommitment_type {
