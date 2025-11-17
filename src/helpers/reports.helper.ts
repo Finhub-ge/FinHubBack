@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { CollectorMonthlyReport, PrismaClient, Transaction } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export const prepareDataForInsert = (parsedData: any[]) => {
@@ -50,7 +50,14 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
   const allLoanIds = [...new Set(allAssignments.map(a => a.loanId))];
   const loanDetails = await getLoanDetailsWithStatusName(allLoanIds);
 
-  const collectorStats = new Map();
+  const collectorStats = new Map<number, {
+    stats: {
+      totalPrincipal: number;
+      totalCount: number;
+      byStatusName: Record<string, number>;
+    };
+    loanIds: number[];
+  }>();
 
   for (const collectorId of collectorIds) {
     const loanIds = assignmentsByCollector[collectorId];
@@ -60,6 +67,8 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
       totalCount: 0,
       byStatusName: {} as Record<string, number>,
     };
+
+    const countedLoanIds: number[] = [];
 
     if (loanIds) {
       for (const loanId of loanIds) {
@@ -76,10 +85,11 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
           }
           stats.byStatusName[statusName]++;
         }
+        countedLoanIds.push(loanId);
       }
     }
 
-    collectorStats.set(collectorId, stats);
+    collectorStats.set(collectorId, { stats, loanIds: countedLoanIds });
   }
 
   return collectorStats;
@@ -139,12 +149,12 @@ export const separateCreatesAndUpdates = (
 
     if (frozenKeys.has(key)) continue;
 
-    const stats = collectorStats.get(collectorId);
+    const collStats = collectorStats.get(collectorId);
 
     // Map status names to report field names
     const statusFields = {};
-    if (stats?.byStatusName) {
-      for (const [statusName, count] of Object.entries(stats.byStatusName)) {
+    if (collStats.stats?.byStatusName) {
+      for (const [statusName, count] of Object.entries(collStats.stats.byStatusName)) {
         const fieldName = STATUS_TO_FIELD_MAP[statusName];
         if (fieldName) {
           statusFields[fieldName] = count;
@@ -158,8 +168,9 @@ export const separateCreatesAndUpdates = (
       month,
       monthlyPlan: targetAmount,
       adjustedPlan: targetAmount,
-      openingPrincipal: stats?.totalPrincipal || 0,
-      totalLoanCount: stats?.totalCount || 0,
+      openingPrincipal: collStats.stats?.totalPrincipal || 0,
+      totalLoanCount: collStats.stats?.totalCount || 0,
+      loanIds: collStats?.loanIds || [],
       ...statusFields,
     };
 
@@ -216,6 +227,7 @@ export const executeBatchOperations = async (toCreate: any[], toUpdate: any[]) =
           agreementCancelledCount: record?.agreementCancelledCount || 0,
           refuseToPayCount: record?.refuseToPayCount || 0,
           promiseToPayCount: record?.promiseToPayCount || 0,
+          loanIds: record?.loanIds || [],
           updatedAt: new Date(),
         },
       })
@@ -226,3 +238,40 @@ export const executeBatchOperations = async (toCreate: any[], toUpdate: any[]) =
     await prisma.$transaction(operations);
   }
 }
+
+export const updateCollectedAmount = async (
+  loanId: number,
+  amount: number,
+  tx?: any
+) => {
+  const dbClient = tx || prisma;
+
+  // Find the report that contains this loanId
+  const reports: { id: number; collectedAmount: number; monthlyPlan: number }[] = await dbClient.$queryRaw`
+    SELECT id, collectedAmount, monthlyPlan
+    FROM \`CollectorMonthlyReport\`
+    WHERE JSON_CONTAINS(\`loanIds\`, CAST(${loanId} AS JSON))
+    LIMIT 1;
+  `;
+
+  const report = reports[0];
+
+  if (!report) return null; // nothing found
+
+  // Calculate new collectedAmount
+  const newCollectedAmount = Number(report.collectedAmount) + amount;
+
+  // Calculate monthlyPlan percentage
+  const collectionRatePercent = report.monthlyPlan > 0 ? (newCollectedAmount / report.monthlyPlan) * 100 : 0;
+
+  // Update collectedAmount by incrementing it
+  const updated = await dbClient.collectorMonthlyReport.update({
+    where: { id: report.id },
+    data: {
+      collectedAmount: { increment: amount },
+      collectionRatePercent,
+    },
+  });
+
+  return updated;
+};

@@ -31,7 +31,7 @@ import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto"
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
-import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, prepareDataForInsert, separateCreatesAndUpdates } from "src/helpers/reports.helper";
+import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -404,6 +404,9 @@ export class AdminService {
             },
           });
         }
+
+        await updateCollectedAmount(loan.id, Number(transaction.amount || 0), tx);
+
         return {
           loanId: loan.id,
           transactionId: transaction.id,
