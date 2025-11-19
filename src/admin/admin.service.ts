@@ -961,6 +961,7 @@ export class AdminService {
           transactionChannelAccountId: data.accountId,
           userId: userId,
           channelId: data.channel,
+          chargeDate: data.chargeDate,
         }
       });
 
@@ -1001,19 +1002,6 @@ export class AdminService {
       const newLoanRemaining = await tx.loanRemaining.create({
         data: newLoanRemainingData,
       });
-
-      // const newLoanRemaining = await tx.loanRemaining.create({
-      //   data: {
-      //     loanId: loan.id,
-      //     principal: loanRemaining.principal,
-      //     interest: loanRemaining.interest,
-      //     penalty: loanRemaining.penalty,
-      //     otherFee: loanRemaining.otherFee,
-      //     legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
-      //     currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
-      //     agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
-      //   }
-      // });
 
       // Determine allocation type
       const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';

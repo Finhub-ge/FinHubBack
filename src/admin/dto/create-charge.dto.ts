@@ -4,6 +4,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { ApiProperty } from '@nestjs/swagger';
+import { IsNotFutureDate } from 'src/validators/date.validator';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -46,6 +47,7 @@ export class CreateChargeDto {
     return date;
   })
   @IsDateString()
+  @IsNotFutureDate({ message: 'Charge date cannot be in the future' })
   chargeDate: string;
 
   @ApiProperty()
