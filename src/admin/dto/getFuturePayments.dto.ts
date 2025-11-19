@@ -25,13 +25,13 @@ export class GetFuturePaymentsDto {
   paymentDateEnd?: string;
 
   @ApiProperty({
-    description: 'Filter by portfolio IDs',
+    description: 'Filter by portfolio case group IDs',
     required: false,
     type: String
   })
   @IsOptional()
   @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
-  portfolio?: number[];
+  portfolioCaseGroup?: number[];
 
   @ApiProperty({
     description: 'Filter by portfolio seller IDs',

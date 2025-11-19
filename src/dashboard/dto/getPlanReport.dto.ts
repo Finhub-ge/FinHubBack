@@ -23,6 +23,15 @@ export class GetPlanReportDto {
   month?: number[];
 
   @ApiProperty({
+    description: 'Date',
+    required: false,
+    type: Date
+  })
+  @IsOptional()
+  @Transform(({ value }) => value ? new Date(value) : undefined)
+  date?: Date;
+
+  @ApiProperty({
     description: 'Collector ID',
     required: false,
     type: String
