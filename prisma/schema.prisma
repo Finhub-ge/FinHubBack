@@ -761,6 +761,7 @@ model Charges {
   paidAmount                  Decimal                     @default(0.00) @db.Decimal(12, 2)
   status                      Charges_status              @default(UNPAID)
   userId                      Int?
+  chargeDate                  DateTime?                   @db.Date
   paymentDate                 DateTime?                   @db.Date
   transactionChannelAccountId Int?
   channelId                   Int?

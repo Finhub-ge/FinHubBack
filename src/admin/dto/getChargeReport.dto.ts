@@ -7,11 +7,11 @@ export class GetChargeReportDto {
   @ApiProperty({
     description: 'Search by case ID',
     required: false,
-    type: Number
+    type: String
   })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
-  search?: number;
+  @Transform(({ value }) => value ? value.trim() : undefined)
+  search?: string;
 
   @ApiProperty({ description: 'Start date for charge date range', required: false })
   @IsDateString()

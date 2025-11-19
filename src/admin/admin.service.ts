@@ -762,17 +762,51 @@ export class AdminService {
   }
 
   async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
-    const { page, limit, ...filters } = getMarkReportDto;
+    const { page, limit, skip, ...filters } = getMarkReportDto;
 
-    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
     const where: any = { deletedAt: null };
     where.Loan = {};
     where.LoanAssignment = undefined;
 
     if (filters.search) {
-      where.Loan.caseId = filters.search;
+      const searchTerm = filters.search;
+
+      where.OR = [
+        { Loan: { caseId: Number(searchTerm) } },
+        {
+          Loan: {
+            LoanAssignment: {
+              some: {
+                User: {
+                  OR: [
+                    { firstName: { contains: searchTerm } },
+                    { lastName: { contains: searchTerm } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          Loan: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: searchTerm } },
+                { lastName: { contains: searchTerm } },
+              ],
+            },
+          },
+        },
+        {
+          Marks: {
+            title: { contains: searchTerm },
+          },
+        },
+      ];
     }
+
     if (filters.assignedCollector?.length) {
       where.Loan.LoanAssignment = {
         some: { User: { id: { in: filters.assignedCollector } } },
@@ -864,7 +898,7 @@ export class AdminService {
     const total = await this.prisma.loanMarks.count({
       where: where,
     });
-    return this.paginationService.createPaginatedResult(data, total, { page, limit });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 
   async getLegalStages() {
@@ -927,6 +961,7 @@ export class AdminService {
           transactionChannelAccountId: data.accountId,
           userId: userId,
           channelId: data.channel,
+          chargeDate: data.chargeDate,
         }
       });
 
@@ -967,19 +1002,6 @@ export class AdminService {
       const newLoanRemaining = await tx.loanRemaining.create({
         data: newLoanRemainingData,
       });
-
-      // const newLoanRemaining = await tx.loanRemaining.create({
-      //   data: {
-      //     loanId: loan.id,
-      //     principal: loanRemaining.principal,
-      //     interest: loanRemaining.interest,
-      //     penalty: loanRemaining.penalty,
-      //     otherFee: loanRemaining.otherFee,
-      //     legalCharges: Number(loanRemaining.legalCharges) + Number(data.amount),
-      //     currentDebt: Number(loanRemaining.currentDebt) + Number(data.amount),
-      //     agreementMin: Number(loanRemaining.agreementMin) + Number(data.amount),
-      //   }
-      // });
 
       // Determine allocation type
       const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';
@@ -1096,7 +1118,42 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (search) loanFilter.caseId = search;
+    if (search) {
+      const searchTerm = search;
+
+      where.OR = [
+        { Loan: { caseId: Number(searchTerm) } },
+        {
+          Loan: {
+            LoanAssignment: {
+              some: {
+                User: {
+                  OR: [
+                    { firstName: { contains: searchTerm } },
+                    { lastName: { contains: searchTerm } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          Loan: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: searchTerm } },
+                { lastName: { contains: searchTerm } },
+              ],
+            },
+          },
+        },
+        {
+          ChargeType: {
+            title: { contains: searchTerm },
+          },
+        },
+      ];
+    }
 
     if (options?.isReport) {
       const filters = getChargeDto as GetChargeReportWithPaginationDto;
