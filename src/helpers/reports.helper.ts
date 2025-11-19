@@ -26,6 +26,36 @@ export const fetchExistingReports = async (dataToInsert: any[], collectorIds: nu
   });
 }
 
+export const loanAssignments = async (collectorIds: number[]) => {
+  const uploadDate = new Date();
+
+  const assignments = await prisma.loanAssignment.findMany({
+    where: {
+      userId: { in: collectorIds },
+      assignedAt: { lte: uploadDate },
+      OR: [
+        { unassignedAt: null },
+        { unassignedAt: { gte: uploadDate } },
+      ],
+      Loan: { closedAt: null },
+    },
+    select: { userId: true, loanId: true },
+  });
+
+  // Prepare result structure with empty arrays
+  const result: Record<number, number[]> = {};
+  for (const id of collectorIds) {
+    result[id] = [];
+  }
+
+  // Fill loan IDs
+  for (const a of assignments) {
+    result[a.userId].push(a.loanId);
+  }
+
+  return result;
+};
+
 export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
   const uploadDate = new Date();
 
@@ -94,7 +124,6 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
 
   return collectorStats;
 }
-
 
 export const getLoanDetailsWithStatusName = async (loanIds: number[]) => {
   if (loanIds.length === 0) return new Map();

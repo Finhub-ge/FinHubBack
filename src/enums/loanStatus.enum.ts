@@ -139,3 +139,9 @@ export type StatusGroup = keyof typeof LoanStatusGroups;
 export function getStatusIdsForGroup(group: StatusGroup): number[] {
   return Array.from(LoanStatusGroups[group]);
 }
+
+export const statusNameMap: Record<number, string> = Object.fromEntries(
+  Object.entries(LoanStatusId)
+    .filter(([key, value]) => typeof value === 'number') // only number values
+    .map(([key, value]) => [value as number, key])
+);

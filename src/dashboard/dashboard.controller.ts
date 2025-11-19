@@ -25,4 +25,11 @@ export class DashboardController {
   getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
     return this.dashboardService.getPlanReport(getPlanReportDto);
   }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('planReportTest')
+  getPlanReportTest(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
+    return this.dashboardService.getPlanReportTest(getPlanReportDto);
+  }
 }

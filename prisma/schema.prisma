@@ -504,6 +504,7 @@ model SmsHistory {
   id            Int               @id @default(autoincrement())
   loanId        Int
   contactId     Int
+  userId        Int?
   phone         String            @db.VarChar(45)
   message       String            @db.VarChar(500)
   status        SmsHistory_status
@@ -604,6 +605,7 @@ model LoanMarks {
   id        Int       @id @default(autoincrement())
   loanId    Int
   markId    Int
+  userId    Int?
   comment   String?   @db.VarChar(500)
   deadline  DateTime? @db.DateTime(0)
   createdAt DateTime  @default(now()) @db.DateTime(0)
@@ -1068,6 +1070,7 @@ model CollectorsMonthlyTarget {
   createdAt    DateTime  @default(now()) @db.DateTime(0)
   updatedAt    DateTime  @default(now()) @db.DateTime(0)
   deletedAt    DateTime? @db.DateTime(0)
+  loanIds      Json?
   User         User      @relation(fields: [collectorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_collector")
 
   @@unique([collectorId, year, month], map: "uc_collector_year_month")
@@ -1120,6 +1123,8 @@ model CollectorMonthlyReport {
   commentCount                                  Int                           @default(0)
   committeeRequestCount                         Int                           @default(0)
   inactiveOver40DaysCount                       Int                           @default(0)
+  debtorStatusCount                             Int?
+  totalActivities                               Int?
   totalLegalCharges                             Decimal                       @default(0.00) @db.Decimal(12, 2)
   totalOtherCharges                             Decimal                       @default(0.00) @db.Decimal(12, 2)
   courtCaseCount                                Int                           @default(0)

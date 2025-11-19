@@ -31,7 +31,7 @@ import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto"
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
-import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1398,10 +1398,14 @@ export class AdminService {
       };
     }
 
-    const portfolioFilter: any = {};
-    if (getFuturePaymentsDto.portfolio?.length) {
-      portfolioFilter.id = { in: getFuturePaymentsDto.portfolio };
+    if (getFuturePaymentsDto.portfolioCaseGroup?.length) {
+      where.Loan = {
+        ...where.Loan,
+        PortfolioCaseGroup: { id: { in: getFuturePaymentsDto.portfolioCaseGroup } }
+      };
     }
+
+    const portfolioFilter: any = {};
     if (getFuturePaymentsDto.portfolioseller?.length) {
       portfolioFilter.portfolioSeller = { id: { in: getFuturePaymentsDto.portfolioseller } };
     }
@@ -1472,6 +1476,12 @@ export class AdminService {
                 idNumber: true,
               }
             },
+            PortfolioCaseGroup: {
+              select: {
+                id: true,
+                groupName: true,
+              }
+            },
           }
         },
         PaymentSchedule: {
@@ -1501,13 +1511,21 @@ export class AdminService {
     // Validate and prepare data
     const dataToInsert = prepareDataForInsert(parsedData);
 
+    const collectorId = dataToInsert.map(d => d.collectorId);
+
     if (dataToInsert.length === 0) {
       return { message: 'No valid records found', insertedCount: 0 };
     }
+    const assignments = await loanAssignments(collectorId);
+
+    const enrichedData = dataToInsert.map(item => ({
+      ...item,
+      loanIds: assignments[item.collectorId] ?? []
+    }));
 
     // Insert targets in bulk
     const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
-      data: dataToInsert,
+      data: enrichedData,
       skipDuplicates: true,
     });
 
