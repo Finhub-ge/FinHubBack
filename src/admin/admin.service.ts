@@ -1118,7 +1118,42 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (search) loanFilter.caseId = search;
+    if (search) {
+      const searchTerm = search;
+
+      where.OR = [
+        { Loan: { caseId: Number(searchTerm) } },
+        {
+          Loan: {
+            LoanAssignment: {
+              some: {
+                User: {
+                  OR: [
+                    { firstName: { contains: searchTerm } },
+                    { lastName: { contains: searchTerm } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          Loan: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: searchTerm } },
+                { lastName: { contains: searchTerm } },
+              ],
+            },
+          },
+        },
+        {
+          ChargeType: {
+            title: { contains: searchTerm },
+          },
+        },
+      ];
+    }
 
     if (options?.isReport) {
       const filters = getChargeDto as GetChargeReportWithPaginationDto;
