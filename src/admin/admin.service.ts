@@ -762,17 +762,51 @@ export class AdminService {
   }
 
   async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
-    const { page, limit, ...filters } = getMarkReportDto;
+    const { page, limit, skip, ...filters } = getMarkReportDto;
 
-    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
     const where: any = { deletedAt: null };
     where.Loan = {};
     where.LoanAssignment = undefined;
 
     if (filters.search) {
-      where.Loan.caseId = filters.search;
+      const searchTerm = filters.search;
+
+      where.OR = [
+        { Loan: { caseId: Number(searchTerm) } },
+        {
+          Loan: {
+            LoanAssignment: {
+              some: {
+                User: {
+                  OR: [
+                    { firstName: { contains: searchTerm } },
+                    { lastName: { contains: searchTerm } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          Loan: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: searchTerm } },
+                { lastName: { contains: searchTerm } },
+              ],
+            },
+          },
+        },
+        {
+          Marks: {
+            title: { contains: searchTerm },
+          },
+        },
+      ];
     }
+
     if (filters.assignedCollector?.length) {
       where.Loan.LoanAssignment = {
         some: { User: { id: { in: filters.assignedCollector } } },
@@ -864,7 +898,7 @@ export class AdminService {
     const total = await this.prisma.loanMarks.count({
       where: where,
     });
-    return this.paginationService.createPaginatedResult(data, total, { page, limit });
+    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 
   async getLegalStages() {

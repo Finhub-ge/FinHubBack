@@ -1043,6 +1043,7 @@ export class LoanService {
       data: {
         loanId: loan.id,
         contactId: contact.id,
+        userId: userId,
         phone: contact.value,
         message: sendSmsDto.message,
         status: smsResult.success ? SmsHistory_status.success : SmsHistory_status.failed,
@@ -1237,6 +1238,7 @@ export class LoanService {
       data: {
         loanId: loan.id,
         markId: data.markId,
+        userId: userId,
         comment: data.comment,
         deadline: data.deadline ? new Date(data.deadline) : null,
       },
