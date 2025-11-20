@@ -10,6 +10,7 @@ import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilt
 import { PaginationService } from "src/common/services/pagination.service";
 import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 import { getUserExport } from "src/helpers/excel.helper";
+import { Role } from "src/enums/role.enum";
 
 @Injectable()
 export class UserService {
@@ -113,12 +114,14 @@ export class UserService {
   }
 
   async getAllUsers(filters: GetUsersWithPaginationDto) {
-    const { page, limit, role, skip, search } = filters;
+    const { page, limit, role, isActive, skip, search } = filters;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
-    let where: any = { deletedAt: null };
+    const where: any = { deletedAt: null };
 
-    if (!search) {
+    if (typeof isActive === 'boolean') {
+      where.isActive = isActive;
+    } else if (!search) {
       where.isActive = true;
     }
 
@@ -147,13 +150,13 @@ export class UserService {
     }
 
     if (role) {
-      const roleId = await this.prisma.role.findFirst({
-        where: { name: role },
+      const roleIds = await this.prisma.role.findMany({
+        where: { name: { in: role } },
         select: { id: true }
       });
 
-      if (roleId) {
-        where.roleId = roleId.id;
+      if (roleIds) {
+        where.roleId = { in: roleIds.map(role => role.id) };
       }
     }
 
@@ -301,7 +304,10 @@ export class UserService {
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
-        User: role ? { Role: { name: role } } : undefined,
+        ...(role && role.length > 0
+          ? { User: { Role: { name: { in: role } } } }
+          : {}
+        ),
       },
       include: {
         User: {
@@ -354,7 +360,8 @@ export class UserService {
     let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
 
     // ✅ If role = 'collector', return only those teams where members include collectors
-    if (role === 'collector') {
+    if (role && role.includes(Role.COLLECTOR as any)) {
+      console.log(role);
       result = result
         .map(team => ({
           ...team,
