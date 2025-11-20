@@ -113,10 +113,38 @@ export class UserService {
   }
 
   async getAllUsers(filters: GetUsersWithPaginationDto) {
-    const { page, limit, role, skip } = filters;
+    const { page, limit, role, skip, search } = filters;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
-    let where: any = {};
+    let where: any = { deletedAt: null };
+
+    if (!search) {
+      where.isActive = true;
+    }
+
+    if (search) {
+      const terms = search.split(" ").filter(Boolean);
+
+      if (terms.length >= 2) {
+        const first = terms[0];
+        const last = terms.slice(1).join(" ");
+
+        where.AND = [
+          { firstName: { contains: first } },
+          { lastName: { contains: last } }
+        ];
+      } else {
+        const term = terms[0];
+        const numberId = Number(term);
+
+        where.OR = [
+          ...(Number.isInteger(numberId) ? [{ id: numberId }] : []),
+          { firstName: { contains: term } },
+          { lastName: { contains: term } },
+          { email: { contains: term } },
+        ];
+      }
+    }
 
     if (role) {
       const roleId = await this.prisma.role.findFirst({
