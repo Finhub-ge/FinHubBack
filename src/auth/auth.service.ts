@@ -231,7 +231,7 @@ export class AuthService {
     return await this.prisma.role.findMany({
       where: {
         name: {
-          not: 'super_admin',
+          notIn: ['super_admin', 'system']
         },
       },
     });
