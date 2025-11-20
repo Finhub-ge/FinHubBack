@@ -383,4 +383,12 @@ export class LoanController {
   ) {
     return this.loanService.addLoanReminder(publicId, data, user.id);
   }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Get(':publicId/availableLitigationStatuses')
+  async getAvailableLitigationStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
+    return this.loanService.getAvailableLitigationStatuses(publicId);
+  }
 }

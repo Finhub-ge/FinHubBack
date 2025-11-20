@@ -1796,4 +1796,34 @@ export class LoanService {
       message: 'Loan reminder added successfully'
     };
   }
+
+  async getAvailableLitigationStatuses(publicId: ParseUUIDPipe) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanLegalStage: true,
+      },
+    });
+
+    if (!loan) throw new NotFoundException('Loan not found');
+
+    const where: any = { deletedAt: null };
+    const rules: Record<number, any> = {
+      61: { id: { notIn: [6] } },
+      62: { id: { in: [6] } },
+      64: { id: { in: [8] } },
+      65: { id: { in: [5, 8] } },
+    };
+
+    if (loan.LoanLegalStage.length > 0) {
+      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+      const stageCode = lastStage.legalStageId;
+
+      if (rules[stageCode]) {
+        Object.assign(where, rules[stageCode]);
+      }
+    }
+    return this.prisma.litigationStage.findMany({ where });
+  }
 }
