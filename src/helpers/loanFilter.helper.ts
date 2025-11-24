@@ -1,11 +1,16 @@
 // loan.helper.ts
 
-import dayjs from 'dayjs';
+import * as dayjs from "dayjs";
+import * as utc from "dayjs/plugin/utc";
+import * as timezone from "dayjs/plugin/timezone";
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
 import { buildLoanSearchWhere, calculateWriteoff } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // ==================== FILTER BUILDERS ====================
 
