@@ -767,7 +767,7 @@ export class AdminService {
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
     const where: any = { deletedAt: null };
-    where.Loan = {};
+    where.Loan = { deletedAt: null };
     where.LoanAssignment = undefined;
 
     if (filters.search) {
@@ -809,12 +809,12 @@ export class AdminService {
 
     if (filters.assignedCollector?.length) {
       where.Loan.LoanAssignment = {
-        some: { User: { id: { in: filters.assignedCollector } } },
+        some: { User: { id: { in: filters.assignedCollector }, isActive: true } },
       };
     }
     if (filters.assignedLawyer?.length) {
       where.Loan.LoanAssignment = {
-        some: { User: { id: { in: filters.assignedLawyer } } },
+        some: { User: { id: { in: filters.assignedLawyer }, isActive: true } },
       };
     }
     if (filters.portfolio?.length) {
