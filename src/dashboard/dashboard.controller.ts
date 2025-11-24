@@ -26,10 +26,19 @@ export class DashboardController {
     return this.dashboardService.getPlanReport(getPlanReportDto);
   }
 
+  // TODO: remove this function
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('planReportTest')
   getPlanReportTest(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
-    return this.dashboardService.getPlanReportTest(getPlanReportDto);
+    return this.dashboardService.getPlanReportV1(getPlanReportDto);
+  }
+
+  // TODO: remove this function
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('planReportData')
+  getPlanReportData(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
+    return this.dashboardService.getPlanReportV2(getPlanReportDto);
   }
 }

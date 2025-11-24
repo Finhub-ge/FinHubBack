@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { statusNameMap } from 'src/enums/loanStatus.enum';
+import { buildDataMaps, calculateCollectorMetrics, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory } from 'src/helpers/report.helper';
 
 @Injectable()
 export class DashboardService {
@@ -78,6 +79,79 @@ export class DashboardService {
   }
 
   async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto) {
+    const { page, limit, skip, ...filters } = getPlanReportDto;
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
+
+    // Build Prisma where clause for targets
+    const targetWhere: any = {};
+    if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
+    if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
+    if (filters.collectorId && filters.collectorId.length > 0) targetWhere.collectorId = { in: filters.collectorId };
+
+    // Fetch collector monthly targets
+    const data = await this.prisma.collectorsMonthlyTarget.findMany({
+      where: targetWhere,
+      select: {
+        id: true,
+        collectorId: true,
+        User: {
+          select: {
+            firstName: true,
+            lastName: true,
+          }
+        },
+        targetAmount: true,
+        year: true,
+        month: true,
+        loanIds: true,
+        createdAt: true,
+      },
+      ...paginationParams,
+    });
+
+    // Extract all loan IDs and collector IDs
+    const allLoanIds = data
+      .flatMap(t => (Array.isArray(t.loanIds) ? t.loanIds : []))
+      .filter(Boolean) as number[];
+    const collectorIds = data.map(t => t.collectorId);
+
+    // Fetch all collection-related data
+    const collectionData = await fetchCollectionData(
+      this.prisma,
+      allLoanIds,
+      collectorIds
+    );
+
+    // Build maps for efficient lookups
+    const dataMaps = buildDataMaps(collectionData);
+
+    // Fetch and process transactions with 2-day rule
+    const transactionData = await fetchAndProcessTransactions(
+      this.prisma,
+      collectorIds,
+      data.map(d => d.year),
+      data.map(d => d.month)
+    );
+
+    // Fetch debtor status history
+    const debtorIds = collectionData.loans.map(l => l.debtorId).filter(Boolean) as number[];
+    const debtorStatusMap = await fetchDebtorStatusHistory(this.prisma, debtorIds);
+
+    // Calculate metrics for each collector target
+    const result = data.map(item =>
+      calculateCollectorMetrics(item, dataMaps, transactionData, debtorStatusMap, filters)
+    );
+
+    // Get total count for pagination
+    const total = await this.prisma.collectorsMonthlyTarget.count({
+      where: targetWhere,
+    });
+
+    return this.paginationService.createPaginatedResult(result, total, { page, limit, skip });
+  }
+
+  // TODO: remove this function
+  async getPlanReportV1(getPlanReportDto: GetPlanReportWithPaginationDto) {
     // const { collectorId, year, month } = getPlanReportDto;
     const { page, limit, skip, ...filters } = getPlanReportDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
@@ -109,7 +183,8 @@ export class DashboardService {
     return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
   }
 
-  async getPlanReportTest(getPlanReportDto: GetPlanReportWithPaginationDto) {
+  // TODO: remove this function
+  async getPlanReportV2(getPlanReportDto: GetPlanReportWithPaginationDto) {
     const { page, limit, skip, ...filters } = getPlanReportDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 

@@ -361,7 +361,6 @@ export class UserService {
 
     // ✅ If role = 'collector', return only those teams where members include collectors
     if (role && role.includes(Role.COLLECTOR as any)) {
-      console.log(role);
       result = result
         .map(team => ({
           ...team,
