@@ -10,6 +10,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
 import { CommonModule } from './common/common.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ExcelImportModule } from './excel-import/excel-import.module';
 
 
 @Module({
@@ -26,6 +27,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     LoanModule,
     AminModule,
     DashboardModule,
+    ExcelImportModule
   ],
   controllers: [AppController],
   providers: [CronService],
