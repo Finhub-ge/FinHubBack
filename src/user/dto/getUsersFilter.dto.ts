@@ -14,10 +14,26 @@ export class GetUsersFilterDto {
   @Transform(({ value }) => value ? value.trim() : undefined)
   search?: string;
 
-  @ApiProperty({ enum: Role, description: 'Role of user', required: false })
-  @IsEnum(Role)
+  @ApiProperty({
+    enum: Role,
+    description: 'Role(s) of user',
+    required: false,
+    isArray: true,
+    type: [String],
+  })
   @IsOptional()
-  role?: Role;
+  @IsEnum(Role, { each: true })
+  @Transform(({ value }) => {
+    if (!value) return undefined;
+    if (Array.isArray(value)) return value;
+    return value.split(',').map((v: string) => v.trim());
+  })
+  role?: Role[];
+
+  @ApiProperty({ type: Boolean, description: 'Status of user', required: false })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  isActive?: boolean;
 }
 
 // Combine with pagination
