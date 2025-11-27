@@ -32,18 +32,27 @@ import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
 import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { QueueService } from "src/queue/queue.service";
+import { ScraperWorker } from "src/queue/workers/scraper.worker";
+import { DebtScraperService } from "src/queue/workers/debtScraper.service";
+import { ClaudeScraperService } from "src/queue/workers/claude-scraper.service";
+import { ScrapeResult } from "src/queue/workers/claude-scraper.types";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 @Injectable()
 export class AdminService {
+  private scraperService: DebtScraperService;
   constructor(
     private prisma: PrismaService,
     private paymentHelper: PaymentsHelper,
     private s3Helper: S3Helper,
     private readonly paginationService: PaginationService,
-  ) { }
+    private readonly queueService: QueueService,
+    private readonly scraperWorker: ScraperWorker,
+    private readonly claudeScraper: ClaudeScraperService
+  ) { this.scraperService = new DebtScraperService(); }
 
   async getDebtorContactTypes() {
     return await this.prisma.contactType.findMany();
@@ -1619,5 +1628,19 @@ export class AdminService {
       skippedRecords: parsedData.length - dataToInsert.length,
       processedReports: toCreate.length + toUpdate.length,
     };
+  }
+
+  async testScraper(): Promise<ScrapeResult> {
+    const id = '62006017862';
+    const result = await this.claudeScraper.scrape(id);
+    return result;
+  }
+
+  async scrapeMultipleIds(ids: string[]): Promise<ScrapeResult[]> {
+    return await this.claudeScraper.scrapeMultiple(ids, 3000);
+  }
+
+  async scrapeBatchIds(ids: string[]): Promise<ScrapeResult[]> {
+    return await this.claudeScraper.scrapeBatch(ids, 5, 3000);
   }
 }

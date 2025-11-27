@@ -27,6 +27,7 @@ import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
+import { ScrapeResult } from "src/queue/workers/claude-scraper.types";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -361,5 +362,26 @@ export class AdminController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     return await this.adminService.importPlan(file.buffer, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('testScraper')
+  async testScraper(): Promise<ScrapeResult> {
+    return await this.adminService.testScraper();
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('scrapeMultiple')
+  async scrapeMultiple(@Body() body: { ids: string[] }): Promise<ScrapeResult[]> {
+    return await this.adminService.scrapeMultipleIds(body.ids);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Post('scrapeBatch')
+  async scrapeBatch(@Body() body: { ids: string[] }): Promise<ScrapeResult[]> {
+    return await this.adminService.scrapeBatchIds(body.ids);
   }
 }

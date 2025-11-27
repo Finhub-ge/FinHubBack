@@ -5,11 +5,12 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { LoanModule } from './loan/loan.module';
 import { AppController } from './app.controller';
-import { AminModule } from './admin/admin.module';
+import { AdminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
 import { CommonModule } from './common/common.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { QueueModule } from './queue/queue.module';
 
 
 @Module({
@@ -24,8 +25,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
     AuthModule,
     UserModule,
     LoanModule,
-    AminModule,
+    AdminModule,
     DashboardModule,
+    QueueModule
   ],
   controllers: [AppController],
   providers: [CronService],
