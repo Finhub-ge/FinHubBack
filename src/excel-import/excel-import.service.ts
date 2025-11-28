@@ -61,6 +61,7 @@ export class ExcelImportService {
 
     // Step 1: Get or create portfolios
     const portfolioMap = await this.processPortfolios(data.attributes);
+    console.log('portfolioMap', portfolioMap)
     summary.portfoliosProcessed = portfolioMap.size;
 
     // Step 2: Process debtors and loans
@@ -70,7 +71,8 @@ export class ExcelImportService {
       errors,
       summary,
     );
-
+    console.log(loanMap)
+    console.log(debtorMap)
     // Step 3: Process loan attributes
     if (loanMap.size > 0) {
       summary.attributesCreated = await this.processLoanAttributes(
@@ -127,7 +129,7 @@ export class ExcelImportService {
         .map((row) => row.portfolioname)
         .filter((name) => name !== undefined),
     );
-
+    //TODO: need understanding portfolio an portfolioSeller relation
     for (const name of portfolioNames) {
       // Check if portfolio exists
       let portfolio = await this.prisma.portfolio.findFirst({
@@ -136,18 +138,18 @@ export class ExcelImportService {
 
       if (!portfolio) {
         // Create new portfolio with default values
-        // portfolio = await this.prisma.portfolio.create({
-        //   data: {
-        //     name,
-        //     purchasePrice: 0,
-        //     purchaseDate: new Date(),
-        //     bankName: 'Unknown',
-        //   },
-        // });
+        portfolio = await this.prisma.portfolio.create({
+          data: {
+            name,
+            purchasePrice: 0,
+            purchaseDate: new Date(),
+            bankName: 'Unknown',
+          },
+        });
         this.logger.log(`Created new portfolio: ${name}`);
       }
 
-      // portfolioMap.set(name, portfolio.id);
+      portfolioMap.set(name, portfolio.id);
     }
 
     return portfolioMap;
@@ -170,7 +172,7 @@ export class ExcelImportService {
     const defaultLoanStatus = await this.prisma.loanStatus.findFirst({
       where: { id: LoanStatusId.NEW, deletedAt: null },
     });
-    console.log('defaultLoanStatus', defaultLoanStatus)
+
     if (!defaultDebtorStatus || !defaultLoanStatus) {
       throw new BadRequestException(
         'Default statuses not found in database. Please ensure DebtorStatus and LoanStatus tables have "Active" status.',
@@ -245,12 +247,12 @@ export class ExcelImportService {
             where: {
               debtorId: debtor.id,
               OR: [
-                { caseId: mappedLoan.caseId },
+                { caseId: Number(mappedLoan.loanNumber) || 0 },
               ],
               deletedAt: null,
             },
           });
-          console.log('loan', loan)
+          // console.log('loan', loan)
           if (loan) {
             // Update existing loan
             // loan = await this.prisma.loan.update({
