@@ -1504,7 +1504,7 @@ export class LoanService {
     };
   }
 
-  async downloadSchedulePdfBuffer(publicId: ParseUUIDPipe): Promise<{ buffer: Buffer, caseId: number }> {
+  async downloadSchedulePdfBuffer(publicId: ParseUUIDPipe): Promise<{ buffer: Buffer, caseId: string }> {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
     });

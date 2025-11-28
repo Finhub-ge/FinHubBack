@@ -517,7 +517,7 @@ export const buildLoanSearchWhere = (searchValue: string) => {
   const orConditions: Prisma.LoanWhereInput[] = [];
 
   // numeric Case ID
-  if (isNumeric) orConditions.push({ caseId: Number(trimmed) });
+  if (isNumeric) orConditions.push({ caseId: String(trimmed) });
 
   // Debtor personal ID
   orConditions.push({ Debtor: { idNumber: trimmed } });
