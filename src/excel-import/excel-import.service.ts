@@ -71,8 +71,8 @@ export class ExcelImportService {
       errors,
       summary,
     );
-    console.log(loanMap)
-    console.log(debtorMap)
+    console.log('loanMap', loanMap)
+    console.log('debtorMap', debtorMap)
     // Step 3: Process loan attributes
     if (loanMap.size > 0) {
       summary.attributesCreated = await this.processLoanAttributes(
@@ -81,7 +81,7 @@ export class ExcelImportService {
         errors,
       );
     }
-
+    console.log('summary.attributesCreated', summary.attributesCreated)
     // Step 4: Process transactions
     if (data.payments.length > 0 && loanMap.size > 0) {
       summary.transactionsCreated = await this.processTransactions(
@@ -181,7 +181,8 @@ export class ExcelImportService {
 
     for (let i = 0; i < attributeRows.length; i++) {
       const row = attributeRows[i];
-
+      console.log('row', row)
+      console.log('i', i)
       try {
         // Map debtor
         const mappedDebtor = this.dataMapper.mapAttributeRowToDebtor(row);
@@ -196,30 +197,30 @@ export class ExcelImportService {
 
         if (debtor) {
           // Update existing debtor
-          // debtor = await this.prisma.debtor.update({
-          //   where: { id: debtor.id },
-          //   data: {
-          //     firstName: mappedDebtor.firstName || debtor.firstName,
-          //     lastName: mappedDebtor.lastName || debtor.lastName,
-          //     birthdate: mappedDebtor.birthdate || debtor.birthdate,
-          //     mainPhone: mappedDebtor.mainPhone || debtor.mainPhone,
-          //     mainAddress: mappedDebtor.mainAddress || debtor.mainAddress,
-          //   },
-          // });
+          debtor = await this.prisma.debtor.update({
+            where: { id: debtor.id },
+            data: {
+              firstName: mappedDebtor.firstName || debtor.firstName,
+              lastName: mappedDebtor.lastName || debtor.lastName,
+              birthdate: mappedDebtor.birthdate || debtor.birthdate,
+              mainPhone: mappedDebtor.mainPhone || debtor.mainPhone,
+              mainAddress: mappedDebtor.mainAddress || debtor.mainAddress,
+            },
+          });
           summary.debtorsUpdated++;
         } else {
           // Create new debtor
-          // debtor = await this.prisma.debtor.create({
-          //   data: {
-          //     idNumber: mappedDebtor.idNumber,
-          //     firstName: mappedDebtor.firstName,
-          //     lastName: mappedDebtor.lastName,
-          //     birthdate: mappedDebtor.birthdate,
-          //     mainPhone: mappedDebtor.mainPhone,
-          //     mainAddress: mappedDebtor.mainAddress,
-          //     statusId: defaultDebtorStatus.id, 1
-          //   },
-          // });
+          debtor = await this.prisma.debtor.create({
+            data: {
+              idNumber: mappedDebtor.idNumber,
+              firstName: mappedDebtor.firstName,
+              lastName: mappedDebtor.lastName,
+              birthdate: mappedDebtor.birthdate,
+              mainPhone: mappedDebtor.mainPhone,
+              mainAddress: mappedDebtor.mainAddress,
+              statusId: defaultDebtorStatus.id,
+            },
+          });
           summary.debtorsCreated++;
         }
         // console.log(
@@ -247,7 +248,7 @@ export class ExcelImportService {
             where: {
               debtorId: debtor.id,
               OR: [
-                { caseId: Number(mappedLoan.loanNumber) || 0 },
+                { caseId: String(mappedLoan.loanNumber) },
               ],
               deletedAt: null,
             },

@@ -281,7 +281,7 @@ export class AdminService {
 
   async addPayment(data: CreatePaymentDto, userId: number) {
     const loan = await this.prisma.loan.findFirst({
-      where: { caseId: Number(data.caseId) },
+      where: { caseId: String(data.caseId) },
       include: { LoanStatus: true }
     });
 
@@ -935,7 +935,7 @@ export class AdminService {
 
   async addCharge(data: CreateChargeDto, userId: number) {
     const loan = await this.prisma.loan.findFirst({
-      where: { caseId: Number(data.caseId) }
+      where: { caseId: String(data.caseId) }
     });
 
     if (!loan) throw new HttpException('Loan not found', 404)

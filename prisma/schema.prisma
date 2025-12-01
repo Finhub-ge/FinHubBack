@@ -171,7 +171,7 @@ model Loan {
   portfolioId             Int
   groupId                 Int?
   debtorId                Int
-  caseId                  Int?
+  caseId                  String?                   @db.VarChar(255)
   principal               Decimal                   @db.Decimal(12, 2)
   interest                Decimal?                  @default(0.00) @db.Decimal(12, 2)
   penalty                 Decimal?                  @default(0.00) @db.Decimal(12, 2)
@@ -223,6 +223,7 @@ model Loan {
   @@index([portfolioId])
   @@index([statusId])
   @@index([groupId], map: "idx_group")
+  @@index([caseId], map: "caseDtl")
 }
 
 model LoanAttribute {
@@ -1621,6 +1622,162 @@ model Old_db_users {
   RegionalManager Int       @default(0)
   RegionalTeams   String    @default("") @db.VarChar(300)
   Region          Int       @default(0)
+}
+
+model Old_db_attributes {
+  attributeId    Int     @id @default(autoincrement())
+  attributeTitle String? @db.VarChar(150)
+}
+
+model Old_db_clients_contact {
+  id          Int       @id @default(autoincrement())
+  number      String    @db.VarChar(255)
+  LoanID      BigInt    @db.UnsignedBigInt
+  ID_Number   String    @default("0") @db.VarChar(30)
+  Full_Name   String    @default("") @db.VarChar(100)
+  relation_id Int       @default(1)
+  relation    String?   @default("Main") @db.VarChar(255)
+  relation_ge String?   @default("მთავარი") @db.VarChar(100)
+  comment     String?   @db.Text
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+  type_id     Int       @default(1)
+  source      Int       @default(0)
+  Chanel      String    @default("Phone") @db.VarChar(100)
+  cnt         Int       @default(0)
+  User_ID     Int       @default(1)
+  mtest       String?   @db.VarChar(512)
+  Case        String    @default("") @db.VarChar(100)
+
+  @@index([number], map: "NewIndex1")
+  @@index([LoanID], map: "additional_contact_loan_id_index")
+  @@index([mtest], map: "mtest")
+}
+
+model Old_db_collection_status_history {
+  ID                   Int       @id @default(autoincrement())
+  LoanID               Int?      @default(0)
+  Employee_ID          Int?      @default(0)
+  Collection_Status_ID Int       @default(0)
+  Collection_Status    String    @default("") @db.VarChar(100)
+  Comment              String?   @db.VarChar(1024)
+  Created_At           DateTime? @db.DateTime(0)
+  Updated_At           DateTime? @db.DateTime(0)
+  mtest                String    @default("") @db.VarChar(300)
+
+  @@index([Collection_Status_ID], map: "Collection_Status_ID")
+  @@index([Employee_ID], map: "Employee_ID")
+  @@index([LoanID], map: "LoanID")
+  @@index([mtest], map: "mtest")
+}
+
+model Old_db_committees {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  case_id    Int       @db.UnsignedInt
+  status     Int
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  principal  String?   @db.VarChar(255)
+  debt       String?   @db.VarChar(255)
+}
+
+model Old_db_communication_history {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id        BigInt    @db.UnsignedBigInt
+  loan_id        BigInt    @db.UnsignedBigInt
+  type_id        BigInt    @default(1) @db.UnsignedBigInt
+  comment        String?   @db.Text
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+  person_type_id BigInt    @db.UnsignedBigInt
+  result         String    @db.VarChar(255)
+  amount         Float?
+  result_date    DateTime? @db.Date
+  relation       String?   @db.VarChar(255)
+
+  @@index([loan_id], map: "communication_history_loan_id_index")
+  @@index([result], map: "index3")
+}
+
+model Old_db_communication_history_type {
+  id   BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  name String @db.VarChar(255)
+}
+
+model Old_db_communication_person_type {
+  id   BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  name String @db.VarChar(255)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model Old_db_legal_stage_history {
+  id             BigInt    @default(0) @db.UnsignedBigInt
+  loanid         BigInt    @db.UnsignedBigInt
+  case           String    @db.VarChar(100)
+  legal_stage_id Int       @db.UnsignedInt
+  legal_stage    String?   @db.VarChar(100)
+  Employee       String?   @db.VarChar(150)
+  user_id        BigInt    @db.UnsignedBigInt
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+  comment        String?   @db.Text
+
+  @@ignore
+}
+
+model Old_db_litigation_stage_history {
+  ID                  BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  LoanID              BigInt    @db.UnsignedBigInt
+  Litigation_Stage_ID Int       @db.UnsignedInt
+  User_ID             Int       @db.UnsignedInt
+  Created_At          DateTime? @db.Timestamp(0)
+  Updated_At          DateTime? @db.Timestamp(0)
+  Comment             String?   @db.VarChar(1024)
+
+  @@index([LoanID], map: "case_id")
+}
+
+model Old_db_loanAttributes {
+  loanAttributeId           Int     @id @default(autoincrement())
+  loanAttributeLoanId       Int?    @default(0)
+  loanAttributesAttributeId Int?
+  loanAttributesValue       String? @db.VarChar(8000)
+
+  @@index([loanAttributeLoanId], map: "NewIndex1")
+  @@index([loanAttributesAttributeId], map: "NewIndex2")
+}
+
+model Old_db_loans_start {
+  id                  Int       @id @default(autoincrement())
+  loanid              Int?
+  loannumber          String?   @db.VarChar(255)
+  Portfolio_id        Int?      @default(0)
+  Portfolio           String?   @db.VarChar(255)
+  Purchase_Year       String?   @db.VarChar(255)
+  Purchase_Date_Quart String?   @db.VarChar(255)
+  Purchase_Date       DateTime? @db.Date
+  Currency_           String?   @map("Currency#") @db.VarChar(255)
+  Currency            String?   @db.VarChar(255)
+  Principal           Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Interest            Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Penalty             Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Other_Fees          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Total_Debt          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Legal_Charges       Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Paymants            Decimal?  @default(0.00) @db.Decimal(15, 2)
+  Agreement_min       Decimal?  @default(0.00) @db.Decimal(15, 2)
+
+  @@index([loannumber], map: "NewIndex1")
+  @@index([loanid], map: "NewIndex2")
+}
+
+model Old_db_portfolio_lender {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  parent     String?   @db.VarChar(45)
+  lender     String    @db.VarChar(100)
 }
 
 enum PaymentCommitment_type {

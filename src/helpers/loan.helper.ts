@@ -513,11 +513,10 @@ export const copyCurrentValues = (currentRemaining: any) => {
 
 export const buildLoanSearchWhere = (searchValue: string) => {
   const trimmed = searchValue.trim();
-  const isNumeric = /^\d+$/.test(trimmed);
   const orConditions: Prisma.LoanWhereInput[] = [];
 
   // numeric Case ID
-  if (isNumeric) orConditions.push({ caseId: Number(trimmed) });
+  orConditions.push({ caseId: trimmed });
 
   // Debtor personal ID
   orConditions.push({ Debtor: { idNumber: trimmed } });
