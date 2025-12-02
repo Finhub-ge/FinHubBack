@@ -552,6 +552,7 @@ model LoanAssignmentHistory {
   actionDate                                 DateTime                     @default(now()) @db.DateTime(0)
   createdBy                                  Int
   deletedAt                                  DateTime?                    @db.DateTime(0)
+  createdAt                                  DateTime?                    @default(now()) @db.DateTime(0)
   Loan                                       Loan                         @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignmentHistory_1")
   User_LoanAssignmentHistory_userIdToUser    User                         @relation("LoanAssignmentHistory_userIdToUser", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignmentHistory_2")
   Role                                       Role                         @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignmentHistory_3")
@@ -1795,6 +1796,35 @@ model Old_db_users_statuses {
   statuses_id Int?
   statusname  String  @db.VarChar(255)
   comment     String? @db.VarChar(255)
+}
+
+model Old_db_past_payments {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  case_id      Int       @db.UnsignedInt
+  payment_date DateTime? @db.Date
+  payment      Float?    @db.Float
+  principal    Float?    @db.Float
+  interest     Float?    @db.Float
+  penalty      Float?    @db.Float
+  other        Float?    @db.Float
+  currency     String?   @db.VarChar(45)
+  portfolio    Int?
+  buy          Int       @default(0)
+  note         String?   @db.VarChar(100)
+
+  @@index([case_id], map: "index2")
+}
+
+model Old_db_user_loan_history {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt    @db.UnsignedBigInt
+  loan_id    BigInt    @db.UnsignedBigInt
+  status_id  BigInt    @db.UnsignedBigInt
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  comment    String?   @db.Text
+
+  @@index([loan_id], map: "user_loan_history_loan_id_index")
 }
 
 enum PaymentCommitment_type {

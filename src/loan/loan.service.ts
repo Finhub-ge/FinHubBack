@@ -425,11 +425,14 @@ export class LoanService {
         LoanAssignmentHistory: {
           where: { deletedAt: null },
           select: {
+            createdAt: true,
             User_LoanAssignmentHistory_userIdToUser: { select: { id: true, firstName: true, lastName: true } },
             User_LoanAssignmentHistory_createdByToUser: { select: { id: true, firstName: true, lastName: true } },
             Role: { select: { name: true } },
+            action: true,
           }
-        }
+        },
+        PastPayments: true
       }
     });
 
@@ -471,13 +474,31 @@ export class LoanService {
 
     const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(publicId);
 
+    const statusHistory = loan.LoanStatusHistory.map(item => ({
+      status: item.LoanStatusNewStatus?.name,
+      date: item.createdAt,
+      comment: item.notes,
+      user: item.User,
+    }));
+
+    const assignmentHistory = loan.LoanAssignmentHistory.map(item => ({
+      status: 'Assignment Change',
+      date: item.createdAt,
+      comment: `Assigned to ${item.User_LoanAssignmentHistory_userIdToUser?.firstName} ${item.User_LoanAssignmentHistory_userIdToUser?.lastName}`,
+      user: item.User_LoanAssignmentHistory_createdByToUser,
+    }));
+
+    const caseHistory = [...statusHistory, ...assignmentHistory]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     return {
       ...loanData,
       comments,
       lawyerComments,
       activeCommitments,
       initialClaimBreakdown,
-      totalPayments
+      totalPayments,
+      caseHistory,
     };
   }
 
