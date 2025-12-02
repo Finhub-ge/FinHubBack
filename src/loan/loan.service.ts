@@ -430,6 +430,7 @@ export class LoanService {
             User_LoanAssignmentHistory_createdByToUser: { select: { id: true, firstName: true, lastName: true } },
             Role: { select: { name: true } },
             action: true,
+            comment: true,
           }
         },
         PastPayments: true
@@ -482,9 +483,9 @@ export class LoanService {
     }));
 
     const assignmentHistory = loan.LoanAssignmentHistory.map(item => ({
-      status: 'Assignment Change',
+      status: 'Change User',
       date: item.createdAt,
-      comment: `Assigned to ${item.User_LoanAssignmentHistory_userIdToUser?.firstName} ${item.User_LoanAssignmentHistory_userIdToUser?.lastName}`,
+      comment: item.comment,
       user: item.User_LoanAssignmentHistory_createdByToUser,
     }));
 
