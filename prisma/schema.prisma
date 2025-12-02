@@ -550,6 +550,7 @@ model LoanAssignmentHistory {
   roleId                                     Int
   action                                     LoanAssignmentHistory_action
   actionDate                                 DateTime                     @default(now()) @db.DateTime(0)
+  comment                                    String?                      @db.VarChar(1000)
   createdBy                                  Int
   deletedAt                                  DateTime?                    @db.DateTime(0)
   createdAt                                  DateTime?                    @default(now()) @db.DateTime(0)
