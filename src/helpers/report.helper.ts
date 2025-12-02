@@ -614,3 +614,27 @@ export const calculateCollectorMetrics = (
   };
 };
 
+export const determinePlanDataSource = (years: number[] | undefined, currentYear: number) => {
+  let oldYears: number[] = [];
+  let newYears: number[] = [];
+  let defaultIsNew = false;
+
+  // --- YEAR MISSING ---
+  if (!years || years.length === 0) {
+    if (currentYear < 2026) {
+      // Before migration → use OLD
+      defaultIsNew = false;
+    } else {
+      // After migration → use NEW
+      defaultIsNew = true;
+    }
+    return { oldYears: [], newYears: [], defaultIsNew };
+  }
+
+  // --- YEAR PROVIDED ---
+  oldYears = years.filter(y => y < 2026);
+  newYears = years.filter(y => y >= 2026);
+
+  return { oldYears, newYears, defaultIsNew };
+}
+

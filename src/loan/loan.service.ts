@@ -422,6 +422,14 @@ export class LoanService {
           where: { deletedAt: null, status: true },
           orderBy: { deadline: 'desc' }
         },
+        LoanAssignmentHistory: {
+          where: { deletedAt: null },
+          select: {
+            User_LoanAssignmentHistory_userIdToUser: { select: { id: true, firstName: true, lastName: true } },
+            User_LoanAssignmentHistory_createdByToUser: { select: { id: true, firstName: true, lastName: true } },
+            Role: { select: { name: true } },
+          }
+        }
       }
     });
 

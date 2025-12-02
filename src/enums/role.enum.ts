@@ -10,4 +10,11 @@ export enum Role {
   EXECUTION_LAWYER = 'execution_lawyer',
   ACCOUNTANT = 'accountant',
   AML_OFFICER = 'aml_officer',
+  COURIER = 'courier',
+  ANALYTICS = 'analytics',
+  HR = 'hr',
+  GENERAL_MANAGER = 'general_manager',
+  PERSONAL_DATA_PROTECTION_OFFICER = 'personal_data_protection_officer',
+  SUPER_LAWYER = 'super_lawyer',
+  OPERATIONAL_MANAGER = 'operational_manager',
 }
