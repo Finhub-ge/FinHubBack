@@ -518,4 +518,24 @@ export class UserService {
 
     return await getUserExport(users.data, columns, 'Users');
   }
+
+  async hashPassword(user: User) {
+    const users = await this.prisma.user.findMany({
+      where: {
+        hash: {
+          not: { startsWith: "$argon2" }, // skip already hashed
+        },
+      },
+    });
+    for (const user of users) {
+      const hash = await argon.hash(user.hash, {});
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { hash: hash }
+      });
+    }
+    return {
+      message: `hashed ${users.length} users`
+    }
+  }
 }

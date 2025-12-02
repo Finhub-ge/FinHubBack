@@ -102,4 +102,11 @@ export class UserController {
   getPayments(@GetUser() user: User) {
     return this.userService.getReminders(user, { type: 'payments' })
   }
+
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @Roles(Role.ADMIN)
+  // @Get('hash/Password')
+  // hashPassword(@GetUser() user: User) {
+  //   return this.userService.hashPassword(user)
+  // }
 }

@@ -4,7 +4,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { statusNameMap } from 'src/enums/loanStatus.enum';
-import { buildDataMaps, calculateCollectorMetrics, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory } from 'src/helpers/report.helper';
+import { buildDataMaps, calculateCollectorMetrics, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory } from 'src/helpers/report.helper';
+import { getYear } from 'src/helpers/date.helper';
 
 @Injectable()
 export class DashboardService {
@@ -13,69 +14,74 @@ export class DashboardService {
     private readonly paginationService: PaginationService,
   ) { }
   async getPlanChart(getPlanReportDto: GetPlanReportDto) {
+    const currentYear = new Date().getFullYear();
     const { collectorId, year } = getPlanReportDto;
 
-    // Build Prisma where clause
-    const where: any = {};
-    if (year && year.length > 0) where.year = { in: year };
-    // if (month && month.length > 0) where.month = { in: month };
+    const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(year, currentYear);
 
-    const targetWhere: any = { ...where };
-    if (collectorId && collectorId.length > 0) targetWhere.collectorId = { in: collectorId };
+    // Helper: initialize 12-month arrays
+    const initMonthlyArrays = () => ({ targetAmounts: Array(12).fill(0), collectedAmounts: Array(12).fill(0) });
 
-    // Fetch targets matching filters
-    const targets = await this.prisma.collectorsMonthlyTarget.findMany({
-      where: targetWhere,
-      select: {
-        targetAmount: true,
-        month: true,
-        year: true,
-        collectorId: true,
-      },
-    });
-
-    const collectionWhere: any = {
-      ...where,
-      roleId: 7,
+    // Helper: sum old plan collection
+    const sumOldData = (data: any[], targetAmounts: number[], collectedAmounts: number[]) => {
+      data.forEach(t => {
+        targetAmounts[t.PlanMonth - 1] += Number(t.PlanSumm);
+        collectedAmounts[t.PlanMonth - 1] += Number(t.PlanCollection);
+      });
     };
-    if (collectorId?.length) collectionWhere.userId = { in: collectorId };
 
-    // Fetch actual collections / transactions
-    const collections = await this.prisma.transactionUserAssignments.findMany({
-      where: collectionWhere,
-      select: {
-        amount: true,
-        year: true,
-        month: true,
-        userId: true,
-        Transaction: {
-          select: {
-            paymentDate: true,
-          },
-        },
-      },
-    });
-
-    // Initialize 12-month arrays
-    const targetAmounts = Array(12).fill(0);
-    const collectedAmounts = Array(12).fill(0); // for now all zeros
-    // const userIds = new Set<number>();
-
-    // Sum targets
-    targets.forEach(t => {
-      targetAmounts[t.month - 1] += Number(t.targetAmount);
-    });
-
-    // Sum collections per month
-    collections.forEach(c => {
-      collectedAmounts[c.Transaction?.paymentDate?.getMonth()] += Number(c.amount);
-    });
-
-    return {
-      // userIds: Array.from(userIds),
-      targetAmounts,
-      collectedAmounts,
+    // Helper: sum new plan data
+    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[]) => {
+      targets.forEach(t => targetAmounts[t.month - 1] += Number(t.targetAmount));
+      collections.forEach(c => {
+        const m = c.Transaction?.paymentDate?.getMonth();
+        if (m !== undefined && m >= 0) collectedAmounts[m] += Number(c.amount);
+      });
     };
+
+    // Initialize arrays
+    const { targetAmounts, collectedAmounts } = initMonthlyArrays();
+
+    // --- OLD DATA ---
+    if (oldYears.length > 0 || (!year && currentYear < 2026)) {
+      const where: any = {};
+      if (year?.length) where.PlanYear = { in: year };
+      const targetWhere: any = { ...where };
+      if (collectorId?.length) targetWhere.Collector_ID = { in: collectorId };
+
+      const oldPlanCollection = await this.prisma.old_db_plan_collection.findMany({
+        where: targetWhere,
+        select: { PlanYear: true, Collector_ID: true, PlanMonth: true, PlanSumm: true, PlanCollection: true },
+      });
+
+      sumOldData(oldPlanCollection, targetAmounts, collectedAmounts);
+    }
+
+    // --- NEW DATA ---
+    if (newYears.length > 0 || defaultIsNew) {
+      const where: any = {};
+      if (year?.length) where.year = { in: year };
+
+      const targetWhere: any = { ...where };
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
+
+      const targets = await this.prisma.collectorsMonthlyTarget.findMany({
+        where: targetWhere,
+        select: { targetAmount: true, month: true, year: true, collectorId: true },
+      });
+
+      const collectionWhere: any = { ...where, roleId: 7 };
+      if (collectorId?.length) collectionWhere.userId = { in: collectorId };
+
+      const collections = await this.prisma.transactionUserAssignments.findMany({
+        where: collectionWhere,
+        select: { amount: true, year: true, month: true, userId: true, Transaction: { select: { paymentDate: true } } },
+      });
+
+      sumNewData(targets, collections, targetAmounts, collectedAmounts);
+    }
+
+    return { targetAmounts, collectedAmounts };
   }
 
   async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto) {
