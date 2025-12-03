@@ -1122,7 +1122,7 @@ export class AdminService {
       const searchTerm = search;
 
       where.OR = [
-        { Loan: { caseId: Number(searchTerm) } },
+        { Loan: { caseId: searchTerm } },
         {
           Loan: {
             LoanAssignment: {
