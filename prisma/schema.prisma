@@ -1828,6 +1828,37 @@ model Old_db_user_loan_history {
   @@index([loan_id], map: "user_loan_history_loan_id_index")
 }
 
+model Old_db_charges {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  loan_id      BigInt    @db.UnsignedBigInt
+  amount       Float
+  payment_date DateTime? @db.Date
+  comment      String?   @db.Text
+  created_at   DateTime? @db.Timestamp(0)
+  updated_at   DateTime? @db.Timestamp(0)
+  portfolio_id BigInt?   @db.UnsignedBigInt
+  channel_id   BigInt    @db.UnsignedBigInt
+  user_id      BigInt?   @db.UnsignedBigInt
+  currency     String    @default("GEL") @db.VarChar(15)
+  employee_id  Int?      @default(0)
+  charge_type  Int       @default(0)
+  Collector    String?   @db.VarChar(100)
+  Lawyer       String?   @db.VarChar(100)
+
+  @@index([employee_id], map: "index4")
+  @@index([loan_id], map: "payment_loan_id_index")
+  @@index([payment_date], map: "payment_payment_date_index")
+}
+
+model Old_db_collateral_history {
+  ID                   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  LoanID               Int       @db.UnsignedInt
+  User_ID              Int       @default(1)
+  Collateral_Status_ID Int       @db.UnsignedInt
+  comment              String    @default("") @db.VarChar(255)
+  Created_At           DateTime? @db.Timestamp(0)
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
