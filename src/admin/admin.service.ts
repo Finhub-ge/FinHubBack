@@ -1097,6 +1097,11 @@ export class AdminService {
             }
           }
         }
+      },
+      TransactionChannels: {
+        select: {
+          name: true
+        }
       }
     }
     if (options?.isReport) {
