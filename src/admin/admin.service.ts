@@ -935,7 +935,29 @@ export class AdminService {
 
   async addCharge(data: CreateChargeDto, userId: number) {
     const loan = await this.prisma.loan.findFirst({
-      where: { caseId: String(data.caseId) }
+      where: { caseId: String(data.caseId) },
+      include: {
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            unassignedAt: null
+          },
+          select: {
+            User: {
+              select: {
+                id: true,
+              }
+            },
+            Role: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!loan) throw new HttpException('Loan not found', 404)
@@ -950,6 +972,14 @@ export class AdminService {
       where: { loanId: loan.id, deletedAt: null }
     });
 
+    // Find collector and lawyer from assignments
+    const collectorAssignment = loan.LoanAssignment.find(
+      assignment => assignment.Role.name === 'collector'
+    );
+    const lawyerAssignment = loan.LoanAssignment.find(
+      assignment => assignment.Role.name === 'lawyer'
+    );
+
     await this.prisma.$transaction(async (tx) => {
       const charge = await tx.charges.create({
         data: {
@@ -962,6 +992,8 @@ export class AdminService {
           userId: userId,
           channelId: data.channel,
           chargeDate: data.chargeDate,
+          collectorId: collectorAssignment?.User.id,
+          lawyerId: lawyerAssignment?.User.id,
         }
       });
 
@@ -1084,6 +1116,18 @@ export class AdminService {
         }
       },
       User: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      },
+      User_Charges_collectorIdToUser: {
+        select: {
+          firstName: true,
+          lastName: true
+        }
+      },
+      User_Charges_lawyerIdToUser: {
         select: {
           firstName: true,
           lastName: true
