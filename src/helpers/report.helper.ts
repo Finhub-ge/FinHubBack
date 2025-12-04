@@ -637,4 +637,43 @@ export const determinePlanDataSource = (years: number[] | undefined, currentYear
 
   return { oldYears, newYears, defaultIsNew };
 }
-
+export const mapOldPlanReport = (data: any[]) => {
+  return data.map(item => {
+    return {
+      collectorId: item.Collector_ID,
+      collector: item.Collector,
+      year: item.PlanYear,
+      month: item.PlanMonth,
+      openingPrincipal: Number(item.Principal),
+      monthlyPlan: Number(item.PlanSumm),
+      adjustedPlan: Number(item.PlanSumm), // Assuming same as PlanSumm
+      collectedAmount: Number(item.PlanCollection),
+      collectionRatePercent: Number(item.Percent),
+      paidLoanCount: item.PaymentsCount,
+      paymentSuccessRate: Number(item.PaymentsRate),
+      newLoanCount: item.New,
+      communicatedCount: item.Communication,
+      unreachableCount: item.Unreachable,
+      agreementCount: item.Agreement,
+      agreementCancelledCount: item.AgreementCancel,
+      refuseToPayCount: item.RefusedToPay,
+      promiseToPayCount: item.PromisedToPay,
+      totalLoanCount: item.CaseCount,
+      callCount: item.Calls,
+      totalCallDurationSec: item.DurationTime, // Already formatted as "HH:MM:SS"
+      smsCount: item.SMS || 0,
+      markCount: item.Marks,
+      commentCount: item.Comment,
+      committeeRequestCount: item.Committee,
+      inactiveOver40DaysCount: item.Day40,
+      debtorStatusCount: item.Clients,
+      totalActivities: item.Total,
+      totalLegalCharges: Number(item.LegalCharges),
+      totalOtherCharges: 0,
+      courtCaseCount: item.CourtCaseCount,
+      courtPrincipalSum: Number(item.CourtCaseAmount),
+      executionCaseCount: item.ExecCaseCount,
+      executionPrincipalSum: Number(item.ExecCaseAmount),
+    };
+  });
+};

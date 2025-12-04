@@ -1513,7 +1513,7 @@ model Old_db_plan_collection {
   PaymentsRate    Decimal   @default(0.00) @db.Decimal(15, 2)
   Calls           Int       @default(0)
   Duration        Int       @default(0)
-  DurationTime    DateTime  @default(dbgenerated("'00:00:00'")) @db.Time(0)
+  DurationTime    String    @default("00:00:00") @db.VarChar(100)
   SMS             Int?      @default(0)
   Marks           Int       @default(0)
   Day40           Int       @default(0)

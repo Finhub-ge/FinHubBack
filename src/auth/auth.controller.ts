@@ -18,18 +18,18 @@ import { User } from "@prisma/client";
 export class AuthController {
   constructor(private readonly authService: AuthService) { }
 
-  @Public() // secure later with a setup token or IP restriction.
-  @Post('signupSuperAdmin')
-  signupSuperAdmin(@Body() dto: SignUpSuperAdminDto) {
-    return this.authService.signupSuperAdmin(dto);
-  }
+  // @Public() // secure later with a setup token or IP restriction.
+  // @Post('signupSuperAdmin')
+  // signupSuperAdmin(@Body() dto: SignUpSuperAdminDto) {
+  //   return this.authService.signupSuperAdmin(dto);
+  // }
 
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @Post('signinSuperAdmin')
-  signinAdmin(@Body() dto: AuthDto) {
-    return this.authService.signinSuperAdmin(dto);
-  }
+  // @Public()
+  // @HttpCode(HttpStatus.OK)
+  // @Post('signinSuperAdmin')
+  // signinAdmin(@Body() dto: AuthDto) {
+  //   return this.authService.signinSuperAdmin(dto);
+  // }
 
   @Public()
   @HttpCode(HttpStatus.OK)
