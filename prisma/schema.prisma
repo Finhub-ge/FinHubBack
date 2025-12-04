@@ -432,6 +432,8 @@ model User {
   updatedAt                                                       DateTime                     @default(now()) @db.DateTime(0)
   deletedAt                                                       DateTime?                    @db.DateTime(0)
   Charges                                                         Charges[]
+  Charges_Charges_collectorIdToUser                               Charges[]                    @relation("Charges_collectorIdToUser")
+  Charges_Charges_lawyerIdToUser                                  Charges[]                    @relation("Charges_lawyerIdToUser")
   CollectorMonthlyReport_CollectorMonthlyReport_generatedByToUser CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_generatedByToUser")
   CollectorMonthlyReport_CollectorMonthlyReport_lockedByToUser    CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_lockedByToUser")
   CollectorMonthlyReport_CollectorMonthlyReport_collectorIdToUser CollectorMonthlyReport[]     @relation("CollectorMonthlyReport_collectorIdToUser")
@@ -757,28 +759,32 @@ model ChargeType {
 }
 
 model Charges {
-  id                          Int                         @id @default(autoincrement())
-  publicId                    String                      @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
-  loanId                      Int?
-  amount                      Decimal?                    @db.Decimal(12, 2)
-  paidAmount                  Decimal                     @default(0.00) @db.Decimal(12, 2)
-  status                      Charges_status              @default(UNPAID)
-  userId                      Int?
-  chargeDate                  DateTime?                   @db.Date
-  paymentDate                 DateTime?                   @db.Date
-  transactionChannelAccountId Int?
-  channelId                   Int?
-  chargeTypeId                Int
-  currency                    String?                     @default("GEL") @db.VarChar(45)
-  comment                     String                      @db.VarChar(500)
-  createdAt                   DateTime                    @default(now()) @db.DateTime(0)
-  updatedAt                   DateTime                    @default(now()) @db.DateTime(0)
-  deletedAt                   DateTime?                   @db.DateTime(0)
-  Loan                        Loan?                       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_1")
-  User                        User?                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_2")
-  TransactionChannelAccounts  TransactionChannelAccounts? @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_3")
-  ChargeType                  ChargeType                  @relation(fields: [chargeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_4")
-  TransactionChannels         TransactionChannels?        @relation(fields: [channelId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_5")
+  id                             Int                         @id @default(autoincrement())
+  publicId                       String                      @unique(map: "publicId_UNIQUE") @default(dbgenerated("(uuid())")) @db.Char(36)
+  loanId                         Int?
+  amount                         Decimal?                    @db.Decimal(12, 2)
+  paidAmount                     Decimal                     @default(0.00) @db.Decimal(12, 2)
+  status                         Charges_status              @default(UNPAID)
+  userId                         Int?
+  collectorId                    Int?
+  lawyerId                       Int?
+  chargeDate                     DateTime?                   @db.Date
+  paymentDate                    DateTime?                   @db.Date
+  transactionChannelAccountId    Int?
+  channelId                      Int?
+  chargeTypeId                   Int
+  currency                       String?                     @default("GEL") @db.VarChar(45)
+  comment                        String                      @db.VarChar(500)
+  createdAt                      DateTime                    @default(now()) @db.DateTime(0)
+  updatedAt                      DateTime                    @default(now()) @db.DateTime(0)
+  deletedAt                      DateTime?                   @db.DateTime(0)
+  Loan                           Loan?                       @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_1")
+  User                           User?                       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_2")
+  TransactionChannelAccounts     TransactionChannelAccounts? @relation(fields: [transactionChannelAccountId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_3")
+  ChargeType                     ChargeType                  @relation(fields: [chargeTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_4")
+  TransactionChannels            TransactionChannels?        @relation(fields: [channelId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_5")
+  User_Charges_collectorIdToUser User?                       @relation("Charges_collectorIdToUser", fields: [collectorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_6")
+  User_Charges_lawyerIdToUser    User?                       @relation("Charges_lawyerIdToUser", fields: [lawyerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Charges_7")
 
   @@index([loanId], map: "fk_Charges_1_idx")
   @@index([userId], map: "fk_Charges_2_idx")
@@ -786,6 +792,8 @@ model Charges {
   @@index([chargeTypeId], map: "fk_Charges_4_idx")
   @@index([deletedAt], map: "idx_deletedAt")
   @@index([channelId], map: "fk_Charges_5_idx")
+  @@index([collectorId], map: "fk_Charges_6")
+  @@index([lawyerId], map: "fk_Charges_7")
 }
 
 model PastPayments {
