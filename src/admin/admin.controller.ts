@@ -65,7 +65,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Get('transactions/get')
   async getTransactionList(@Query() getPaymentDto: GetPaymentWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentDto);
@@ -219,7 +219,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Get('getCharges')
   async getCharges(@Query() getChargeDto: GetChargeWithPaginationDto) {
     return await this.adminService.getCharges(getChargeDto);
@@ -240,7 +240,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Get('file/:id')
   async downloadFile(@Param('id') id: number) {
     return await this.adminService.downloadFile(id)
@@ -316,14 +316,14 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Get('report/payments')
   async getPaymentsReport(@Query() getPaymentReportDto: GetPaymentReportWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentReportDto, { isReport: true });
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Get('report/charges')
   async getChargesReport(@Query() getChargeReportDto: GetChargeReportWithPaginationDto) {
     return await this.adminService.getCharges(getChargeReportDto, { isReport: true });
@@ -344,7 +344,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @Get('future-payments')
   async getFuturePayments(@Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
     return await this.adminService.getFuturePayments(getFuturePaymentsDto);
