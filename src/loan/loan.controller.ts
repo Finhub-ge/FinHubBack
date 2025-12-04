@@ -45,7 +45,7 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  // @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   async exportLoans(@Query() filterDto: GetLoansFilterDto) {
     const excelBuffer = await this.loanService.exportLoans(filterDto);
 

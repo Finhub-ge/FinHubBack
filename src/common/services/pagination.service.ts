@@ -94,11 +94,11 @@ export class PaginationService {
       throw new BadRequestException('Page number must be greater than 0');
     }
 
-    if (limit < 1 || limit > this.MAX_LIMIT) {
-      throw new BadRequestException(
-        `Limit must be between 1 and ${this.MAX_LIMIT}`,
-      );
-    }
+    // if (limit < 1 || limit > this.MAX_LIMIT) {
+    //   throw new BadRequestException(
+    //     `Limit must be between 1 and ${this.MAX_LIMIT}`,
+    //   );
+    // }
 
     // Check if page exceeds total pages
     if (total !== undefined && total > 0) {
