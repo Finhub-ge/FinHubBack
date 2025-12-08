@@ -304,10 +304,14 @@ export class UserService {
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
-        ...(role && role.length > 0
-          ? { User: { Role: { name: { in: role } } } }
-          : {}
-        ),
+        User: {
+          deletedAt: null,
+          isActive: true,
+          ...(role && role.length > 0
+            ? { Role: { name: { in: role } } }
+            : {}
+          )
+        }
       },
       include: {
         User: {
@@ -366,7 +370,7 @@ export class UserService {
           ...team,
           members: team.members.filter(m => m.role === 'collector'),
         }))
-        .filter(team => team.members.length > 0);
+      // .filter(team => team.members.length > 0);
     }
 
     return result

@@ -171,7 +171,8 @@ export class AdminService {
   }
 
   async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, options?: { isReport?: boolean }) {
-    const { page, limit, caseId } = getPaymentDto;
+    const { page, limit, search } = getPaymentDto;
+
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const includes = {
@@ -221,7 +222,39 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (caseId) loanFilter.caseId = caseId;
+    if (search?.trim()) {
+      const term = search.trim();
+      const fullSearch: any[] = [];
+
+      fullSearch.push({ Loan: { is: { caseId: term } } });
+
+      fullSearch.push({
+        Loan: {
+          is: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: term } },
+                { lastName: { contains: term } },
+                { idNumber: { contains: term } },
+              ],
+            },
+          },
+        },
+      });
+
+      fullSearch.push({
+        User: {
+          is: {
+            OR: [
+              { firstName: { contains: term } },
+              { lastName: { contains: term } },
+            ].filter(Boolean),
+          },
+        },
+      });
+
+      where.OR = fullSearch;
+    }
 
     if (options?.isReport) {
       const filters = getPaymentDto as GetPaymentReportWithPaginationDto;
@@ -256,7 +289,7 @@ export class AdminService {
       }
     }
 
-    if (Object.keys(loanFilter).length) {
+    if (Object.keys(loanFilter).length > 0) {
       where.Loan = { is: loanFilter };
     }
 

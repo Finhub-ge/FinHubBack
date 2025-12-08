@@ -102,49 +102,61 @@ export class PermissionsHelper {
         const teamLead = isTeamLead(user);
         const teamId = activeTeamMembership?.teamId;
 
+        let scopeCondition: any;
+
         if (user.role_name === Role.COLLECTOR && teamLead && teamId) {
           // Team lead: see all loans assigned to team members
-          return {
-            ...where,
+          scopeCondition = {
             LoanAssignment: {
               some: {
                 isActive: true,
                 User: {
                   TeamMembership: {
                     some: {
-                      teamId: teamId, // Team lead's team
-                      deletedAt: null
-                    }
-                  }
-                }
-              }
-            }
+                      teamId: teamId,
+                      deletedAt: null,
+                    },
+                  },
+                },
+              },
+            },
           };
         } else if (user.role_name === Role.COLLECTOR) {
-          // Regular collector: see only their own loans
-          return {
-            ...where,
+          // Regular collector
+          scopeCondition = {
             LoanAssignment: {
               some: {
                 isActive: true,
-                User: { id: user.id }
-              }
-            }
-          };
-        } else {
-          // Other roles: see their assigned loans
-          return {
-            ...where,
-            LoanAssignment: {
-              some: {
-                isActive: true,
-                User: { id: user.id }
-              }
-            }
+                User: { id: user.id },
+              },
+            },
           };
         }
-      default:
-        return where;
+        else {
+          // Other roles (non-admin)
+          scopeCondition = {
+            LoanAssignment: {
+              some: {
+                isActive: true,
+                User: { id: user.id },
+              },
+            },
+          };
+        }
+        return this.mergeWhereWithCondition(where, scopeCondition);
     }
+  }
+
+  private mergeWhereWithCondition(where: any, newCond: any): any {
+    // If where is empty, return newCond directly (keeps shape simple).
+    if (!where || Object.keys(where).length === 0) return newCond;
+
+    // If `where` already has AND, append newCond.
+    if (Array.isArray(where.AND)) {
+      return { ...where, AND: [...where.AND, newCond] };
+    }
+
+    // Otherwise create an AND combining the original where and newCond.
+    return { AND: [where, newCond] };
   }
 }

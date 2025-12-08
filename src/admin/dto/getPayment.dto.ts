@@ -7,11 +7,11 @@ export class GetPaymentDto {
   @ApiProperty({
     description: 'Search by case ID',
     required: false,
-    type: Number
+    type: String
   })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  @Transform(({ value }) => value ? value.trim() : undefined)
+  search?: string;
 }
 
 // Combine with pagination

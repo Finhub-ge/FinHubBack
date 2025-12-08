@@ -89,18 +89,18 @@ export class LoanController {
     return this.loanService.editDebtorContact(publicId, contactId, createContactDto, user.id);
   }
 
-  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
-  @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
-  @UseGuards(JwtGuard, RolesGuard)
-  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
-  @Delete(':publicId/debtor/contacts/:contactId')
-  deleteDebtorContact(
-    @GetUser() user: User,
-    @Param('publicId', ParseUUIDPipe) publicId: string,
-    @Param('contactId', ParseIntPipe) contactId: number
-  ) {
-    return this.loanService.deleteDebtorContact(publicId, contactId, user.id);
-  }
+  // @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  // @ApiParam({ name: 'contactId', type: 'string', format: 'int' })
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  // @Delete(':publicId/debtor/contacts/:contactId')
+  // deleteDebtorContact(
+  //   @GetUser() user: User,
+  //   @Param('publicId', ParseUUIDPipe) publicId: string,
+  //   @Param('contactId', ParseIntPipe) contactId: number
+  // ) {
+  //   return this.loanService.deleteDebtorContact(publicId, contactId, user.id);
+  // }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
