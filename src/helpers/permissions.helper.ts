@@ -30,18 +30,7 @@ export class PermissionsHelper {
   private getScopedModel(model: string, user: AuthenticatedRequest['user']) {
     return {
       findMany: async (args: any) => {
-        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
-        // Special logic for collectors with loans > 40 actDays
-        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
-          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
-
-          if (highActDaysLoanIds.length > 0) {
-            scopedWhere = {
-              ...scopedWhere,
-              id: { in: highActDaysLoanIds }
-            };
-          }
-        }
+        const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         return this.prisma[model].findMany({
           ...args,
@@ -50,17 +39,7 @@ export class PermissionsHelper {
       },
 
       findFirst: async (args: any) => {
-        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
-        // Special logic for collectors with loans > 40 actDays
-        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
-          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
-          if (highActDaysLoanIds.length > 0) {
-            scopedWhere = {
-              ...scopedWhere,
-              id: { in: highActDaysLoanIds }
-            };
-          }
-        }
+        const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         return this.prisma[model].findFirst({
           ...args,
@@ -69,19 +48,7 @@ export class PermissionsHelper {
       },
 
       count: async (args: any) => {
-        let scopedWhere = this.addUserScope(args?.where || {}, user, model);
-
-        // Special logic for collectors with loans > 40 actDays
-        if (model === 'loan' && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
-          const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
-
-          if (highActDaysLoanIds.length > 0) {
-            scopedWhere = {
-              ...scopedWhere,
-              id: { in: highActDaysLoanIds }
-            };
-          }
-        }
+        const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         return this.prisma[model].count({
           ...args,
@@ -158,5 +125,50 @@ export class PermissionsHelper {
 
     // Otherwise create an AND combining the original where and newCond.
     return { AND: [where, newCond] };
+  }
+
+  private isSearchMode(args: any): boolean {
+    const where = args?.where;
+
+    if (!where) return false;
+
+    // OR block indicates search (based on your system)
+    if (Array.isArray(where.AND)) {
+      for (const condition of where.AND) {
+        if (Array.isArray(condition.OR) && condition.OR.length > 0) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private async buildScopedWhere(
+    model: string,
+    user: AuthenticatedRequest["user"],
+    args: any
+  ) {
+    let scopedWhere = args?.where || {};
+    const searchMode = this.isSearchMode(args);
+
+    // Skip user scoping while searching
+    if (!searchMode) {
+      scopedWhere = this.addUserScope(scopedWhere, user, model);
+    }
+
+    // Special collector rule: loans > 40 actDays
+    if (model === "loan" && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
+      const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
+
+      if (highActDaysLoanIds.length > 0) {
+        scopedWhere = {
+          ...scopedWhere,
+          id: { in: highActDaysLoanIds },
+        };
+      }
+    }
+
+    return scopedWhere;
   }
 }

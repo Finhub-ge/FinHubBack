@@ -300,7 +300,8 @@ export class UserService {
 
   async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto) {
     const { role } = filters;
-    // Get all team memberships with their users and team info
+
+    // 1. Get all team memberships
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
@@ -326,11 +327,11 @@ export class UserService {
       },
     });
 
-    // Group by teamId
+    // 2. Group into teams
     const teamsMap = new Map<number, any>();
 
-    for (const membership of memberships) {
-      const { teamId, teamRole, User, Team } = membership;
+    for (const m of memberships) {
+      const { teamId, teamRole, User, Team } = m;
 
       if (!teamsMap.has(teamId)) {
         teamsMap.set(teamId, {
@@ -349,7 +350,7 @@ export class UserService {
         team.teamLeaderId = User.id;
         team.teamLeader = `${User.firstName} ${User.lastName}`;
         team.teamLeaderRole = User.Role?.name;
-        team.teamName = Team.name;
+        team.teamName = Team?.name;
       } else {
         team.members.push({
           id: User.id,
@@ -360,20 +361,59 @@ export class UserService {
       }
     }
 
-    // Convert to array and filter out teams without leaders (optional)
+    // 3. Convert map to array, only teams with a leader
     let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
 
-    // ✅ If role = 'collector', return only those teams where members include collectors
+    // 4. Filter members if role=collector
     if (role && role.includes(Role.COLLECTOR as any)) {
-      result = result
-        .map(team => ({
-          ...team,
-          members: team.members.filter(m => m.role === 'collector'),
-        }))
-      // .filter(team => team.members.length > 0);
+      result = result.map(team => ({
+        ...team,
+        members: team.members.filter(m => m.role === 'collector'),
+      }));
     }
 
-    return result
+    // --------------------------------------------------------
+    // 5. Add "Unassigned" collectors (or the provided role)
+    // --------------------------------------------------------
+    let unassignedUsers = [];
+
+    if (role && role.length > 0) {
+      const assignedUserIds = new Set(memberships.map(m => m.userId));
+
+      unassignedUsers = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          isActive: true,
+          Role: { name: { in: role } },
+          id: { notIn: Array.from(assignedUserIds) }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          Role: true
+        }
+      });
+    }
+
+    // 6. Add virtual "Unassigned" team
+    if (unassignedUsers.length > 0) {
+      result.push(
+        // teamId: null,
+        // teamName: "Unassigned",
+        // teamLeaderId: null,
+        // teamLeader: null,
+        // teamLeaderRole: null,
+        unassignedUsers.map(u => ({
+          id: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          role: u.Role?.name,
+        })),
+      );
+    }
+
+    return result;
   }
 
   async getTasks(user: User) {
