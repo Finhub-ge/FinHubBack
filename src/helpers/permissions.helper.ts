@@ -27,6 +27,16 @@ export class PermissionsHelper {
     return this.getScopedModel('loan', user);
   }
 
+  get committee() {
+    const user = this.request.user;
+    return this.getScopedModel('committee', user);
+  }
+
+  get futurePayment() {
+    const user = this.request.user;
+    return this.getScopedModel('paymentCommitment', user);
+  }
+
   private getScopedModel(model: string, user: AuthenticatedRequest['user']) {
     return {
       findMany: async (args: any) => {
@@ -63,54 +73,42 @@ export class PermissionsHelper {
       return where;
     }
 
+    const scopeCondition = this.buildScopeCondition(user, model);
+    return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
+  }
+
+  private buildScopeCondition(user: AuthenticatedRequest['user'], model: string) {
+    const activeTeamMembership = getActiveTeamMembership(user);
+    const teamLead = isTeamLead(user);
+    const teamId = activeTeamMembership?.teamId;
+
+    const baseLoanCondition = this.buildLoanAssignmentCondition(user, teamLead, teamId);
+
     switch (model) {
       case 'loan':
-        const activeTeamMembership = getActiveTeamMembership(user);
-        const teamLead = isTeamLead(user);
-        const teamId = activeTeamMembership?.teamId;
+        return baseLoanCondition;
 
-        let scopeCondition: any;
+      case 'committee':
+      case 'paymentCommitment':
+        return { Loan: baseLoanCondition };
 
-        if (user.role_name === Role.COLLECTOR && teamLead && teamId) {
-          // Team lead: see all loans assigned to team members
-          scopeCondition = {
-            LoanAssignment: {
-              some: {
-                isActive: true,
-                User: {
-                  TeamMembership: {
-                    some: {
-                      teamId: teamId,
-                      deletedAt: null,
-                    },
-                  },
-                },
-              },
-            },
-          };
-        } else if (user.role_name === Role.COLLECTOR) {
-          // Regular collector
-          scopeCondition = {
-            LoanAssignment: {
-              some: {
-                isActive: true,
-                User: { id: user.id },
-              },
-            },
-          };
-        }
-        else {
-          // Other roles (non-admin)
-          scopeCondition = {
-            LoanAssignment: {
-              some: {
-                isActive: true,
-                User: { id: user.id },
-              },
-            },
-          };
-        }
-        return this.mergeWhereWithCondition(where, scopeCondition);
+      // Easy to add new models here:
+      // case 'transaction':
+      //   return { Loan: baseLoanCondition };
+
+      // case 'customer':
+      //   return this.buildCustomerCondition(user);
+
+      // case 'report':
+      //   return { 
+      //     OR: [
+      //       { createdBy: user.id },
+      //       { assignedTo: user.id }
+      //     ]
+      //   };
+
+      default:
+        return null; // No scope restriction for unknown models
     }
   }
 
@@ -125,6 +123,39 @@ export class PermissionsHelper {
 
     // Otherwise create an AND combining the original where and newCond.
     return { AND: [where, newCond] };
+  }
+
+  private buildLoanAssignmentCondition(
+    user: AuthenticatedRequest['user'],
+    teamLead: boolean,
+    teamId: number | undefined
+  ) {
+    if (user.role_name === Role.COLLECTOR && teamLead && teamId) {
+      return {
+        LoanAssignment: {
+          some: {
+            isActive: true,
+            User: {
+              TeamMembership: {
+                some: {
+                  teamId: teamId,
+                  deletedAt: null,
+                },
+              },
+            },
+          },
+        },
+      };
+    }
+
+    return {
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: { id: user.id },
+        },
+      },
+    };
   }
 
   private isSearchMode(args: any): boolean {
@@ -167,6 +198,10 @@ export class PermissionsHelper {
           id: { in: highActDaysLoanIds },
         };
       }
+    }
+
+    if (model === "committee" || model === "paymentCommitment") {
+      scopedWhere = this.addUserScope(scopedWhere, user, model);
     }
 
     return scopedWhere;

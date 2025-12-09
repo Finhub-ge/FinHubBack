@@ -298,21 +298,46 @@ export class UserService {
     return { message: 'User updated successfully' };
   }
 
-  async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto) {
+  async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto, user: any) {
     const { role } = filters;
 
-    // 1. Get all team memberships
+    // Logged-in user role & team info
+    const loggedInRole = user.role_name;
+    const isCollectorUser = loggedInRole === Role.COLLECTOR;
+
+    const isLeader = user.team_membership?.some(m => m.teamRole === 'leader');
+    const leaderTeamIds = user.team_membership
+      ?.filter(m => m.teamRole === 'leader')
+      .map(m => m.teamId) || [];
+
+    const filterHasCollector = role?.includes(Role.COLLECTOR);
+
+    // Collector + filter=collector + NOT leader → return []
+    if (isCollectorUser && filterHasCollector && !isLeader) {
+      return [];
+    }
+
+    // Collector + filter=collector + IS leader → restrict to leader teams
+    const collectorTeamFilter =
+      isCollectorUser && filterHasCollector && isLeader
+        ? { teamId: { in: leaderTeamIds } }
+        : {};
+
+    // Load memberships from DB
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
+
+        // Apply collector leader restriction if needed
+        ...collectorTeamFilter,
+
         User: {
           deletedAt: null,
           isActive: true,
           ...(role && role.length > 0
             ? { Role: { name: { in: role } } }
-            : {}
-          )
-        }
+            : {}),
+        },
       },
       include: {
         User: {
@@ -320,14 +345,14 @@ export class UserService {
             id: true,
             firstName: true,
             lastName: true,
-            Role: true
+            Role: true,
           },
         },
         Team: true,
       },
     });
 
-    // 2. Group into teams
+    // Group memberships by team
     const teamsMap = new Map<number, any>();
 
     for (const m of memberships) {
@@ -350,7 +375,6 @@ export class UserService {
         team.teamLeaderId = User.id;
         team.teamLeader = `${User.firstName} ${User.lastName}`;
         team.teamLeaderRole = User.Role?.name;
-        team.teamName = Team?.name;
       } else {
         team.members.push({
           id: User.id,
@@ -361,56 +385,48 @@ export class UserService {
       }
     }
 
-    // 3. Convert map to array, only teams with a leader
+    // Convert map to array & remove teams without leader
     let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
 
-    // 4. Filter members if role=collector
-    if (role && role.includes(Role.COLLECTOR as any)) {
+    // Filter members by role=collector if requested
+    if (role && role.includes(Role.COLLECTOR)) {
       result = result.map(team => ({
         ...team,
-        members: team.members.filter(m => m.role === 'collector'),
+        members: team.members.filter(m => m.role === Role.COLLECTOR),
       }));
     }
 
-    // --------------------------------------------------------
-    // 5. Add "Unassigned" collectors (or the provided role)
-    // --------------------------------------------------------
-    let unassignedUsers = [];
+    // Add UNASSIGNED users only for Admins / Super-admins
+    const isAdmin = ['admin', 'super-admin'].includes(loggedInRole);
 
-    if (role && role.length > 0) {
+    if (isAdmin && role && role.length > 0) {
       const assignedUserIds = new Set(memberships.map(m => m.userId));
 
-      unassignedUsers = await this.prisma.user.findMany({
+      const unassignedUsers = await this.prisma.user.findMany({
         where: {
           deletedAt: null,
           isActive: true,
           Role: { name: { in: role } },
-          id: { notIn: Array.from(assignedUserIds) }
+          id: { notIn: Array.from(assignedUserIds) },
         },
         select: {
           id: true,
           firstName: true,
           lastName: true,
-          Role: true
-        }
+          Role: true,
+        },
       });
-    }
 
-    // 6. Add virtual "Unassigned" team
-    if (unassignedUsers.length > 0) {
-      result.push(
-        // teamId: null,
-        // teamName: "Unassigned",
-        // teamLeaderId: null,
-        // teamLeader: null,
-        // teamLeaderRole: null,
-        unassignedUsers.map(u => ({
-          id: u.id,
-          firstName: u.firstName,
-          lastName: u.lastName,
-          role: u.Role?.name,
-        })),
-      );
+      if (unassignedUsers.length > 0) {
+        result.push(
+          unassignedUsers.map(u => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            role: u.Role?.name,
+          })),
+        );
+      }
     }
 
     return result;

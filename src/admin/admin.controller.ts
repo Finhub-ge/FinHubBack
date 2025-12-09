@@ -344,7 +344,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
   @Get('future-payments')
   async getFuturePayments(@Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
     return await this.adminService.getFuturePayments(getFuturePaymentsDto);
