@@ -1319,6 +1319,9 @@ export class LoanService {
   async addLoanLegalStage(publicId: ParseUUIDPipe, data: AddLoanLegalStageDto, userId: number) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        LoanCollateralStatus: true,
+      }
     });
 
     if (!loan) {
@@ -1333,12 +1336,21 @@ export class LoanService {
       throw new NotFoundException('Legal stage not found');
     }
 
+    if (!loan.LoanCollateralStatus.length && legalStage.title === 'Court') {
+      throw new BadRequestException('Loan must have a collateral status before adding legal stage Court');
+    }
+
+    let comment = data.comment
+    if (legalStage.title === 'Execution') {
+      comment = `${data.comment} / principal = ${data.principal}, interest = ${data.interest}, other fee = ${data.other}, penalty = ${data.penalty},legal = ${data.legal} /`
+    }
+
     // Create the relationship between loan and legal stage
     await this.prisma.loanLegalStage.create({
       data: {
         loanId: loan.id,
         legalStageId: data.stageId,
-        comment: data.comment,
+        comment: comment,
         userId: userId,
       },
     });
