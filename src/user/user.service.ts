@@ -506,7 +506,6 @@ export class UserService {
   }
 
   async getReminders(user: User, type: any) {
-    console.log(type);
     if (type.type === 'reminders') {
       return await this.prisma.reminders.findMany({
         where: {

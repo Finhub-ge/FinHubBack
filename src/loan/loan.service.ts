@@ -13,7 +13,7 @@ import { AssignLoanDto } from './dto/assignLoan.dto';
 import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
-import { Role } from 'src/enums/role.enum';
+import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
 import { AddLoanLegalStageDto } from './dto/addLoanLegalStage.dto';
 import { AddLoanCollateralStatusDto } from './dto/addLoanCollateralStatus.dto';
 import { AddLoanLitigationStageDto } from './dto/addLoanLitigationStage.dto';
@@ -433,7 +433,9 @@ export class LoanService {
             comment: true,
           }
         },
-        PastPayments: true
+        PastPayments: true,
+        DebtorEnforcementRecords: true,
+        CallHistory: true,
       }
     });
 
@@ -457,10 +459,14 @@ export class LoanService {
     let comments = loan.Comments;
     let lawyerComments = [];
 
-    if (user.role_name === Role.LAWYER) {
-      lawyerComments = comments.filter(c => c.User.Role.name === Role.LAWYER);
-      comments = comments.filter(c => c.User.Role.name !== Role.LAWYER);
-    }
+    // if (LAWYER_ROLES.includes(user.role_name)) {
+    lawyerComments = comments.filter(
+      c => LAWYER_ROLES.includes(c.User.Role.name)
+    );
+    comments = comments.filter(
+      c => !LAWYER_ROLES.includes(c.User.Role.name)
+    );
+    // }
 
     const { Comments, ...loanData } = loan;
 

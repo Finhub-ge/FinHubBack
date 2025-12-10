@@ -18,3 +18,10 @@ export enum Role {
   SUPER_LAWYER = 'super_lawyer',
   OPERATIONAL_MANAGER = 'operational_manager',
 }
+
+export const LAWYER_ROLES = [
+  Role.LAWYER,
+  Role.JUNIOR_LAWYER,
+  Role.EXECUTION_LAWYER,
+  Role.SUPER_LAWYER,
+];

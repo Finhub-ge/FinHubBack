@@ -130,7 +130,8 @@ export class PermissionsHelper {
     teamLead: boolean,
     teamId: number | undefined
   ) {
-    if (user.role_name === Role.COLLECTOR && teamLead && teamId) {
+    if ((user.role_name === Role.COLLECTOR || user.role_name === Role.LAWYER)
+      && teamLead && teamId) {
       return {
         LoanAssignment: {
           some: {

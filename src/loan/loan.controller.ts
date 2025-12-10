@@ -131,6 +131,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
+  @Post(':publicId/lawyer-comment')
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.LAWYER, Role.JUNIOR_LAWYER, Role.EXECUTION_LAWYER)
   addLawyerComment(
     @GetUser() user: User,

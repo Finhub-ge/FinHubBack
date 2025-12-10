@@ -72,25 +72,26 @@ model ContactType {
 }
 
 model Debtor {
-  id                  Int                   @id @default(autoincrement())
-  publicId            String                @default(dbgenerated("(uuid())")) @db.Char(36)
-  firstName           String?
-  lastName            String?
-  birthdate           DateTime?             @db.Date
-  mainEmail           String?
-  mainPhone           String?
-  mainAddress         String?
-  statusId            Int
-  createdAt           DateTime              @default(now()) @db.DateTime(0)
-  updatedAt           DateTime              @default(now()) @db.DateTime(0)
-  deletedAt           DateTime?             @db.DateTime(0)
-  idNumber            String?               @unique(map: "idNumber_UNIQUE") @db.VarChar(45)
-  DebtorStatus        DebtorStatus          @relation(fields: [statusId], references: [id])
-  DebtorContact       DebtorContact[]
-  DebtorGuarantors    DebtorGuarantors[]
-  DebtorRealEstate    DebtorRealEstate[]
-  DebtorStatusHistory DebtorStatusHistory[]
-  Loan                Loan[]
+  id                       Int                        @id @default(autoincrement())
+  publicId                 String                     @default(dbgenerated("(uuid())")) @db.Char(36)
+  firstName                String?
+  lastName                 String?
+  birthdate                DateTime?                  @db.Date
+  mainEmail                String?
+  mainPhone                String?
+  mainAddress              String?
+  statusId                 Int
+  createdAt                DateTime                   @default(now()) @db.DateTime(0)
+  updatedAt                DateTime                   @default(now()) @db.DateTime(0)
+  deletedAt                DateTime?                  @db.DateTime(0)
+  idNumber                 String?                    @unique(map: "idNumber_UNIQUE") @db.VarChar(45)
+  DebtorStatus             DebtorStatus               @relation(fields: [statusId], references: [id])
+  DebtorContact            DebtorContact[]
+  DebtorEnforcementRecords DebtorEnforcementRecords[]
+  DebtorGuarantors         DebtorGuarantors[]
+  DebtorRealEstate         DebtorRealEstate[]
+  DebtorStatusHistory      DebtorStatusHistory[]
+  Loan                     Loan[]
 
   @@index([createdAt])
   @@index([deletedAt])
@@ -189,6 +190,7 @@ model Loan {
   deletedAt               DateTime?                 @db.DateTime(0)
   currency                String?                   @db.VarChar(45)
   olDbId                  Int?
+  CallHistory             CallHistory[]
   Charges                 Charges[]
   Comments                Comments[]
   Committee               Committee[]
@@ -431,6 +433,7 @@ model User {
   createdAt                                                       DateTime                     @default(now()) @db.DateTime(0)
   updatedAt                                                       DateTime                     @default(now()) @db.DateTime(0)
   deletedAt                                                       DateTime?                    @db.DateTime(0)
+  CallHistory                                                     CallHistory[]
   Charges                                                         Charges[]
   Charges_Charges_collectorIdToUser                               Charges[]                    @relation("Charges_collectorIdToUser")
   Charges_Charges_lawyerIdToUser                                  Charges[]                    @relation("Charges_lawyerIdToUser")
@@ -1924,6 +1927,97 @@ model Old_db_sms_history {
   SMS_Status String?  @default("") @db.VarChar(100)
 
   @@index([LoanID], map: "Instalment_ID")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CallHistory {
+  id          Int       @id @default(autoincrement())
+  loanId      Int?
+  idn         Int?
+  userId      Int       @default(0)
+  userName    String    @default("") @db.VarChar(100)
+  callId      Int?
+  caller      String?   @db.VarChar(50)
+  called      String?   @db.VarChar(50)
+  name        String?   @db.VarChar(100)
+  callStart   String?   @db.VarChar(30)
+  callDate    DateTime? @db.DateTime(0)
+  callMonth   Int       @default(1)
+  time        String?   @db.VarChar(30)
+  duration    Int       @default(0)
+  billedTime  String?   @db.VarChar(30)
+  rate        String?   @db.VarChar(30)
+  price       String?   @db.VarChar(30)
+  userField   String?   @db.VarChar(30)
+  destination String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now()) @db.DateTime(0)
+  updatedAt   DateTime  @default(now()) @db.DateTime(0)
+  deletedAt   DateTime? @db.DateTime(0)
+  Loan        Loan?     @relation(fields: [loanId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_CallHistory_Loan")
+  User        User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_call_history_user")
+
+  @@index([userId], map: "fk_call_history_user")
+  @@index([loanId], map: "idx_loanId")
+}
+
+model DebtorEnforcementRecords {
+  id                 Int       @id @default(autoincrement())
+  debtorId           Int
+  personalId         String?   @db.VarChar(50)
+  address            String?
+  registrationNumber String?   @db.VarChar(50)
+  registrationDate   DateTime? @db.DateTime(0)
+  description        String?
+  caseNumber         String?   @db.VarChar(100)
+  status             String?   @db.VarChar(50)
+  executor           String?
+  metadata           Json?
+  createdAt          DateTime  @default(now()) @db.DateTime(0)
+  updatedAt          DateTime  @default(now()) @db.DateTime(0)
+  deletedAt          DateTime? @db.DateTime(0)
+  Debtor             Debtor    @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorEnforcementRecords_debtor")
+
+  @@index([debtorId], map: "fk_DebtorEnforcementRecords_debtor")
+  @@index([caseNumber], map: "idx_caseNumber")
+  @@index([personalId], map: "idx_personalId")
+  @@index([registrationNumber], map: "idx_registrationNumber")
+  @@index([status], map: "idx_status")
+}
+
+model Old_db_city {
+  City_ID     Int     @id
+  City_Name   String? @db.VarChar(100)
+  Region_ID   Int     @default(0)
+  Region_Name Int?
+}
+
+model Old_db_committee_new {
+  id               Int       @id @default(autoincrement())
+  LoanID           Int       @db.UnsignedInt
+  Debtor           String?   @db.VarChar(200)
+  ID_Number        String?   @db.VarChar(20)
+  Requester        String?   @db.VarChar(100)
+  Requester_ID     Int?
+  Lawyer           String?   @db.VarChar(100)
+  Lawyer_ID        Int?
+  LegaL_Stage      String?   @db.VarChar(100)
+  Legal_Stage_ID   Int?
+  Principal        Decimal   @default(0.00) @db.Decimal(15, 2)
+  Request          String?   @db.VarChar(2048)
+  Request_Date     DateTime? @db.DateTime(0)
+  Respond          String?   @db.VarChar(2048)
+  Responder_ID     Int       @default(0)
+  Responder        String    @default(" ") @db.VarChar(100)
+  Respond_Date     DateTime? @db.DateTime(0)
+  Agreement_Min    Decimal   @default(0.00) @db.Decimal(15, 2)
+  Committee_Status Int?      @default(1)
+  created_at       DateTime? @db.Timestamp(0)
+  updated_at       DateTime? @db.Timestamp(0)
+  ComView          Int       @default(1)
+  Attachment       String    @default("") @db.VarChar(4096)
+  File_Name        String    @default("") @db.VarChar(1024)
+  Type_Status      Int       @default(1)
+  Request_Type     String    @default("None") @db.VarChar(50)
 }
 
 enum PaymentCommitment_type {
