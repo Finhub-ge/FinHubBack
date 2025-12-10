@@ -174,6 +174,7 @@ export class LoanService {
             },
             DebtorRealEstate: true,
             DebtorGuarantors: true,
+            DebtorEnforcementRecords: true,
           }
         },
         LoanStatus: {
@@ -434,7 +435,6 @@ export class LoanService {
           }
         },
         PastPayments: true,
-        DebtorEnforcementRecords: true,
         CallHistory: true,
       }
     });
