@@ -41,6 +41,12 @@ export const daysBetween = (date1: Date | string, date2: Date | string): number 
   return d2.diff(d1, 'day');
 }
 
+export const daysFromDate = (date: Date | string): number => {
+  const d1 = dayjs(date).tz(TIMEZONE).startOf('day');
+  const now = dayjs().tz(TIMEZONE).startOf('day');
+  return now.diff(d1, 'day');
+}
+
 export const isSameDay = (date1: Date | string, date2: Date | string): boolean => {
   return getDateOnlyString(date1) === getDateOnlyString(date2);
 }

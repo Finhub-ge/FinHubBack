@@ -185,6 +185,7 @@ model Loan {
   closedAt                DateTime?                 @db.DateTime(0)
   statusId                Int
   actDays                 Int                       @default(0)
+  lastActivite            DateTime?                 @db.DateTime(0)
   createdAt               DateTime                  @default(now()) @db.DateTime(0)
   updatedAt               DateTime                  @default(now()) @db.DateTime(0)
   deletedAt               DateTime?                 @db.DateTime(0)

@@ -4,6 +4,7 @@ import * as dayjs from "dayjs";
 import { statusToId } from "src/enums/visitStatus.enum";
 import { BadRequestException } from "@nestjs/common";
 import { PaymentScheduleItemDto } from "src/loan/dto/updateLoanStatus.dto";
+import { daysFromDate, subtractDays } from "./date.helper";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -125,7 +126,8 @@ export const isTeamLead = (user: any): boolean => {
 export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, userId: number): Promise<number[]> => {
   const loans = await prisma.loan.findMany({
     where: {
-      actDays: { gt: 40 },
+      // actDays: { gt: 40 },
+      lastActivite: { lte: subtractDays(new Date(), 40) },
       LoanAssignment: {
         some: {
           isActive: true,
