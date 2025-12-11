@@ -298,16 +298,46 @@ export class UserService {
     return { message: 'User updated successfully' };
   }
 
-  async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto) {
+  async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto, user: any) {
     const { role } = filters;
-    // Get all team memberships with their users and team info
+
+    // Logged-in user role & team info
+    const loggedInRole = user.role_name;
+    const isCollectorUser = loggedInRole === Role.COLLECTOR;
+
+    const isLeader = user.team_membership?.some(m => m.teamRole === 'leader');
+    const leaderTeamIds = user.team_membership
+      ?.filter(m => m.teamRole === 'leader')
+      .map(m => m.teamId) || [];
+
+    const filterHasCollector = role?.includes(Role.COLLECTOR);
+
+    // Collector + filter=collector + NOT leader → return []
+    if (isCollectorUser && filterHasCollector && !isLeader) {
+      return [];
+    }
+
+    // Collector + filter=collector + IS leader → restrict to leader teams
+    const collectorTeamFilter =
+      isCollectorUser && filterHasCollector && isLeader
+        ? { teamId: { in: leaderTeamIds } }
+        : {};
+
+    // Load memberships from DB
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
-        ...(role && role.length > 0
-          ? { User: { Role: { name: { in: role } } } }
-          : {}
-        ),
+
+        // Apply collector leader restriction if needed
+        ...collectorTeamFilter,
+
+        User: {
+          deletedAt: null,
+          isActive: true,
+          ...(role && role.length > 0
+            ? { Role: { name: { in: role } } }
+            : {}),
+        },
       },
       include: {
         User: {
@@ -315,18 +345,18 @@ export class UserService {
             id: true,
             firstName: true,
             lastName: true,
-            Role: true
+            Role: true,
           },
         },
         Team: true,
       },
     });
 
-    // Group by teamId
+    // Group memberships by team
     const teamsMap = new Map<number, any>();
 
-    for (const membership of memberships) {
-      const { teamId, teamRole, User, Team } = membership;
+    for (const m of memberships) {
+      const { teamId, teamRole, User, Team } = m;
 
       if (!teamsMap.has(teamId)) {
         teamsMap.set(teamId, {
@@ -345,7 +375,6 @@ export class UserService {
         team.teamLeaderId = User.id;
         team.teamLeader = `${User.firstName} ${User.lastName}`;
         team.teamLeaderRole = User.Role?.name;
-        team.teamName = Team.name;
       } else {
         team.members.push({
           id: User.id,
@@ -356,20 +385,51 @@ export class UserService {
       }
     }
 
-    // Convert to array and filter out teams without leaders (optional)
+    // Convert map to array & remove teams without leader
     let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
 
-    // ✅ If role = 'collector', return only those teams where members include collectors
-    if (role && role.includes(Role.COLLECTOR as any)) {
-      result = result
-        .map(team => ({
-          ...team,
-          members: team.members.filter(m => m.role === 'collector'),
-        }))
-        .filter(team => team.members.length > 0);
+    // Filter members by role=collector if requested
+    if (role && role.includes(Role.COLLECTOR)) {
+      result = result.map(team => ({
+        ...team,
+        members: team.members.filter(m => m.role === Role.COLLECTOR),
+      }));
     }
 
-    return result
+    // Add UNASSIGNED users only for Admins / Super-admins
+    const isAdmin = ['admin', 'super-admin'].includes(loggedInRole);
+
+    if (isAdmin && role && role.length > 0) {
+      const assignedUserIds = new Set(memberships.map(m => m.userId));
+
+      const unassignedUsers = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          isActive: true,
+          Role: { name: { in: role } },
+          id: { notIn: Array.from(assignedUserIds) },
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          Role: true,
+        },
+      });
+
+      if (unassignedUsers.length > 0) {
+        result.push(
+          unassignedUsers.map(u => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            role: u.Role?.name,
+          })),
+        );
+      }
+    }
+
+    return result;
   }
 
   async getTasks(user: User) {
@@ -446,7 +506,6 @@ export class UserService {
   }
 
   async getReminders(user: User, type: any) {
-    console.log(type);
     if (type.type === 'reminders') {
       return await this.prisma.reminders.findMany({
         where: {

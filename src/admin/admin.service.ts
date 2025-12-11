@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, StatusMatrix_entityType, CollectorMonthlyReport_status } from '@prisma/client';
+import { User, Committee_status, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -32,6 +32,8 @@ import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
 import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { buildLoanQuery } from "src/helpers/loanFilter.helper";
+import { PermissionsHelper } from "src/helpers/permissions.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -43,6 +45,7 @@ export class AdminService {
     private paymentHelper: PaymentsHelper,
     private s3Helper: S3Helper,
     private readonly paginationService: PaginationService,
+    private readonly permissionsHelper: PermissionsHelper,
   ) { }
 
   async getDebtorContactTypes() {
@@ -171,7 +174,8 @@ export class AdminService {
   }
 
   async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, options?: { isReport?: boolean }) {
-    const { page, limit, caseId } = getPaymentDto;
+    const { page, limit, search } = getPaymentDto;
+
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
     const includes = {
@@ -221,7 +225,39 @@ export class AdminService {
     };
 
     const loanFilter: any = {};
-    if (caseId) loanFilter.caseId = caseId;
+    if (search?.trim()) {
+      const term = search.trim();
+      const fullSearch: any[] = [];
+
+      fullSearch.push({ Loan: { is: { caseId: term } } });
+
+      fullSearch.push({
+        Loan: {
+          is: {
+            Debtor: {
+              OR: [
+                { firstName: { contains: term } },
+                { lastName: { contains: term } },
+                { idNumber: { contains: term } },
+              ],
+            },
+          },
+        },
+      });
+
+      fullSearch.push({
+        User: {
+          is: {
+            OR: [
+              { firstName: { contains: term } },
+              { lastName: { contains: term } },
+            ].filter(Boolean),
+          },
+        },
+      });
+
+      where.OR = fullSearch;
+    }
 
     if (options?.isReport) {
       const filters = getPaymentDto as GetPaymentReportWithPaginationDto;
@@ -256,7 +292,7 @@ export class AdminService {
       }
     }
 
-    if (Object.keys(loanFilter).length) {
+    if (Object.keys(loanFilter).length > 0) {
       where.Loan = { is: loanFilter };
     }
 
@@ -653,73 +689,97 @@ export class AdminService {
       where.createdAt = createdDateCondition;
     }
 
-    const data = await this.prisma.committee.findMany({
-      where,
-      ...paginationParams,
-      include: {
-        Loan: {
-          select: {
-            publicId: true,
-            caseId: true,
-            Debtor: {
+    const [committees, totalCount] = await Promise.all([
+      this.permissionsHelper.committee.findMany(
+        {
+          where,
+          ...paginationParams,
+          include: {
+            Loan: {
               select: {
+                publicId: true,
+                caseId: true,
+                Debtor: {
+                  select: {
+                    firstName: true,
+                    lastName: true
+                  }
+                },
+                LoanRemaining: {
+                  where: {
+                    deletedAt: null
+                  }
+                },
+                Portfolio: {
+                  select: {
+                    portfolioSeller: true
+                  }
+                },
+                LoanLegalStage: {
+                  where: {
+                    deletedAt: null,
+                  },
+                  select: {
+                    LegalStage: {
+                      select: {
+                        id: true,
+                        title: true
+                      }
+                    }
+                  }
+                },
+                LoanAssignment: {
+                  where: {
+                    isActive: true,
+                  },
+                  select: {
+                    createdAt: true,
+                    User: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
+                    Role: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                  },
+                },
+              }
+            },
+            User_Committee_requesterIdToUser: {
+              select: {
+                id: true,
                 firstName: true,
                 lastName: true
               }
             },
-            LoanRemaining: {
-              where: {
-                deletedAt: null
-              }
-            },
-            Portfolio: {
+            User_Committee_responderIdToUser: {
               select: {
-                portfolioSeller: true
+                id: true,
+                firstName: true,
+                lastName: true
               }
             },
-            LoanLegalStage: {
-              where: {
-                deletedAt: null,
-              },
+            Uploads: {
               select: {
-                LegalStage: {
-                  select: {
-                    id: true,
-                    title: true
-                  }
-                }
+                id: true,
+                originalFileName: true
               }
-            },
-          }
-        },
-        User_Committee_requesterIdToUser: {
-          select: {
-            firstName: true,
-            lastName: true
-          }
-        },
-        User_Committee_responderIdToUser: {
-          select: {
-            firstName: true,
-            lastName: true
-          }
-        },
-        Uploads: {
-          select: {
-            id: true,
-            originalFileName: true
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
           }
         }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+      ),
+      this.permissionsHelper.committee.count({ where }),
+    ]);
 
-    const total = await this.prisma.committee.count({
-      where,
-    });
-    return this.paginationService.createPaginatedResult(data, total, { page, limit });
+    return this.paginationService.createPaginatedResult(committees, totalCount, { page, limit });
   }
 
   async createMarks(title: string) {
@@ -1535,80 +1595,79 @@ export class AdminService {
       where.PaymentSchedule.some.paymentDate = schedulePaymentDateFilter;
     }
 
-    const data = await this.prisma.paymentCommitment.findMany({
-      where,
-      select: {
-        id: true,
-        type: true,
-        Loan: {
-          select: {
-            id: true,
-            publicId: true,
-            caseId: true,
-            currency: true,
-            LoanAssignment: {
+    const [futurePayments, totalCount] = await Promise.all([
+      this.permissionsHelper.futurePayment.findMany(
+        {
+          where,
+          include: {
+            Loan: {
               select: {
-                User: {
+                id: true,
+                publicId: true,
+                caseId: true,
+                currency: true,
+                LoanAssignment: {
+                  select: {
+                    User: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        Role: {
+                          select: {
+                            name: true,
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                Portfolio: {
                   select: {
                     id: true,
-                    firstName: true,
-                    lastName: true,
-                    Role: {
+                    name: true,
+                    portfolioSeller: {
                       select: {
+                        id: true,
                         name: true,
                       }
                     }
                   }
-                }
-              }
-            },
-            Portfolio: {
-              select: {
-                id: true,
-                name: true,
-                portfolioSeller: {
+                },
+                Debtor: {
                   select: {
                     id: true,
-                    name: true,
+                    firstName: true,
+                    lastName: true,
+                    idNumber: true,
                   }
-                }
+                },
+                PortfolioCaseGroup: {
+                  select: {
+                    id: true,
+                    groupName: true,
+                  }
+                },
               }
             },
-            Debtor: {
+            PaymentSchedule: {
+              where: {
+                paymentDate: schedulePaymentDateFilter
+              },
               select: {
                 id: true,
-                firstName: true,
-                lastName: true,
-                idNumber: true,
+                paymentDate: true,
+                amount: true,
               }
             },
-            PortfolioCaseGroup: {
-              select: {
-                id: true,
-                groupName: true,
-              }
-            },
-          }
-        },
-        PaymentSchedule: {
-          where: {
-            paymentDate: schedulePaymentDateFilter
           },
-          select: {
-            id: true,
-            paymentDate: true,
-            amount: true,
-          }
-        }
-      },
-      ...paginationParams,
-    });
+          ...paginationParams,
+          orderBy: { paymentDate: 'desc' },
+        }),
+      this.permissionsHelper.futurePayment.count({ where }),
+    ]);
 
-    const total = await this.prisma.paymentCommitment.count({
-      where,
-    });
-
-    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
+    return this.paginationService.createPaginatedResult(futurePayments, totalCount, { page, limit, skip });
   }
 
   async importPlan(fileBuffer: Buffer, userId: number) {

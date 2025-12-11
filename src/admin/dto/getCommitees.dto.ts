@@ -8,11 +8,11 @@ export class GetCommiteesDto {
   @ApiProperty({
     description: 'Search by case ID',
     required: false,
-    type: Number
+    type: String
   })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
-  search?: number;
+  @Transform(({ value }) => value ? value.trim() : undefined)
+  search?: string;
 
   @ApiProperty({ enum: Committee_type, description: 'Type of the committee', required: false })
   @IsEnum(Committee_type)

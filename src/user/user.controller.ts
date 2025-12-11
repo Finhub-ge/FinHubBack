@@ -69,10 +69,10 @@ export class UserController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @AllRoles()
   @Get('groupedBy/teamLeader')
-  getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto) {
-    return this.userService.getUsersGroupedByTeamLeader(getUsersFilterDto)
+  getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto, @GetUser() user: User) {
+    return this.userService.getUsersGroupedByTeamLeader(getUsersFilterDto, user)
   }
 
   @UseGuards(JwtGuard, RolesGuard)
