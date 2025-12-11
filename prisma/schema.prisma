@@ -1513,7 +1513,7 @@ model Old_db_plan_collection {
   Teams           Int       @default(0)
   TeamsGroup      Int       @default(0)
   PlanYear        Int       @default(2025)
-  PlanMonth       Int       @default(7)
+  PlanMonth       Int       @default(12)
   PlanSumm        Decimal   @default(0.00) @db.Decimal(15, 2)
   PlanCollection  Decimal   @default(0.00) @db.Decimal(15, 2)
   Principal       Decimal   @default(0.00) @db.Decimal(15, 2)
@@ -1524,7 +1524,7 @@ model Old_db_plan_collection {
   PaymentsRate    Decimal   @default(0.00) @db.Decimal(15, 2)
   Calls           Int       @default(0)
   Duration        Int       @default(0)
-  DurationTime    String    @default("00:00:00") @db.VarChar(100)
+  DurationTime    String    @default("00:00:00") @db.VarChar(50)
   SMS             Int?      @default(0)
   Marks           Int       @default(0)
   Day40           Int       @default(0)
@@ -2018,6 +2018,32 @@ model Old_db_committee_new {
   File_Name        String    @default("") @db.VarChar(1024)
   Type_Status      Int       @default(1)
   Request_Type     String    @default("None") @db.VarChar(50)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Old_db_clients_call_history {
+  ID           Int       @id @default(autoincrement())
+  IDN          Int?
+  User_ID      Int       @default(0)
+  User_Name    String    @default("") @db.VarChar(100)
+  CallID       Int?
+  Caller       String?   @db.VarChar(50)
+  Called       String?   @db.VarChar(50)
+  Name         String?   @db.VarChar(100)
+  CallStartStr String?   @db.VarChar(30)
+  CallDate     DateTime? @db.DateTime(0)
+  CallMonth    Int       @default(1)
+  Time         String?   @db.VarChar(30)
+  Duration     Int       @default(0)
+  BilledTime   String?   @db.VarChar(30)
+  Rate         String?   @db.VarChar(30)
+  Price        String?   @db.VarChar(30)
+  UserField    String?   @db.VarChar(30)
+  Destination  String?   @db.VarChar(255)
+  Created_At   DateTime? @db.DateTime(0)
+
+  @@index([Caller], map: "Caller")
+  @@index([User_ID], map: "User_ID")
 }
 
 enum PaymentCommitment_type {
