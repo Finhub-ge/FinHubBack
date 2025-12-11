@@ -33,6 +33,7 @@ import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
 import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
+import { daysFromDate } from 'src/helpers/date.helper';
 
 @Injectable()
 export class LoanService {
@@ -99,17 +100,23 @@ export class LoanService {
       this.permissionsHelper.loan.count({ where }),
     ]);
 
+    // Enrich loans with actDays
+    const enrichedLoans = loans.map(loan => ({
+      ...loan,
+      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+    }));
+
     // Handle CSV export
     if (columns) {
-      return this.paginationService.getAllWithoutPagination(loans, totalCount);
+      return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
     }
 
     // Enrich closed loans with additional data
     if (showOnlyClosedLoans) {
-      await mapClosedLoansDataToPaymentWriteoff(loans, this.paymentsHelper);
+      await mapClosedLoansDataToPaymentWriteoff(enrichedLoans, this.paymentsHelper);
     }
 
-    return this.paginationService.createPaginatedResult(loans, totalCount, { page, limit });
+    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
@@ -803,6 +810,7 @@ export class LoanService {
       where: { id: loan.id },
       data: {
         actDays: 0,
+        lastActivite: new Date(),
       },
     });
     return {

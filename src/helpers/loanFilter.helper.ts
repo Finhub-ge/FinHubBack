@@ -8,6 +8,7 @@ import { buildLoanSearchWhere, calculateWriteoff } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { subtractDays } from "./date.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -78,7 +79,13 @@ export const applyClientStatusFilter = (where: any, clientStatuses?: number[]): 
 
 export const applyActDaysFilter = (where: any, actDays?: number): void => {
   if (actDays) {
-    where.actDays = { gt: actDays };
+    const targetDate = subtractDays(new Date(), actDays);
+    const nextDay = subtractDays(new Date(), actDays - 1);
+
+    where.lastActivite = {
+      gte: targetDate,
+      lt: nextDay
+    };
   }
 };
 
@@ -269,6 +276,16 @@ export const getLoanIncludeConfig = () => {
     LoanStatus: {
       select: { id: true, name: true },
     },
+    LoanStatusHistory: {
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' as const },
+      select: {
+        id: true,
+        newStatusId: true,
+        createdAt: true,
+      },
+      take: 1,
+    },
     LoanAssignment: {
       where: { isActive: true },
       select: {
@@ -355,7 +372,8 @@ export const buildLoanQuery = (
   return {
     where,
     ...paginationParams,
-    orderBy: { actDays: 'desc' as const },
+    // orderBy: { actDays: 'desc' as const },
+    orderBy: { lastActivite: 'asc' },
     include: includeConfig,
   };
 };
