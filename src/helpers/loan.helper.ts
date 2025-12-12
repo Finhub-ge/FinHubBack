@@ -547,33 +547,41 @@ export const buildLoanSearchWhere = (searchValue: string) => {
   return orConditions;
 };
 
-export const getLatestLoanIds = async (prisma: PrismaService, table: string, relationField: string, filterValues: (number | string)[]) => {
-  const latest = await prisma[table].groupBy({
-    by: ['loanId'],
-    where: { deletedAt: null },
-    _max: { createdAt: true },
-  });
+export const getLatestLoanIds = async (
+  prisma: PrismaService,
+  table: string,
+  relationField: string,
+  filterValues: (number | string)[]
+) => {
+  // Determine the filter column name
+  const filterColumn = relationField === 'status' ? 'status' : `${relationField}Id`;
 
-  const whereCondition: any = {
-    deletedAt: null,
-    OR: latest.map((s) => ({
-      loanId: s.loanId,
-      createdAt: s._max.createdAt,
-    })),
-  };
+  // Build the IN clause with proper escaping
+  const filterList = filterValues
+    .map(v => relationField === 'status' ? `'${String(v).replace(/'/g, "''")}'` : Number(v))
+    .join(',');
 
-  if (relationField === 'status') {
-    whereCondition.status = { in: Array.isArray(filterValues) ? filterValues : [filterValues] };
-  } else {
-    whereCondition[`${relationField}Id`] = { in: filterValues.map(Number) };
-  }
+  // Use window function to get latest record per loan - single efficient query
+  // ROW_NUMBER() OVER (PARTITION BY loanId ORDER BY createdAt DESC) ranks records
+  // Latest record for each loan gets rn = 1
+  const result: any[] = await prisma.$queryRawUnsafe(`
+    SELECT DISTINCT loanId
+    FROM (
+      SELECT
+        loanId,
+        ${filterColumn},
+        ROW_NUMBER() OVER (
+          PARTITION BY loanId
+          ORDER BY createdAt DESC
+        ) as rn
+      FROM ${table}
+      WHERE deletedAt IS NULL
+    ) ranked
+    WHERE rn = 1
+      AND ${filterColumn} IN (${filterList})
+  `);
 
-  const matches = await prisma[table].findMany({
-    where: whereCondition,
-    select: { loanId: true },
-  });
-
-  return matches.map((m) => m.loanId);
+  return result.map((r) => r.loanId);
 };
 
 export const calculateWriteoff = async (
