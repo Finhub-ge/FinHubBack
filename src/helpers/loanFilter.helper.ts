@@ -50,6 +50,8 @@ export const applySearchFilter = (where: any, searchTerm?: string): void => {
   const searchConditions = buildLoanSearchWhere(searchTerm);
   where.AND = where.AND || [];
   where.AND.push({ OR: searchConditions });
+
+  delete where.closedAt;
 };
 
 export const applyPortfolioFilters = (where: any, filters: any): void => {
