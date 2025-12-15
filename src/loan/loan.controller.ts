@@ -186,7 +186,7 @@ export class LoanController {
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() sssignLoanDto: AssignLoanDto
   ) {
-    return this.loanService.assignLoanToUser(publicId, sssignLoanDto, user.id);
+    return this.loanService.assignLoanToUser(publicId, sssignLoanDto, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

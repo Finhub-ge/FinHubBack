@@ -1144,7 +1144,7 @@ export class LoanService {
     };
   }
 
-  async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, userId: number) {
+  async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, user: any) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
       select: {
@@ -1164,25 +1164,25 @@ export class LoanService {
 
     // If no userId provided → unassign
     if (!assignLoanDto.userId) {
-      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: userId, });
+      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: user.id, });
     }
 
-    const user = await this.prisma.user.findUnique({
+    const assignedUser = await this.prisma.user.findUnique({
       where: { id: assignLoanDto.userId, isActive: true, deletedAt: null },
-      include: {
-        TeamMembership: {
-          where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
-        },
-      }
+      // include: {
+      //   TeamMembership: {
+      //     where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
+      //   },
+      // }
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!assignedUser) throw new NotFoundException('User not found');
 
     //Check role matches
-    if (user.roleId !== assignLoanDto.roleId) {
+    if (assignedUser.roleId !== assignLoanDto.roleId) {
       throw new BadRequestException('User role does not match roleId provided');
     }
 
-    if (user.TeamMembership.length === 0) {
+    if (user?.team_membership?.teamRole !== TeamMembership_teamRole.leader) {
       throw new BadRequestException('User is not a team lead');
     }
 
@@ -1198,7 +1198,7 @@ export class LoanService {
     return await this.prisma.$transaction(async (tx) => {
       // user.id is the new user id
       // userId is the assigned by user id
-      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, currentAssignment, tx);
+      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, user.id, currentAssignment, tx);
 
       // Update reminders to new user
       await tx.reminders.updateMany({
@@ -1208,9 +1208,9 @@ export class LoanService {
 
       return await this.assign({
         loanId: loan.id,
-        userId: user.id,
+        userId: assignedUser.id,
         roleId: assignLoanDto.roleId,
-        assignedBy: userId,
+        assignedBy: user.id,
         tx
       });
     });
