@@ -1182,7 +1182,7 @@ export class LoanService {
       throw new BadRequestException('User role does not match roleId provided');
     }
 
-    if (user?.team_membership?.teamRole !== TeamMembership_teamRole.leader) {
+    if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
       throw new BadRequestException('User is not a team lead');
     }
 
