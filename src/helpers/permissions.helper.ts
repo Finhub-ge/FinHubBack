@@ -42,8 +42,11 @@ export class PermissionsHelper {
       findMany: async (args: any) => {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
+        // Remove custom properties that Prisma doesn't recognize
+        const { _skipUserScope, ...cleanArgs } = args || {};
+
         return this.prisma[model].findMany({
-          ...args,
+          ...cleanArgs,
           where: scopedWhere
         });
       },
@@ -51,8 +54,11 @@ export class PermissionsHelper {
       findFirst: async (args: any) => {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
+        // Remove custom properties that Prisma doesn't recognize
+        const { _skipUserScope, ...cleanArgs } = args || {};
+
         return this.prisma[model].findFirst({
-          ...args,
+          ...cleanArgs,
           where: scopedWhere
         });
       },
@@ -60,8 +66,11 @@ export class PermissionsHelper {
       count: async (args: any) => {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
+        // Remove custom properties that Prisma doesn't recognize
+        const { _skipUserScope, ...cleanArgs } = args || {};
+
         return this.prisma[model].count({
-          ...args,
+          ...cleanArgs,
           where: scopedWhere
         });
       }
@@ -69,7 +78,7 @@ export class PermissionsHelper {
   }
 
   private addUserScope(where: any, user: AuthenticatedRequest['user'], model: string) {
-    if (user.role_name === Role.SUPER_ADMIN || user.role_name === Role.ADMIN) {
+    if (user.role_name === Role.SUPER_ADMIN || user.role_name === Role.ADMIN || user.role_name === Role.SUPER_LAWYER) {
       return where;
     }
 
@@ -130,25 +139,9 @@ export class PermissionsHelper {
     teamLead: boolean,
     teamId: number | undefined
   ) {
-    if ((user.role_name === Role.COLLECTOR || user.role_name === Role.LAWYER)
-      && teamLead && teamId) {
-      return {
-        LoanAssignment: {
-          some: {
-            isActive: true,
-            User: {
-              TeamMembership: {
-                some: {
-                  teamId: teamId,
-                  deletedAt: null,
-                },
-              },
-            },
-          },
-        },
-      };
-    }
-
+    // Team leads now see only their own loans by default
+    // They can see team member loans only when explicitly filtering by assigneduser
+    // This change ensures default view shows only own loans for everyone
     return {
       LoanAssignment: {
         some: {
@@ -176,6 +169,27 @@ export class PermissionsHelper {
     return false;
   }
 
+  private hasLoanAssignmentFilter(where: any): boolean {
+    if (!where) return false;
+
+    // Check if LoanAssignment filter already exists in where clause
+    // This happens when user explicitly filters by assigneduser/assignedlawyer
+    if (where.LoanAssignment) {
+      return true;
+    }
+
+    // Check in AND conditions
+    if (Array.isArray(where.AND)) {
+      for (const condition of where.AND) {
+        if (condition.LoanAssignment) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   private async buildScopedWhere(
     model: string,
     user: AuthenticatedRequest["user"],
@@ -183,9 +197,14 @@ export class PermissionsHelper {
   ) {
     let scopedWhere = args?.where || {};
     const searchMode = this.isSearchMode(args);
+    const skipUserScopeFlag = args?._skipUserScope === true;
 
-    // Skip user scoping while searching
-    if (!searchMode) {
+    // Skip user scoping only in these cases:
+    // 1. Search mode (user is searching, should see all loans)
+    // 2. Explicit skipUserScope flag (set by service layer for team leads with same-role filters)
+    const shouldSkipUserScope = searchMode || skipUserScopeFlag;
+
+    if (!shouldSkipUserScope) {
       scopedWhere = this.addUserScope(scopedWhere, user, model);
     }
 

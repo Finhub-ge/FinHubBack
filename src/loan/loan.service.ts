@@ -8,7 +8,7 @@ import { PaymentScheduleItemDto, UpdateLoanStatusDto } from './dto/updateLoanSta
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
 import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
@@ -34,6 +34,7 @@ import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters,
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate } from 'src/helpers/date.helper';
+import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
 
 @Injectable()
 export class LoanService {
@@ -47,7 +48,7 @@ export class LoanService {
 
   ) { }
 
-  async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
+  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
     // Setup pagination
@@ -67,7 +68,26 @@ export class LoanService {
     }
 
     applyCommonFilters(where, filters);
-    applyUserAssignmentFilter(where, filters);
+
+    // Get team member IDs if user is a collector team lead
+    let teamMemberIds: number[] | undefined;
+    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+      if (activeTeamMembership) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: activeTeamMembership.teamId,
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        teamMemberIds = teamMembers.map(tm => tm.userId);
+      }
+    }
+
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
 
     // Handle complex filters with intersection ONLY if there are complex filters
     const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
@@ -91,13 +111,22 @@ export class LoanService {
       applyIntersectedIds(where, intersectedIds);
     }
 
+    // Determine if we should skip user scope in permission helper
+    // Skip only for team leads filtering by their own role type
+    const skipUserScope = shouldSkipUserScope(user, filters);
+
     // Fetch loans
     const includeConfig = getLoanIncludeConfig();
+    const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
+
+    // Add flag to skip user scope if needed
+    if (skipUserScope) {
+      loanQuery._skipUserScope = true;
+    }
+
     const [loans, totalCount] = await Promise.all([
-      this.permissionsHelper.loan.findMany(
-        buildLoanQuery(where, paginationParams, includeConfig)
-      ),
-      this.permissionsHelper.loan.count({ where }),
+      this.permissionsHelper.loan.findMany(loanQuery),
+      this.permissionsHelper.loan.count({ where, _skipUserScope: skipUserScope }),
     ]);
 
     // Enrich loans with actDays
@@ -116,7 +145,16 @@ export class LoanService {
       await mapClosedLoansDataToPaymentWriteoff(enrichedLoans, this.paymentsHelper);
     }
 
-    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+    // Calculate summary statistics (respects filters)
+    const summary = await calculateLoanSummary(this.permissionsHelper, where, skipUserScope);
+
+    const paginatedResult = this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+
+    // Add summary to response
+    return {
+      ...paginatedResult,
+      summary,
+    } as PaginatedResult<Loan> & { summary: any };
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
@@ -1129,12 +1167,23 @@ export class LoanService {
       return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: userId, });
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: assignLoanDto.userId, isActive: true, deletedAt: null } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: assignLoanDto.userId, isActive: true, deletedAt: null },
+      include: {
+        TeamMembership: {
+          where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
+        },
+      }
+    });
     if (!user) throw new NotFoundException('User not found');
 
     //Check role matches
     if (user.roleId !== assignLoanDto.roleId) {
       throw new BadRequestException('User role does not match roleId provided');
+    }
+
+    if (user.TeamMembership.length === 0) {
+      throw new BadRequestException('User is not a team lead');
     }
 
     // Check if any visit is pending
@@ -1819,8 +1868,8 @@ export class LoanService {
     };
   }
 
-  async exportLoans(filterDto: GetLoansFilterDto) {
-    const loans = await this.getAll(filterDto);
+  async exportLoans(filterDto: GetLoansFilterDto, user: any) {
+    const loans = await this.getAll(filterDto, user);
 
     const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 

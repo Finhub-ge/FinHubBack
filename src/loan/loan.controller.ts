@@ -38,16 +38,16 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get()
-  getAll(@Query() filterDto: GetLoansFilterWithPaginationDto) {
-    return this.loanService.getAll(filterDto);
+  getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
+    return this.loanService.getAll(filterDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
   // @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  async exportLoans(@Query() filterDto: GetLoansFilterDto) {
-    const excelBuffer = await this.loanService.exportLoans(filterDto);
+  async exportLoans(@GetUser() user: User, @Query() filterDto: GetLoansFilterDto) {
+    const excelBuffer = await this.loanService.exportLoans(filterDto, user);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -179,7 +179,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST, Role.LAWYER)
   @Post(':publicId/assignment')
   async assignLoan(
     @GetUser() user: User,

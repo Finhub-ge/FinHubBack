@@ -683,3 +683,94 @@ export const saveScheduleReminders = async (
     });
   }
 }
+
+export const shouldSkipUserScope = (user: any, filters: any): boolean => {
+  const teamLead = isTeamLead(user);
+
+  if (!teamLead) {
+    return false;
+  }
+
+  // Collector team lead filtering by assigneduser (collectors)
+  if (user.role_name === 'collector' && filters.assigneduser?.length > 0) {
+    return true;
+  }
+
+  // Lawyer team lead filtering by any lawyer assignment
+  const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+  if (LAWYER_ROLES.includes(user.role_name)) {
+    const hasLawyerFilter =
+      filters.assignedlawyer?.length > 0 ||
+      filters.assignedjuniorLawyer?.length > 0 ||
+      filters.assignedexecutionLawyer?.length > 0;
+
+    if (hasLawyerFilter) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export const calculateLoanSummary = async (
+  permissionsHelper: any,
+  where: any,
+  skipUserScope: boolean
+) => {
+  // Fetch all loans matching the filter (respecting permissions)
+  const loans = await permissionsHelper.loan.findMany({
+    where,
+    _skipUserScope: skipUserScope,
+    select: {
+      currency: true,
+      principal: true,
+      totalDebt: true,
+      LoanRemaining: {
+        where: { deletedAt: null },
+        select: {
+          principal: true,
+          interest: true,
+          penalty: true,
+          otherFee: true,
+          legalCharges: true,
+          currentDebt: true,
+        },
+      },
+    },
+  });
+
+  // Initialize summary for all currencies
+  const summary = {
+    GEL: { cases: 0, principal: 0, debt: 0 },
+    USD: { cases: 0, principal: 0, debt: 0 },
+    EUR: { cases: 0, principal: 0, debt: 0 },
+  };
+
+  // Aggregate by currency
+  loans.forEach((loan) => {
+    const currency = loan.currency?.toUpperCase() || 'GEL';
+
+    if (summary[currency]) {
+      summary[currency].cases += 1;
+
+      // Use LoanRemaining if available (current debt), otherwise use original loan values
+      if (loan.LoanRemaining && loan.LoanRemaining.length > 0) {
+        const remaining = loan.LoanRemaining[0];
+        summary[currency].principal += Number(remaining.principal || 0);
+        summary[currency].debt += Number(remaining.currentDebt || 0);
+      } else {
+        // Fallback to original loan values if LoanRemaining doesn't exist
+        summary[currency].principal += Number(loan.principal || 0);
+        summary[currency].debt += Number(loan.totalDebt || 0);
+      }
+    }
+  });
+
+  // Round to 2 decimal places
+  Object.keys(summary).forEach((currency) => {
+    summary[currency].principal = Number(summary[currency].principal.toFixed(2));
+    summary[currency].debt = Number(summary[currency].debt.toFixed(2));
+  });
+
+  return summary;
+}

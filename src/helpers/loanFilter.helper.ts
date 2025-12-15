@@ -89,8 +89,63 @@ export const applyActDaysFilter = (where: any, actDays?: number): void => {
   }
 };
 
-export const applyUserAssignmentFilter = (where: any, filters: any): void => {
-  const assignedUserIds = collectAssignedUserIds(filters);
+export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberIds?: number[]): any => {
+  // Import helper functions from loan.helper
+  const { getActiveTeamMembership, isTeamLead } = require('./loan.helper');
+
+  // Admin and Super Admin can see everything without restrictions
+  if (user.role_name === 'super_admin' || user.role_name === 'admin') {
+    return filters;
+  }
+
+  const activeTeamMembership = getActiveTeamMembership(user);
+  const teamLead = isTeamLead(user);
+  const restrictedFilters = { ...filters };
+
+  // Handle COLLECTOR role
+  if (user.role_name === 'collector') {
+    if (teamLead && activeTeamMembership && teamMemberIds) {
+      // Collector Team Lead: Can filter by assigneduser, but only team members
+      // Validate and restrict assigneduser to only include team member IDs
+      if (restrictedFilters.assigneduser && Array.isArray(restrictedFilters.assigneduser)) {
+        // Filter to only include IDs that are in the team
+        restrictedFilters.assigneduser = restrictedFilters.assigneduser.filter(
+          (userId: number) => teamMemberIds.includes(userId)
+        );
+
+        // If after filtering, no valid users remain, remove the filter
+        if (restrictedFilters.assigneduser.length === 0) {
+          delete restrictedFilters.assigneduser;
+        }
+      }
+    } else {
+      // Collector (Not Team Lead): Remove assigneduser filter completely
+      delete restrictedFilters.assigneduser;
+    }
+  }
+
+  // Handle LAWYER roles (lawyer, junior_lawyer, execution_lawyer, super_lawyer)
+  const lawyerRoles = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+  if (lawyerRoles.includes(user.role_name)) {
+    if (teamLead && activeTeamMembership) {
+      // Lawyer Team Lead: Can filter by any lawyer (no restrictions)
+      // Allow all lawyer filters to pass through
+    } else {
+      // Lawyer (Not Team Lead): Remove all lawyer filters
+      delete restrictedFilters.assignedlawyer;
+      delete restrictedFilters.assignedjuniorLawyer;
+      delete restrictedFilters.assignedexecutionLawyer;
+    }
+  }
+
+  return restrictedFilters;
+};
+
+export const applyUserAssignmentFilter = (where: any, filters: any, user?: any, teamMemberIds?: number[]): void => {
+  // If user is provided, apply filter restrictions based on role
+  const restrictedFilters = user ? applyUserFilterRestrictions(filters, user, teamMemberIds) : filters;
+
+  const assignedUserIds = collectAssignedUserIds(restrictedFilters);
 
   if (assignedUserIds.length === 0) return;
 
