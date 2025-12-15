@@ -37,13 +37,18 @@ export class PermissionsHelper {
     return this.getScopedModel('paymentCommitment', user);
   }
 
+  get loanMarks() {
+    const user = this.request.user;
+    return this.getScopedModel('loanMarks', user);
+  }
+
   private getScopedModel(model: string, user: AuthenticatedRequest['user']) {
     return {
       findMany: async (args: any) => {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
 
         return this.prisma[model].findMany({
           ...cleanArgs,
@@ -55,7 +60,7 @@ export class PermissionsHelper {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
 
         return this.prisma[model].findFirst({
           ...cleanArgs,
@@ -67,7 +72,7 @@ export class PermissionsHelper {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
 
         return this.prisma[model].count({
           ...cleanArgs,
@@ -86,6 +91,53 @@ export class PermissionsHelper {
     return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
   }
 
+  private addTeamScope(where: any, user: AuthenticatedRequest['user'], model: string) {
+    if (user.role_name === Role.SUPER_ADMIN || user.role_name === Role.ADMIN || user.role_name === Role.SUPER_LAWYER) {
+      return where;
+    }
+
+    const scopeCondition = this.buildTeamScopeCondition(user, model);
+    return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
+  }
+
+  private buildTeamScopeCondition(user: AuthenticatedRequest['user'], model: string) {
+    const activeTeamMembership = getActiveTeamMembership(user);
+    const teamId = activeTeamMembership?.teamId;
+
+    if (!teamId) {
+      return null;
+    }
+
+    const baseLoanCondition = {
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: {
+            TeamMembership: {
+              some: {
+                teamId: teamId,
+                deletedAt: null,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    switch (model) {
+      case 'loan':
+        return baseLoanCondition;
+
+      case 'committee':
+      case 'paymentCommitment':
+      case 'loanMarks':
+        return { Loan: baseLoanCondition };
+
+      default:
+        return null;
+    }
+  }
+
   private buildScopeCondition(user: AuthenticatedRequest['user'], model: string) {
     const activeTeamMembership = getActiveTeamMembership(user);
     const teamLead = isTeamLead(user);
@@ -99,6 +151,7 @@ export class PermissionsHelper {
 
       case 'committee':
       case 'paymentCommitment':
+      case 'loanMarks':
         return { Loan: baseLoanCondition };
 
       // Easy to add new models here:
@@ -198,14 +251,19 @@ export class PermissionsHelper {
     let scopedWhere = args?.where || {};
     const searchMode = this.isSearchMode(args);
     const skipUserScopeFlag = args?._skipUserScope === true;
+    const allowTeamAccessFlag = args?._allowTeamAccess === true;
 
     // Skip user scoping only in these cases:
     // 1. Search mode (user is searching, should see all loans)
     // 2. Explicit skipUserScope flag (set by service layer for team leads with same-role filters)
-    const shouldSkipUserScope = searchMode || skipUserScopeFlag;
+    // 3. Explicit allowTeamAccess flag (set for team leads accessing individual records)
+    const shouldSkipUserScope = searchMode || skipUserScopeFlag || allowTeamAccessFlag;
 
     if (!shouldSkipUserScope) {
       scopedWhere = this.addUserScope(scopedWhere, user, model);
+    } else if (allowTeamAccessFlag) {
+      // For team access, apply team-based scope instead of user-only scope
+      scopedWhere = this.addTeamScope(scopedWhere, user, model);
     }
 
     // Special collector rule: loans > 40 actDays
@@ -218,10 +276,6 @@ export class PermissionsHelper {
           id: { in: highActDaysLoanIds },
         };
       }
-    }
-
-    if (model === "committee" || model === "paymentCommitment") {
-      scopedWhere = this.addUserScope(scopedWhere, user, model);
     }
 
     return scopedWhere;

@@ -158,11 +158,20 @@ export class LoanService {
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
+    // Team leads should be able to view team members' loans
+    const teamLead = isTeamLead(user);
+    const isLawyer = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(user.role_name);
+    const isCollector = user.role_name === 'collector';
+
+    // Allow team access for team leads viewing individual loans
+    const allowTeamAccess = teamLead && (isLawyer || isCollector);
+
     const loan = await this.permissionsHelper.loan.findFirst({
       where: {
         publicId: String(publicId),
         deletedAt: null
       },
+      _allowTeamAccess: allowTeamAccess,
       include: {
         Portfolio: {
           select: {

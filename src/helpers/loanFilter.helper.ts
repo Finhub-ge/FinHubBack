@@ -21,6 +21,7 @@ export const buildInitialWhereClause = () => {
 
 export const applyClosedLoansFilter = (where: any, filters: any): void => {
   where.statusId = { in: LoanStatusGroups.CLOSED };
+  where.closedAt = { not: null };
   applySearchFilter(where, filters.search);
   applyPortfolioFilters(where, filters);
 };

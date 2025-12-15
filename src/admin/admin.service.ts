@@ -22,7 +22,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
-import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
+import { createInitialLoanRemaining, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
@@ -660,7 +660,7 @@ export class AdminService {
     });
   }
 
-  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto) {
+  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto, user: any) {
     const { page, limit, ...filters } = getCommiteesDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
@@ -689,94 +689,110 @@ export class AdminService {
       where.createdAt = createdDateCondition;
     }
 
-    const [committees, totalCount] = await Promise.all([
-      this.permissionsHelper.committee.findMany(
-        {
-          where,
-          ...paginationParams,
-          include: {
-            Loan: {
+    // For committees: team leads should see all team's committees by default
+    const teamLead = isTeamLead(user);
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+
+    // Team leads (collectors and lawyers) see all team's committees, members see only own
+    const allowTeamAccess = teamLead && (isCollector || isLawyer);
+
+    const queryOptions: any = {
+      where,
+      ...paginationParams,
+      include: {
+        Loan: {
+          select: {
+            publicId: true,
+            caseId: true,
+            Debtor: {
               select: {
-                publicId: true,
-                caseId: true,
-                Debtor: {
+                firstName: true,
+                lastName: true
+              }
+            },
+            LoanRemaining: {
+              where: {
+                deletedAt: null
+              }
+            },
+            Portfolio: {
+              select: {
+                portfolioSeller: true
+              }
+            },
+            LoanLegalStage: {
+              where: {
+                deletedAt: null,
+              },
+              select: {
+                LegalStage: {
                   select: {
+                    id: true,
+                    title: true
+                  }
+                }
+              }
+            },
+            LoanAssignment: {
+              where: {
+                isActive: true,
+              },
+              select: {
+                createdAt: true,
+                User: {
+                  select: {
+                    id: true,
                     firstName: true,
-                    lastName: true
-                  }
-                },
-                LoanRemaining: {
-                  where: {
-                    deletedAt: null
-                  }
-                },
-                Portfolio: {
-                  select: {
-                    portfolioSeller: true
-                  }
-                },
-                LoanLegalStage: {
-                  where: {
-                    deletedAt: null,
-                  },
-                  select: {
-                    LegalStage: {
-                      select: {
-                        id: true,
-                        title: true
-                      }
-                    }
-                  }
-                },
-                LoanAssignment: {
-                  where: {
-                    isActive: true,
-                  },
-                  select: {
-                    createdAt: true,
-                    User: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                      },
-                    },
-                    Role: {
-                      select: {
-                        name: true,
-                      },
-                    },
+                    lastName: true,
                   },
                 },
-              }
+                Role: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
             },
-            User_Committee_requesterIdToUser: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            },
-            User_Committee_responderIdToUser: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            },
-            Uploads: {
-              select: {
-                id: true,
-                originalFileName: true
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
+          }
+        },
+        User_Committee_requesterIdToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_Committee_responderIdToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Uploads: {
+          select: {
+            id: true,
+            originalFileName: true
           }
         }
-      ),
-      this.permissionsHelper.committee.count({ where }),
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    };
+
+    if (allowTeamAccess) {
+      queryOptions._allowTeamAccess = true;
+    }
+
+    const [committees, totalCount] = await Promise.all([
+      this.permissionsHelper.committee.findMany(queryOptions),
+      this.permissionsHelper.committee.count({
+        where,
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+      }),
     ]);
 
     return this.paginationService.createPaginatedResult(committees, totalCount, { page, limit });
@@ -821,7 +837,7 @@ export class AdminService {
     });
   }
 
-  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
+  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto, user: any) {
     const { page, limit, skip, ...filters } = getMarkReportDto;
 
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
@@ -889,7 +905,17 @@ export class AdminService {
       where.Marks = { id: { in: filters.marks } };
     }
 
-    const data = await this.prisma.loanMarks.findMany({
+    // Determine if we should skip user scope for team leads filtering by team members
+    const teamLead = isTeamLead(user);
+    const hasAssignedCollectorFilter = filters.assignedCollector?.length > 0;
+
+    // Team leads (both collectors and lawyers) can see team members' payment commitments when filtering by assignedCollector
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+    const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    const queryOptions: any = {
       where,
       ...paginationParams,
       include: {
@@ -954,11 +980,21 @@ export class AdminService {
           }
         }
       }
-    });
-    const total = await this.prisma.loanMarks.count({
-      where: where,
-    });
-    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
+    }
+
+    if (skipUserScope) {
+      queryOptions._skipUserScope = true;
+    }
+
+    const [loanMarks, total] = await Promise.all([
+      this.permissionsHelper.loanMarks.findMany(queryOptions),
+      this.permissionsHelper.loanMarks.count({
+        where,
+        ...(skipUserScope ? { _skipUserScope: true } : {})
+      }),
+    ]);
+
+    return this.paginationService.createPaginatedResult(loanMarks, total, { page, limit, skip });
   }
 
   async getLegalStages() {
@@ -1529,7 +1565,7 @@ export class AdminService {
     };
   }
 
-  async getFuturePayments(getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
+  async getFuturePayments(getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto, user: any) {
     const { page, limit, search, skip } = getFuturePaymentsDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
@@ -1595,76 +1631,92 @@ export class AdminService {
       where.PaymentSchedule.some.paymentDate = schedulePaymentDateFilter;
     }
 
-    const [futurePayments, totalCount] = await Promise.all([
-      this.permissionsHelper.futurePayment.findMany(
-        {
-          where,
-          include: {
-            Loan: {
+    const teamLead = isTeamLead(user);
+    const hasAssignedCollectorFilter = getFuturePaymentsDto.assignedCollector?.length > 0;
+
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+    const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    const queryOptions: any = {
+      where,
+      include: {
+        Loan: {
+          select: {
+            id: true,
+            publicId: true,
+            caseId: true,
+            currency: true,
+            LoanAssignment: {
               select: {
-                id: true,
-                publicId: true,
-                caseId: true,
-                currency: true,
-                LoanAssignment: {
-                  select: {
-                    User: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        Role: {
-                          select: {
-                            name: true,
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                Portfolio: {
-                  select: {
-                    id: true,
-                    name: true,
-                    portfolioSeller: {
-                      select: {
-                        id: true,
-                        name: true,
-                      }
-                    }
-                  }
-                },
-                Debtor: {
+                User: {
                   select: {
                     id: true,
                     firstName: true,
                     lastName: true,
-                    idNumber: true,
+                    Role: {
+                      select: {
+                        name: true,
+                      }
+                    }
                   }
-                },
-                PortfolioCaseGroup: {
-                  select: {
-                    id: true,
-                    groupName: true,
-                  }
-                },
+                }
               }
             },
-            PaymentSchedule: {
-              where: {
-                paymentDate: schedulePaymentDateFilter
-              },
+            Portfolio: {
               select: {
                 id: true,
-                paymentDate: true,
-                amount: true,
+                name: true,
+                portfolioSeller: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
               }
             },
+            Debtor: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                idNumber: true,
+              }
+            },
+            PortfolioCaseGroup: {
+              select: {
+                id: true,
+                groupName: true,
+              }
+            },
+          }
+        },
+        PaymentSchedule: {
+          where: {
+            paymentDate: schedulePaymentDateFilter
           },
-          ...paginationParams,
-          orderBy: { paymentDate: 'desc' },
-        }),
-      this.permissionsHelper.futurePayment.count({ where }),
+          select: {
+            id: true,
+            paymentDate: true,
+            amount: true,
+          }
+        },
+      },
+      ...paginationParams,
+      orderBy: { paymentDate: 'desc' },
+    };
+
+    if (skipUserScope) {
+      queryOptions._skipUserScope = true;
+    }
+
+    const [futurePayments, totalCount] = await Promise.all([
+      this.permissionsHelper.futurePayment.findMany(queryOptions),
+      this.permissionsHelper.futurePayment.count({
+        where,
+        ...(skipUserScope ? { _skipUserScope: true } : {})
+      }),
     ]);
 
     return this.paginationService.createPaginatedResult(futurePayments, totalCount, { page, limit, skip });

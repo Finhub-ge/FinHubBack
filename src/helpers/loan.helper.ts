@@ -742,9 +742,9 @@ export const calculateLoanSummary = async (
 
   // Initialize summary for all currencies
   const summary = {
-    GEL: { cases: 0, principal: 0, debt: 0 },
-    USD: { cases: 0, principal: 0, debt: 0 },
-    EUR: { cases: 0, principal: 0, debt: 0 },
+    GEL: { title: 'GEL', cases: 0, principal: 0, debt: 0 },
+    USD: { title: 'USD', cases: 0, principal: 0, debt: 0 },
+    EUR: { title: 'EUR', cases: 0, principal: 0, debt: 0 },
   };
 
   // Aggregate by currency

@@ -137,8 +137,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('committees')
-  async getAllCommittees(@Query() getCommiteesDto: GetCommiteesWithPaginationDto) {
-    return await this.adminService.getAllCommittees(getCommiteesDto);
+  async getAllCommittees(@GetUser() user: User, @Query() getCommiteesDto: GetCommiteesWithPaginationDto) {
+    return await this.adminService.getAllCommittees(getCommiteesDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -179,8 +179,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('loanMarks')
-  async getLoanMarks(@Query() getMarkReportDto: GetMarkReportWithPaginationDto) {
-    return await this.adminService.getLoanMarks(getMarkReportDto);
+  async getLoanMarks(@GetUser() user: User, @Query() getMarkReportDto: GetMarkReportWithPaginationDto) {
+    return await this.adminService.getLoanMarks(getMarkReportDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -346,8 +346,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
   @Get('future-payments')
-  async getFuturePayments(@Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
-    return await this.adminService.getFuturePayments(getFuturePaymentsDto);
+  async getFuturePayments(@GetUser() user: User, @Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
+    return await this.adminService.getFuturePayments(getFuturePaymentsDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
