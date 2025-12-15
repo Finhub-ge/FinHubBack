@@ -179,7 +179,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @ExceptRoles(Role.CONTROLLER, Role.ANALYST, Role.LAWYER)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/assignment')
   async assignLoan(
     @GetUser() user: User,

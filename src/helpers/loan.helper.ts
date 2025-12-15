@@ -128,6 +128,7 @@ export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, us
     where: {
       // actDays: { gt: 40 },
       lastActivite: { lte: subtractDays(new Date(), 40) },
+      closedAt: null,
       LoanAssignment: {
         some: {
           isActive: true,
