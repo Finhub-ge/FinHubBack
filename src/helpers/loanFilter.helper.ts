@@ -16,7 +16,7 @@ dayjs.extend(timezone);
 // ==================== FILTER BUILDERS ====================
 
 export const buildInitialWhereClause = () => {
-  return { deletedAt: null, closedAt: null };
+  return { deletedAt: null };
 };
 
 export const applyClosedLoansFilter = (where: any, filters: any): void => {

@@ -5,6 +5,7 @@ import { statusToId } from "src/enums/visitStatus.enum";
 import { BadRequestException } from "@nestjs/common";
 import { PaymentScheduleItemDto } from "src/loan/dto/updateLoanStatus.dto";
 import { daysFromDate, subtractDays } from "./date.helper";
+import { LoanStatusGroups } from "src/enums/loanStatus.enum";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -128,7 +129,7 @@ export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, us
     where: {
       // actDays: { gt: 40 },
       lastActivite: { lte: subtractDays(new Date(), 40) },
-      closedAt: null,
+      statusId: { notIn: LoanStatusGroups.CLOSED as any },
       LoanAssignment: {
         some: {
           isActive: true,

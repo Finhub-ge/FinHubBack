@@ -392,4 +392,12 @@ export class LoanController {
   async getAvailableLitigationStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
     return this.loanService.getAvailableLitigationStatuses(publicId);
   }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':publicId/availableLegalStatuses')
+  async getAvailableLegalStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
+    return this.loanService.getAvailableLegalStatuses(publicId);
+  }
 }

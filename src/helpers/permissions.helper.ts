@@ -267,7 +267,7 @@ export class PermissionsHelper {
     }
 
     // Special collector rule: loans > 40 actDays
-    if (model === "loan" && user.role_name === Role.COLLECTOR && !isTeamLead(user)) {
+    if (model === "loan" && user.role_name === Role.COLLECTOR && !isTeamLead(user) && !searchMode) {
       const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
 
       if (highActDaysLoanIds.length > 0) {

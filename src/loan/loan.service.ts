@@ -1940,4 +1940,37 @@ export class LoanService {
     }
     return this.prisma.litigationStage.findMany({ where });
   }
+
+  async getAvailableLegalStatuses(publicId: ParseUUIDPipe) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanLegalStage: true,
+      },
+    });
+
+    if (!loan) throw new NotFoundException('Loan not found');
+
+    const where: any = { deletedAt: null };
+    const rules: Record<number, any> = {
+      60: { id: { in: [61, 63, 64] } },
+      61: { id: { in: [60, 62] } },
+      62: { id: { in: [60] } },
+      63: { id: { in: [65] } },
+      64: { id: { in: [0] } },
+      65: { id: { in: [0] } },
+    };
+
+    if (loan.LoanLegalStage.length > 0) {
+      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+      const stageCode = lastStage.legalStageId;
+
+      if (rules[stageCode]) {
+        Object.assign(where, rules[stageCode]);
+      }
+    }
+
+    return await this.prisma.legalStage.findMany({ where });
+  }
 }
