@@ -148,16 +148,73 @@ export const applyUserAssignmentFilter = (where: any, filters: any, user?: any, 
   // If user is provided, apply filter restrictions based on role
   const restrictedFilters = user ? applyUserFilterRestrictions(filters, user, teamMemberIds) : filters;
 
-  const assignedUserIds = collectAssignedUserIds(restrictedFilters);
+  // Collect all assignment filter IDs
+  const allLawyerIds = [
+    ...(restrictedFilters.assignedlawyer || []),
+    ...(restrictedFilters.assignedjuniorLawyer || []),
+    ...(restrictedFilters.assignedexecutionLawyer || []),
+  ];
 
-  if (assignedUserIds.length === 0) return;
+  const collectorIds = restrictedFilters.assigneduser || [];
 
-  where.LoanAssignment = {
-    some: {
-      isActive: true,
-      User: { id: { in: assignedUserIds } },
-    },
-  };
+  // Check for special IDs
+  const hasUnassigned = allLawyerIds.includes(-1);  // None
+  const hasPending = allLawyerIds.includes(-2);      // Pending
+
+  // Get real user IDs (exclude special IDs)
+  const realLawyerIds = allLawyerIds.filter(id => id > 0);
+  const realCollectorIds = collectorIds.filter(id => id > 0);
+  const realUserIds = [...realLawyerIds, ...realCollectorIds];
+
+  // Build conditions array for OR logic
+  const conditions = [];
+
+  // 1. Add condition for unassigned lawyers (-1)
+  if (hasUnassigned) {
+    conditions.push({
+      LoanAssignment: {
+        none: {
+          isActive: true,
+          Role: {
+            name: {
+              in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer']
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Add condition for pending requests (-2)
+  if (hasPending) {
+    conditions.push({
+      LawyerRequest: {
+        status: 'PENDING'
+      }
+    });
+  }
+
+  // 3. Add condition for real user assignments
+  if (realUserIds.length > 0) {
+    conditions.push({
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: { id: { in: realUserIds } }
+        }
+      }
+    });
+  }
+
+  // Apply the conditions
+  if (conditions.length > 1) {
+    // Multiple conditions: use OR
+    where.OR = conditions;
+  } else if (conditions.length === 1) {
+    // Single condition: merge directly
+    Object.assign(where, conditions[0]);
+  }
+  // If no conditions, don't add any filter
 };
 
 export const collectAssignedUserIds = (filters: any): number[] => {
@@ -380,6 +437,7 @@ export const getLoanIncludeConfig = () => {
     LoanRemaining: {
       where: { deletedAt: null },
     },
+    LawyerRequest: true,
   };
 };
 

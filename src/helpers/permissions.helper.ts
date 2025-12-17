@@ -266,17 +266,17 @@ export class PermissionsHelper {
       scopedWhere = this.addTeamScope(scopedWhere, user, model);
     }
 
-    // Special collector rule: loans > 40 actDays
-    if (model === "loan" && user.role_name === Role.COLLECTOR && !isTeamLead(user) && !searchMode) {
-      const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
+    // Special collector rule: loans > 40 actDays TODO: need fix this rule
+    // if (model === "loan" && user.role_name === Role.COLLECTOR && !isTeamLead(user) && !searchMode) {
+    //   const highActDaysLoanIds = await getCollectorLoansWithHighActDays(this.prisma, user.id);
 
-      if (highActDaysLoanIds.length > 0) {
-        scopedWhere = {
-          ...scopedWhere,
-          id: { in: highActDaysLoanIds },
-        };
-      }
-    }
+    //   if (highActDaysLoanIds.length > 0) {
+    //     scopedWhere = {
+    //       ...scopedWhere,
+    //       id: { in: highActDaysLoanIds },
+    //     };
+    //   }
+    // }
 
     return scopedWhere;
   }

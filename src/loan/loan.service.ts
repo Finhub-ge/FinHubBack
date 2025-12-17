@@ -490,6 +490,7 @@ export class LoanService {
         },
         PastPayments: true,
         CallHistory: true,
+        LawyerRequest: true,
       }
     });
 
@@ -1173,7 +1174,7 @@ export class LoanService {
 
     // If no userId provided → unassign
     if (!assignLoanDto.userId) {
-      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: user.id, });
+      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: user.id, hideRequest: assignLoanDto.hideRequest });
     }
 
     const assignedUser = await this.prisma.user.findUnique({
@@ -1254,6 +1255,31 @@ export class LoanService {
 
     await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
 
+    // Check if this is a lawyer role being assigned
+    const role = await dbClient.role.findUnique({
+      where: { id: roleId },
+      select: { name: true }
+    });
+
+    if (role && LAWYER_ROLES.includes(role.name as Role)) {
+      // Check if there's a PENDING LawyerRequest for this loan
+      const pendingRequest = await dbClient.lawyerRequest.findUnique({
+        where: { loanId: loanId }
+      });
+
+      if (pendingRequest && pendingRequest.status === 'PENDING') {
+        // Update LawyerRequest to ASSIGNED
+        await dbClient.lawyerRequest.update({
+          where: { id: pendingRequest.id },
+          data: {
+            status: 'ASSIGNED',
+            assignedAt: new Date(),
+            assignedBy: assignedBy
+          }
+        });
+      }
+    }
+
     return { loanId, userId, roleId, action: 'assigned' };
   }
 
@@ -1261,11 +1287,13 @@ export class LoanService {
     loanId,
     roleId,
     assignedBy,
+    hideRequest = false,
     tx = null
   }: {
     loanId: number;
     roleId: number;
     assignedBy: number;
+    hideRequest?: boolean;
     tx?: any;
   }) {
     const dbClient = tx || this.prisma;
@@ -1283,6 +1311,33 @@ export class LoanService {
 
     // Log history
     await logAssignmentHistory({ prisma: dbClient, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
+
+    // Check if this is a lawyer role being unassigned and hideRequest is true
+    if (hideRequest) {
+      const role = await dbClient.role.findUnique({
+        where: { id: roleId },
+        select: { name: true }
+      });
+
+      if (role && LAWYER_ROLES.includes(role.name as Role)) {
+        // Check if there's a LawyerRequest for this loan
+        const lawyerRequest = await dbClient.lawyerRequest.findUnique({
+          where: { loanId: loanId }
+        });
+
+        if (lawyerRequest) {
+          // Update LawyerRequest to HIDDEN
+          await dbClient.lawyerRequest.update({
+            where: { id: lawyerRequest.id },
+            data: {
+              status: 'HIDDEN',
+              hiddenAt: new Date(),
+              hiddenBy: assignedBy
+            }
+          });
+        }
+      }
+    }
     return { loanId, userId: currentAssignment.userId, roleId, action: 'unassigned' };
   }
 
@@ -1972,5 +2027,56 @@ export class LoanService {
     }
 
     return await this.prisma.legalStage.findMany({ where });
+  }
+
+  async requestLawyer(publicId: ParseUUIDPipe, requestedBy: number) {
+    // Find the loan
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        LawyerRequest: true
+      }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Check if there's already a request
+    const existingRequest = loan.LawyerRequest;
+
+    if (existingRequest) {
+      if (existingRequest.status === 'PENDING') {
+        throw new BadRequestException('A lawyer request is already pending for this loan');
+      }
+      if (existingRequest.status === 'HIDDEN') {
+        throw new BadRequestException('This loan has been marked as hidden and cannot request a lawyer again');
+      }
+      // If status is ASSIGNED, allow new request (user can request again)
+    }
+
+    // Create new request with PENDING status
+    const request = await this.prisma.lawyerRequest.create({
+      data: {
+        loanId: loan.id,
+        requestedBy: requestedBy,
+        status: 'PENDING',
+        pendingAt: new Date()
+      },
+      include: {
+        User_LawyerRequest_requestedByToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    return {
+      message: 'Lawyer request submitted successfully',
+      request
+    };
   }
 }
