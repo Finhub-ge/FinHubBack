@@ -18,4 +18,12 @@ export class AssignLoanDto {
   @IsBoolean()
   @IsOptional()
   hideRequest?: boolean;
+
+  @ApiProperty({
+    description: 'Comment/reason for assignment or unassignment',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+  comment?: string;
 }

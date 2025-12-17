@@ -1174,7 +1174,14 @@ export class LoanService {
 
     // If no userId provided → unassign
     if (!assignLoanDto.userId) {
-      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: user.id, hideRequest: assignLoanDto.hideRequest });
+      return this.unassign({
+        loanId: loan.id,
+        roleId: assignLoanDto.roleId,
+        assignedBy: user.id,
+        hideRequest: assignLoanDto.hideRequest,
+        comment: assignLoanDto.comment,
+        userId: user.id,
+      });
     }
 
     const assignedUser = await this.prisma.user.findUnique({
@@ -1221,12 +1228,13 @@ export class LoanService {
         userId: assignedUser.id,
         roleId: assignLoanDto.roleId,
         assignedBy: user.id,
+        comment: assignLoanDto.comment,
         tx
       });
     });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy, tx = null }) {
+  private async assign({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
     const dbClient = tx || this.prisma;
     // Find current active assignment for this role
     const currentAssignment = await dbClient.loanAssignment.findFirst({
@@ -1240,20 +1248,38 @@ export class LoanService {
 
     // If there is a current assignment → unassign old user
     if (currentAssignment) {
-      await this.unassign({ loanId, roleId, assignedBy, tx });
+      await this.unassign({ loanId, roleId, assignedBy, comment, userId, tx });
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, tx });
+    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy, tx = null }) {
+  private async assignNew({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
     const dbClient = tx || this.prisma;
     await dbClient.loanAssignment.create({
       data: { loanId, userId, roleId, isActive: true },
     });
 
     await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
+
+    // Get assigned user details for comment
+    const assignedUser = await dbClient.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+
+    // Create comment for assignment
+    if (assignedUser) {
+      const commentText = `Assign Lawyer (${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
+      await dbClient.comments.create({
+        data: {
+          loanId: loanId,
+          userId: userId,
+          comment: commentText
+        }
+      });
+    }
 
     // Check if this is a lawyer role being assigned
     const role = await dbClient.role.findUnique({
@@ -1288,13 +1314,17 @@ export class LoanService {
     roleId,
     assignedBy,
     hideRequest = false,
+    comment,
+    userId,
     tx = null
   }: {
     loanId: number;
     roleId: number;
     assignedBy: number;
     hideRequest?: boolean;
+    comment?: string;
     tx?: any;
+    userId?: number;
   }) {
     const dbClient = tx || this.prisma;
     // Find current active assignment
@@ -1311,6 +1341,25 @@ export class LoanService {
 
     // Log history
     await logAssignmentHistory({ prisma: dbClient, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
+
+    // Create comment for unassignment if comment provided
+    if (comment) {
+      const unassigner = await dbClient.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true }
+      });
+
+      if (unassigner) {
+        const commentText = `${unassigner.firstName} ${unassigner.lastName} Removed Lawyer. Reason: ${comment}`;
+        await dbClient.comments.create({
+          data: {
+            loanId: loanId,
+            userId: userId,
+            comment: commentText
+          }
+        });
+      }
+    }
 
     // Check if this is a lawyer role being unassigned and hideRequest is true
     if (hideRequest) {
@@ -1979,6 +2028,7 @@ export class LoanService {
 
     const where: any = { deletedAt: null };
     const rules: Record<number, any> = {
+      60: { id: { in: [0] } },
       61: { id: { notIn: [6] } },
       62: { id: { in: [6] } },
       64: { id: { in: [8] } },
