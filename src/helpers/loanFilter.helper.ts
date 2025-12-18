@@ -4,7 +4,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { buildLoanSearchWhere, calculateWriteoff } from './loan.helper';
+import { buildLoanSearchWhere, calculateWriteoff, getActiveTeamMembership, isTeamLead } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -93,11 +93,8 @@ export const applyActDaysFilter = (where: any, actDays?: number): void => {
 };
 
 export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberIds?: number[]): any => {
-  // Import helper functions from loan.helper
-  const { getActiveTeamMembership, isTeamLead } = require('./loan.helper');
-
   // Admin and Super Admin can see everything without restrictions
-  if (user.role_name === 'super_admin' || user.role_name === 'admin') {
+  if (user.role_name === 'super_admin' || user.role_name === 'admin' || user.role_name === 'operational_manager') {
     return filters;
   }
 

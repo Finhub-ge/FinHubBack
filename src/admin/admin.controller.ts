@@ -65,7 +65,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('transactions/get')
   async getTransactionList(@Query() getPaymentDto: GetPaymentWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentDto);
@@ -219,7 +219,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('getCharges')
   async getCharges(@Query() getChargeDto: GetChargeWithPaginationDto) {
     return await this.adminService.getCharges(getChargeDto);
@@ -240,14 +240,14 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('file/:id')
   async downloadFile(@Param('id') id: number) {
     return await this.adminService.downloadFile(id)
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Post('createTeam')
   async createTeam(
     @GetUser() user: User,
@@ -257,14 +257,14 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get('getTeams')
   async getTeams() {
     return await this.adminService.getTeams();
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @ApiParam({ name: 'teamId', type: 'number' })
   @Patch('updateTeam/:teamId')
   async updateTeam(
@@ -275,7 +275,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @ApiParam({ name: 'teamId', type: 'number' })
   @Delete('deleteTeam/:teamId')
   async deleteTeam(@Param('teamId', ParseIntPipe) teamId: number) {
@@ -283,7 +283,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @ApiParam({ name: 'teamId', type: 'number' })
   @Post('manageTeamUsers/:teamId')
   async manageTeamUsers(
@@ -316,14 +316,14 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('report/payments')
   async getPaymentsReport(@Query() getPaymentReportDto: GetPaymentReportWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentReportDto, { isReport: true });
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('report/charges')
   async getChargesReport(@Query() getChargeReportDto: GetChargeReportWithPaginationDto) {
     return await this.adminService.getCharges(getChargeReportDto, { isReport: true });
@@ -344,7 +344,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Get('future-payments')
   async getFuturePayments(@GetUser() user: User, @Query() getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
     return await this.adminService.getFuturePayments(getFuturePaymentsDto, user);

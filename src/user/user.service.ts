@@ -397,7 +397,7 @@ export class UserService {
     }
 
     // Add UNASSIGNED users only for Admins / Super-admins
-    const isAdmin = ['admin', 'super-admin'].includes(loggedInRole);
+    const isAdmin = ['admin', 'super-admin', 'operational_manager'].includes(loggedInRole);
 
     if (isAdmin && role && role.length > 0) {
       const assignedUserIds = new Set(memberships.map(m => m.userId));

@@ -132,7 +132,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Post(':publicId/lawyer-comment')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.LAWYER, Role.JUNIOR_LAWYER, Role.EXECUTION_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.LAWYER, Role.JUNIOR_LAWYER, Role.EXECUTION_LAWYER, Role.OPERATIONAL_MANAGER)
   addLawyerComment(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
@@ -316,7 +316,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Post(':publicId/visit')
   addVisit(
     @GetUser() user: User,
@@ -329,7 +329,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'visitId', type: 'number' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Patch(':publicId/visit/:visitId')
   updateVisit(
     @GetUser() user: User,
@@ -359,7 +359,7 @@ export class LoanController {
     enum: StatusMatrix_entityType,
   })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Get(':publicId/availableStatuses')
   async getAvailableStatuses(@Param('publicId') publicId: ParseUUIDPipe, @Query('entityType') entityType: StatusMatrix_entityType,) {
     return this.loanService.getAvailableStatuses(publicId, entityType);
@@ -367,7 +367,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Patch(':publicId/updatePortfolioGroup')
   async updatePortfolioGroup(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() updatePortfolioGroupDto: UpdatePortfolioGroupDto) {
     return this.loanService.updatePortfolioGroup(publicId, user.id, updatePortfolioGroupDto);

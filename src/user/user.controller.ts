@@ -20,14 +20,14 @@ export class UserController {
   ) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Post('create')
   createUser(@Body() data: CreateUserDto) {
     return this.userService.createUser(data)
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get('byRole')
   getUsersGroupedByRole() {
     return this.userService.getUsersGroupedByRole()
@@ -54,14 +54,14 @@ export class UserController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get(':roleId')
   getUsersByRoleId(@Param('roleId') roleId: string) {
     return this.userService.getUsersByRoleId(roleId)
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @ApiParam({ name: 'userId', type: 'number' })
   @Patch(':userId')
   editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
