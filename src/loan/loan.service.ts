@@ -2129,4 +2129,75 @@ export class LoanService {
       request
     };
   }
+
+  async exportPayments(publicId: ParseUUIDPipe, user: any) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        Transaction: true,
+      },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const columns = [
+      'CreatedAt',
+      'Date',
+      'Payment',
+      'Principal',
+      'Interest',
+      'Penalty',
+      'OtherFees',
+      'LegalCharges',
+      'Currency',
+    ];
+
+    const data = loan.Transaction.map(transaction => ({
+      CreatedAt: transaction.createdAt?.toISOString().split('T')[0],
+      Date: transaction.paymentDate?.toISOString().split('T')[0],
+      Payment: transaction.amount || '',
+      Principal: transaction.principal || '',
+      Interest: transaction.interest || '',
+      Penalty: transaction.penalty || '',
+      OtherFees: transaction.fees || '',
+      LegalCharges: transaction.legal || '',
+      Currency: transaction.currency || 'GEL',
+    }));
+
+    // Calculate totals
+    const totals = data.reduce(
+      (acc, row) => ({
+        Payment: acc.Payment + Number(row.Payment || 0),
+        Principal: acc.Principal + Number(row.Principal || 0),
+        Interest: acc.Interest + Number(row.Interest || 0),
+        Penalty: acc.Penalty + Number(row.Penalty || 0),
+        OtherFees: acc.OtherFees + Number(row.OtherFees || 0),
+        LegalCharges: acc.LegalCharges + Number(row.LegalCharges || 0),
+      }),
+      {
+        Payment: 0,
+        Principal: 0,
+        Interest: 0,
+        Penalty: 0,
+        OtherFees: 0,
+        LegalCharges: 0,
+      }
+    );
+
+    // Add total row
+    data.push({
+      CreatedAt: '',
+      Date: `Total (${data.length} transactions)`,
+      Payment: totals.Payment.toFixed(2),
+      Principal: totals.Principal.toFixed(2),
+      Interest: totals.Interest.toFixed(2),
+      Penalty: totals.Penalty.toFixed(2),
+      OtherFees: totals.OtherFees.toFixed(2),
+      LegalCharges: totals.LegalCharges.toFixed(2),
+      Currency: '',
+    });
+
+    return await generateExcel(data, columns, 'Case Payments');
+  }
 }

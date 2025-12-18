@@ -65,6 +65,20 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':publicId/export/payments')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportPayments(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe,) {
+    const excelBuffer = await this.loanService.exportPayments(publicId, user);
+
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=Case_payments_${Date.now()}.xlsx`
+    });
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
   @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post(':publicId/debtor/contacts')
   addDebtorContact(
