@@ -27,6 +27,7 @@ import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
+import { UpdateCommentDto } from './dto/updateComment.dto';
 
 
 @ApiTags('Loans')
@@ -167,6 +168,18 @@ export class LoanController {
     @Body() addCommentDto: AddCommentDto
   ) {
     return this.loanService.addComment(publicId, addCommentDto, user.id);
+  }
+
+  @ApiParam({ name: 'commentId', type: 'number' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Patch('comment/:commentId')
+  updateComment(
+    @GetUser() user: User,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Body() updateCommentDto: UpdateCommentDto
+  ) {
+    return this.loanService.updateComment(commentId, updateCommentDto, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

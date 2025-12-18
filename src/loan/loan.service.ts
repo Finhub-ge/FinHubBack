@@ -35,6 +35,7 @@ import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate } from 'src/helpers/date.helper';
 import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
+import { UpdateCommentDto } from './dto/updateComment.dto';
 
 @Injectable()
 export class LoanService {
@@ -863,6 +864,44 @@ export class LoanService {
     });
     return {
       message: 'Comment added successfully',
+    };
+  }
+
+  async updateComment(commentId: number, updateComment: UpdateCommentDto, userId: number) {
+    // Find the comment
+    const comment = await this.prisma.comments.findFirst({
+      where: {
+        id: commentId,
+        deletedAt: null
+      }
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    // Check if user is the owner of the comment
+    if (comment.userId !== userId) {
+      throw new BadRequestException('You can only edit your own comments');
+    }
+
+    // Check if comment is less than 24 hours old
+    const hoursSinceCreation = (Date.now() - comment.createdAt.getTime()) / (1000 * 60 * 60);
+    if (hoursSinceCreation >= 24) {
+      throw new BadRequestException('Comments can only be edited within 24 hours of creation');
+    }
+
+    // Update the comment
+    await this.prisma.comments.update({
+      where: { id: commentId },
+      data: {
+        comment: updateComment.comment,
+        updatedAt: new Date()
+      }
+    });
+
+    return {
+      message: 'Comment updated successfully',
     };
   }
 
