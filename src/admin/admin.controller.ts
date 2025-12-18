@@ -124,7 +124,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.CONTROLLER, Role.OPERATIONAL_MANAGER)
   @Post('committee/:id/response')
   async responseCommittee(
     @GetUser() user: User,

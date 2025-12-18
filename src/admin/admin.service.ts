@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
+import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -34,6 +34,7 @@ import { normalizeName } from "src/helpers/accountId.helper";
 import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 import { buildLoanQuery } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
+import { logAssignmentHistory } from "src/helpers/loan.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -616,6 +617,16 @@ export class AdminService {
   }
 
   async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {
+    // Fetch user 79 details
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: 79 },
+      select: { id: true, roleId: true, firstName: true, lastName: true }
+    });
+
+    if (!targetUser) {
+      throw new BadRequestException('Target user (ID: 79) not found');
+    }
+
     return await this.prisma.$transaction(async (tx) => {
       const committee = await tx.committee.findUnique({
         where: {
@@ -655,6 +666,84 @@ export class AdminService {
       // } else {
       await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
       // }
+
+      // Handle hopeless type
+      const finalType = data.type || committee.type;
+      if (finalType === Committee_type.hopeless) {
+        // Update loan groupId to 14
+        await tx.loan.update({
+          where: { id: committee.loanId },
+          data: { groupId: 14 }
+        });
+
+        // Find current active assignment for this role (read inside transaction for consistency)
+        const currentAssignment = await tx.loanAssignment.findFirst({
+          where: {
+            loanId: committee.loanId,
+            roleId: targetUser.roleId,
+            isActive: true
+          }
+        });
+
+        // If already assigned to user 79, skip reassignment
+        if (currentAssignment?.userId !== 79) {
+          // Deactivate current assignment if exists
+          if (currentAssignment) {
+            await tx.loanAssignment.update({
+              where: { id: currentAssignment.id },
+              data: { isActive: false, unassignedAt: new Date() }
+            });
+
+            // Log unassignment
+            await logAssignmentHistory({
+              prisma: tx as any,
+              loanId: committee.loanId,
+              userId: currentAssignment.userId,
+              roleId: targetUser.roleId,
+              action: 'unassigned',
+              assignedBy: userId
+            });
+          }
+
+          // Create new assignment to user 79
+          await tx.loanAssignment.create({
+            data: {
+              loanId: committee.loanId,
+              userId: 79,
+              roleId: targetUser.roleId,
+              isActive: true
+            }
+          });
+
+          // Log new assignment
+          await logAssignmentHistory({
+            prisma: tx as any,
+            loanId: committee.loanId,
+            userId: 79,
+            roleId: targetUser.roleId,
+            action: 'assigned',
+            assignedBy: userId
+          });
+
+          // Create comment for hopeless reassignment (using pre-fetched user details)
+          await tx.comments.create({
+            data: {
+              loanId: committee.loanId,
+              userId: userId,
+              comment: `Hopeless case - Reassigned to ${targetUser.firstName} ${targetUser.lastName} (79) and moved to group 14`
+            }
+          });
+        }
+      }
+
+      // Handle close type
+      if (finalType === Committee_type.close) {
+        // Update loan statusId to 12
+        await tx.loan.update({
+          where: { id: committee.loanId },
+          data: { statusId: 12, closedAt: new Date() }
+        });
+      }
 
       return { message: 'Committee response submitted successfully' };
     });
