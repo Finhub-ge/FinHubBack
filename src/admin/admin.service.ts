@@ -313,7 +313,69 @@ export class AdminService {
       transactions: data,
       paymentChannels,
     };
-    return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
+
+    // Calculate summary (respects filters, not pagination)
+    let summary = null;
+    if (options?.isReport) {
+      const allTransactions = await this.prisma.transaction.findMany({
+        where,
+        select: {
+          currency: true,
+          amount: true,
+          principal: true,
+          interest: true,
+          penalty: true,
+          fees: true,
+          legal: true,
+        },
+      });
+
+      // Initialize summary for all currencies
+      summary = {
+        GEL: { title: 'GEL', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+        USD: { title: 'USD', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+        EUR: { title: 'EUR', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+      };
+
+      // Aggregate by currency
+      allTransactions.forEach((transaction) => {
+        const currency = transaction.currency?.toUpperCase() || 'GEL';
+
+        if (summary[currency]) {
+          summary[currency].totalCases += 1;
+          summary[currency].totalAmount += Number(transaction.amount || 0);
+          summary[currency].totalPrincipal += Number(transaction.principal || 0);
+          summary[currency].totalInterest += Number(transaction.interest || 0);
+          summary[currency].totalPenalty += Number(transaction.penalty || 0);
+          summary[currency].totalOtherFees += Number(transaction.fees || 0);
+          summary[currency].totalLegalCharges += Number(transaction.legal || 0);
+          summary[currency].totalCollection += Number(transaction.amount || 0) + Number(transaction.legal || 0);
+        }
+      });
+
+      // Round to 2 decimal places
+      Object.keys(summary).forEach((currency) => {
+        summary[currency].totalAmount = Number(summary[currency].totalAmount.toFixed(2));
+        summary[currency].totalPrincipal = Number(summary[currency].totalPrincipal.toFixed(2));
+        summary[currency].totalInterest = Number(summary[currency].totalInterest.toFixed(2));
+        summary[currency].totalPenalty = Number(summary[currency].totalPenalty.toFixed(2));
+        summary[currency].totalOtherFees = Number(summary[currency].totalOtherFees.toFixed(2));
+        summary[currency].totalLegalCharges = Number(summary[currency].totalLegalCharges.toFixed(2));
+        summary[currency].totalCollection = Number(summary[currency].totalCollection.toFixed(2));
+      });
+    }
+
+    const paginatedResult = this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
+
+    // Add summary to response if it's a report
+    if (options?.isReport && summary) {
+      return {
+        ...paginatedResult,
+        summary,
+      };
+    }
+
+    return paginatedResult;
   }
 
   async addPayment(data: CreatePaymentDto, userId: number) {
