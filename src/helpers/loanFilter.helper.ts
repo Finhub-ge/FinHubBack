@@ -383,6 +383,9 @@ export const getLoanIncludeConfig = () => {
         lastName: true,
         idNumber: true,
         DebtorStatus: { select: { id: true, name: true } },
+        _count: {
+          select: { Loan: true }  // This counts all loans for this debtor
+        }
       },
     },
     LoanStatus: {

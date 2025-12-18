@@ -230,6 +230,9 @@ export class LoanService {
             DebtorRealEstate: true,
             DebtorGuarantors: true,
             DebtorEnforcementRecords: true,
+            _count: {
+              select: { Loan: true }  // This counts all loans for this debtor
+            }
           }
         },
         LoanStatus: {
