@@ -2200,4 +2200,67 @@ export class LoanService {
 
     return await generateExcel(data, columns, 'Case Payments');
   }
+
+  async exportPreviousPayments(publicId: ParseUUIDPipe, user: any) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        PastPayments: true,
+      },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const columns = [
+      'Date',
+      'Payment',
+      'Principal',
+      'Interest',
+      'Penalty',
+      'OtherFees',
+      'Currency',
+    ];
+
+    const data = loan.PastPayments.map(payment => ({
+      Date: payment.paymentDate?.toISOString().split('T')[0],
+      Payment: payment.payment || '',
+      Principal: payment.principal || '',
+      Interest: payment.interest || '',
+      Penalty: payment.penalty || '',
+      OtherFees: payment.otherFee || '',
+      Currency: payment.currency || 'GEL',
+    }));
+
+    // Calculate totals
+    const totals = data.reduce(
+      (acc, row) => ({
+        Payment: acc.Payment + (row.Payment || ''),
+        Principal: acc.Principal + (row.Principal || ''),
+        Interest: acc.Interest + (row.Interest || ''),
+        Penalty: acc.Penalty + (row.Penalty || ''),
+        OtherFees: acc.OtherFees + (row.OtherFees || ''),
+      }),
+      {
+        Payment: '',
+        Principal: '',
+        Interest: '',
+        Penalty: '',
+        OtherFees: '',
+      }
+    );
+
+    // Add total row
+    data.push({
+      Date: `Total (${data.length} payments)`,
+      Payment: totals.Payment.toString(),
+      Principal: totals.Principal.toString(),
+      Interest: totals.Interest.toString(),
+      Penalty: totals.Penalty.toString(),
+      OtherFees: totals.OtherFees.toString(),
+      Currency: '',
+    });
+
+    return await generateExcel(data, columns, 'Previous Payments');
+  }
 }
