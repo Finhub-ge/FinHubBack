@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
@@ -167,6 +167,9 @@ export class LoanService {
     // Allow team access for team leads viewing individual loans
     const allowTeamAccess = teamLead && (isLawyer || isCollector);
 
+    // Build comments WHERE clause based on user role and assignment
+    const commentsWhere = await buildCommentsWhereClause(this.prisma, user, String(publicId));
+
     const loan = await this.permissionsHelper.loan.findFirst({
       where: {
         publicId: String(publicId),
@@ -267,20 +270,7 @@ export class LoanService {
           }
         },
         Comments: {
-          where: user.role_name === Role.COLLECTOR && !isTeamLead(user) ? {
-            // Collectors: exclude other collectors' archived comments
-            NOT: {
-              AND: [
-                { archived: true }, // Is archived
-                { userId: { not: user.id } }, // Not their own
-                { User: { Role: { name: Role.COLLECTOR } } } // Is from a collector
-              ]
-            },
-            deletedAt: null
-          } : {
-            // Non-collectors: see ALL comments
-            deletedAt: null
-          },
+          where: commentsWhere,
           select: {
             id: true,
             comment: true,
@@ -1241,9 +1231,9 @@ export class LoanService {
       throw new BadRequestException('User role does not match roleId provided');
     }
 
-    if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
-      throw new BadRequestException('User is not a team lead');
-    }
+    // if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
+    //   throw new BadRequestException('User is not a team lead');
+    // }
 
     // Check if any visit is pending
     const hasPendingVisit = loan.LoanVisit.some(visit => visit.status === LoanVisit_status.pending);
@@ -1313,11 +1303,11 @@ export class LoanService {
 
     // Create comment for assignment
     if (assignedUser) {
-      const commentText = `Assign Lawyer (${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
+      const commentText = `Assign (${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
       await dbClient.comments.create({
         data: {
           loanId: loanId,
-          userId: userId,
+          userId: assignedBy,
           comment: commentText
         }
       });

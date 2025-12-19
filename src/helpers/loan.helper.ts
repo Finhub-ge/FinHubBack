@@ -124,6 +124,66 @@ export const isTeamLead = (user: any): boolean => {
   return activeTeamMembership?.teamRole === TeamMembership_teamRole.leader;
 }
 
+export const buildCommentsWhereClause = async (prisma: PrismaService, user: any, loanPublicId: string) => {
+  const teamLead = isTeamLead(user);
+  const isCollector = user.role_name === 'collector';
+
+  // Lawyers, team leads, admins: see ALL comments
+  if (!isCollector || teamLead) {
+    return { deletedAt: null };
+  }
+
+  // For collectors (non-team leads): get their LAST active assignment
+  const assignments = await prisma.loanAssignment.findMany({
+    where: {
+      Loan: { publicId: loanPublicId, deletedAt: null },
+      userId: user.id,
+      Role: { name: 'collector' }, // Only collector role assignments
+      isActive: true
+    },
+    select: { createdAt: true },
+    orderBy: { createdAt: 'desc' }, // Latest first
+    take: 1 // Get only the last one
+  });
+
+  // If no assignment found, return very restrictive filter
+  if (!assignments.length) {
+    return { id: -1 }; // No comments visible
+  }
+
+  const assignmentDate = assignments[0].createdAt;
+
+  // Build collector filter: combines BOTH requirements
+  return {
+    AND: [
+      { deletedAt: null },
+
+      // Only from assignment date onwards
+      { createdAt: { gte: assignmentDate } },
+
+      // Only own + team leads + lawyers
+      {
+        OR: [
+          { userId: user.id }, // Own comments
+          { User: { TeamMembership: { some: { teamRole: TeamMembership_teamRole.leader } } } }, // Team lead comments
+          { User: { Role: { name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] } } } } // Lawyer comments
+        ]
+      },
+
+      // Exclude other collectors' archived comments (preserve existing logic)
+      {
+        NOT: {
+          AND: [
+            { archived: true }, // Is archived
+            { userId: { not: user.id } }, // Not their own
+            { User: { Role: { name: 'collector' } } } // Is from a collector
+          ]
+        }
+      }
+    ]
+  };
+};
+
 export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, userId: number): Promise<number[]> => {
   const loans = await prisma.loan.findMany({
     where: {
