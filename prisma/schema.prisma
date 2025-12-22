@@ -195,6 +195,7 @@ model Loan {
   Charges                 Charges[]
   Comments                Comments[]
   Committee               Committee[]
+  LawyerRequest           LawyerRequest?
   Debtor                  Debtor                    @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   Portfolio               Portfolio                 @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   LoanStatus              LoanStatus                @relation(fields: [statusId], references: [id])
@@ -448,6 +449,9 @@ model User {
   Committee_Committee_responderIdToUser                           Committee[]                  @relation("Committee_responderIdToUser")
   DebtorContact                                                   DebtorContact[]
   DebtorStatusHistory                                             DebtorStatusHistory[]
+  LawyerRequest_LawyerRequest_assignedByToUser                    LawyerRequest[]              @relation("LawyerRequest_assignedByToUser")
+  LawyerRequest_LawyerRequest_hiddenByToUser                      LawyerRequest[]              @relation("LawyerRequest_hiddenByToUser")
+  LawyerRequest_LawyerRequest_requestedByToUser                   LawyerRequest[]              @relation("LawyerRequest_requestedByToUser")
   LoanAddress                                                     LoanAddress[]
   LoanAssignment                                                  LoanAssignment[]
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser        LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
@@ -2047,6 +2051,30 @@ model Old_db_clients_call_history {
   @@index([User_ID], map: "User_ID")
 }
 
+model LawyerRequest {
+  id                                   Int                   @id @default(autoincrement())
+  loanId                               Int                   @unique(map: "loanId")
+  requestedBy                          Int?
+  status                               LawyerRequest_status? @default(PENDING)
+  pendingAt                            DateTime?             @default(now()) @db.DateTime(0)
+  assignedAt                           DateTime?             @db.DateTime(0)
+  assignedBy                           Int?
+  hiddenAt                             DateTime?             @db.DateTime(0)
+  hiddenBy                             Int?
+  createdAt                            DateTime              @default(now()) @db.DateTime(0)
+  updatedAt                            DateTime              @default(now()) @db.DateTime(0)
+  User_LawyerRequest_assignedByToUser  User?                 @relation("LawyerRequest_assignedByToUser", fields: [assignedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_lawyer_request_assigned_by")
+  User_LawyerRequest_hiddenByToUser    User?                 @relation("LawyerRequest_hiddenByToUser", fields: [hiddenBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_lawyer_request_hidden_by")
+  Loan                                 Loan                  @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_lawyer_request_loan")
+  User_LawyerRequest_requestedByToUser User?                 @relation("LawyerRequest_requestedByToUser", fields: [requestedBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_lawyer_request_requested_by")
+
+  @@index([assignedBy], map: "idx_assigned_by")
+  @@index([hiddenBy], map: "idx_hidden_by")
+  @@index([loanId], map: "idx_loan_id")
+  @@index([requestedBy], map: "idx_requested_by")
+  @@index([status], map: "idx_status")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -2130,4 +2158,10 @@ enum CollectorMonthlyReport_status {
   ACTIVE
   FROZEN
   CLOSED
+}
+
+enum LawyerRequest_status {
+  PENDING
+  ASSIGNED
+  HIDDEN
 }

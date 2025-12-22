@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
+import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -22,7 +22,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
-import { createInitialLoanRemaining, updateLoanRemaining } from "src/helpers/loan.helper";
+import { createInitialLoanRemaining, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
@@ -34,6 +34,7 @@ import { normalizeName } from "src/helpers/accountId.helper";
 import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 import { buildLoanQuery } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
+import { logAssignmentHistory } from "src/helpers/loan.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -312,7 +313,69 @@ export class AdminService {
       transactions: data,
       paymentChannels,
     };
-    return this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
+
+    // Calculate summary (respects filters, not pagination)
+    let summary = null;
+    if (options?.isReport) {
+      const allTransactions = await this.prisma.transaction.findMany({
+        where,
+        select: {
+          currency: true,
+          amount: true,
+          principal: true,
+          interest: true,
+          penalty: true,
+          fees: true,
+          legal: true,
+        },
+      });
+
+      // Initialize summary for all currencies
+      summary = {
+        GEL: { title: 'GEL', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+        USD: { title: 'USD', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+        EUR: { title: 'EUR', totalCases: 0, totalAmount: 0, totalPrincipal: 0, totalInterest: 0, totalPenalty: 0, totalOtherFees: 0, totalLegalCharges: 0, totalCollection: 0 },
+      };
+
+      // Aggregate by currency
+      allTransactions.forEach((transaction) => {
+        const currency = transaction.currency?.toUpperCase() || 'GEL';
+
+        if (summary[currency]) {
+          summary[currency].totalCases += 1;
+          summary[currency].totalAmount += Number(transaction.amount || 0);
+          summary[currency].totalPrincipal += Number(transaction.principal || 0);
+          summary[currency].totalInterest += Number(transaction.interest || 0);
+          summary[currency].totalPenalty += Number(transaction.penalty || 0);
+          summary[currency].totalOtherFees += Number(transaction.fees || 0);
+          summary[currency].totalLegalCharges += Number(transaction.legal || 0);
+          summary[currency].totalCollection += Number(transaction.amount || 0) + Number(transaction.legal || 0);
+        }
+      });
+
+      // Round to 2 decimal places
+      Object.keys(summary).forEach((currency) => {
+        summary[currency].totalAmount = Number(summary[currency].totalAmount.toFixed(2));
+        summary[currency].totalPrincipal = Number(summary[currency].totalPrincipal.toFixed(2));
+        summary[currency].totalInterest = Number(summary[currency].totalInterest.toFixed(2));
+        summary[currency].totalPenalty = Number(summary[currency].totalPenalty.toFixed(2));
+        summary[currency].totalOtherFees = Number(summary[currency].totalOtherFees.toFixed(2));
+        summary[currency].totalLegalCharges = Number(summary[currency].totalLegalCharges.toFixed(2));
+        summary[currency].totalCollection = Number(summary[currency].totalCollection.toFixed(2));
+      });
+    }
+
+    const paginatedResult = this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
+
+    // Add summary to response if it's a report
+    if (options?.isReport && summary) {
+      return {
+        ...paginatedResult,
+        summary,
+      };
+    }
+
+    return paginatedResult;
   }
 
   async addPayment(data: CreatePaymentDto, userId: number) {
@@ -616,6 +679,16 @@ export class AdminService {
   }
 
   async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {
+    // Fetch user 79 details
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: 79 },
+      select: { id: true, roleId: true, firstName: true, lastName: true }
+    });
+
+    if (!targetUser) {
+      throw new BadRequestException('Target user (ID: 79) not found');
+    }
+
     return await this.prisma.$transaction(async (tx) => {
       const committee = await tx.committee.findUnique({
         where: {
@@ -656,11 +729,89 @@ export class AdminService {
       await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
       // }
 
+      // Handle hopeless type
+      const finalType = data.type || committee.type;
+      if (finalType === Committee_type.hopeless) {
+        // Update loan groupId to 14
+        await tx.loan.update({
+          where: { id: committee.loanId },
+          data: { groupId: 14 }
+        });
+
+        // Find current active assignment for this role (read inside transaction for consistency)
+        const currentAssignment = await tx.loanAssignment.findFirst({
+          where: {
+            loanId: committee.loanId,
+            roleId: targetUser.roleId,
+            isActive: true
+          }
+        });
+
+        // If already assigned to user 79, skip reassignment
+        if (currentAssignment?.userId !== 79) {
+          // Deactivate current assignment if exists
+          if (currentAssignment) {
+            await tx.loanAssignment.update({
+              where: { id: currentAssignment.id },
+              data: { isActive: false, unassignedAt: new Date() }
+            });
+
+            // Log unassignment
+            await logAssignmentHistory({
+              prisma: tx as any,
+              loanId: committee.loanId,
+              userId: currentAssignment.userId,
+              roleId: targetUser.roleId,
+              action: 'unassigned',
+              assignedBy: userId
+            });
+          }
+
+          // Create new assignment to user 79
+          await tx.loanAssignment.create({
+            data: {
+              loanId: committee.loanId,
+              userId: 79,
+              roleId: targetUser.roleId,
+              isActive: true
+            }
+          });
+
+          // Log new assignment
+          await logAssignmentHistory({
+            prisma: tx as any,
+            loanId: committee.loanId,
+            userId: 79,
+            roleId: targetUser.roleId,
+            action: 'assigned',
+            assignedBy: userId
+          });
+
+          // Create comment for hopeless reassignment (using pre-fetched user details)
+          await tx.comments.create({
+            data: {
+              loanId: committee.loanId,
+              userId: userId,
+              comment: `Hopeless case - Reassigned to ${targetUser.firstName} ${targetUser.lastName} (79) and moved to group 14`
+            }
+          });
+        }
+      }
+
+      // Handle close type
+      if (finalType === Committee_type.close) {
+        // Update loan statusId to 12
+        await tx.loan.update({
+          where: { id: committee.loanId },
+          data: { statusId: 12, closedAt: new Date() }
+        });
+      }
+
       return { message: 'Committee response submitted successfully' };
     });
   }
 
-  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto) {
+  async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto, user: any) {
     const { page, limit, ...filters } = getCommiteesDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
@@ -689,94 +840,110 @@ export class AdminService {
       where.createdAt = createdDateCondition;
     }
 
-    const [committees, totalCount] = await Promise.all([
-      this.permissionsHelper.committee.findMany(
-        {
-          where,
-          ...paginationParams,
-          include: {
-            Loan: {
+    // For committees: team leads should see all team's committees by default
+    const teamLead = isTeamLead(user);
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+
+    // Team leads (collectors and lawyers) see all team's committees, members see only own
+    const allowTeamAccess = teamLead && (isCollector || isLawyer);
+
+    const queryOptions: any = {
+      where,
+      ...paginationParams,
+      include: {
+        Loan: {
+          select: {
+            publicId: true,
+            caseId: true,
+            Debtor: {
               select: {
-                publicId: true,
-                caseId: true,
-                Debtor: {
+                firstName: true,
+                lastName: true
+              }
+            },
+            LoanRemaining: {
+              where: {
+                deletedAt: null
+              }
+            },
+            Portfolio: {
+              select: {
+                portfolioSeller: true
+              }
+            },
+            LoanLegalStage: {
+              where: {
+                deletedAt: null,
+              },
+              select: {
+                LegalStage: {
                   select: {
+                    id: true,
+                    title: true
+                  }
+                }
+              }
+            },
+            LoanAssignment: {
+              where: {
+                isActive: true,
+              },
+              select: {
+                createdAt: true,
+                User: {
+                  select: {
+                    id: true,
                     firstName: true,
-                    lastName: true
-                  }
-                },
-                LoanRemaining: {
-                  where: {
-                    deletedAt: null
-                  }
-                },
-                Portfolio: {
-                  select: {
-                    portfolioSeller: true
-                  }
-                },
-                LoanLegalStage: {
-                  where: {
-                    deletedAt: null,
-                  },
-                  select: {
-                    LegalStage: {
-                      select: {
-                        id: true,
-                        title: true
-                      }
-                    }
-                  }
-                },
-                LoanAssignment: {
-                  where: {
-                    isActive: true,
-                  },
-                  select: {
-                    createdAt: true,
-                    User: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                      },
-                    },
-                    Role: {
-                      select: {
-                        name: true,
-                      },
-                    },
+                    lastName: true,
                   },
                 },
-              }
+                Role: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
             },
-            User_Committee_requesterIdToUser: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            },
-            User_Committee_responderIdToUser: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            },
-            Uploads: {
-              select: {
-                id: true,
-                originalFileName: true
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
+          }
+        },
+        User_Committee_requesterIdToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_Committee_responderIdToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        Uploads: {
+          select: {
+            id: true,
+            originalFileName: true
           }
         }
-      ),
-      this.permissionsHelper.committee.count({ where }),
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    };
+
+    if (allowTeamAccess) {
+      queryOptions._allowTeamAccess = true;
+    }
+
+    const [committees, totalCount] = await Promise.all([
+      this.permissionsHelper.committee.findMany(queryOptions),
+      this.permissionsHelper.committee.count({
+        where,
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+      }),
     ]);
 
     return this.paginationService.createPaginatedResult(committees, totalCount, { page, limit });
@@ -821,7 +988,7 @@ export class AdminService {
     });
   }
 
-  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto) {
+  async getLoanMarks(getMarkReportDto: GetMarkReportWithPaginationDto, user: any) {
     const { page, limit, skip, ...filters } = getMarkReportDto;
 
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
@@ -889,7 +1056,17 @@ export class AdminService {
       where.Marks = { id: { in: filters.marks } };
     }
 
-    const data = await this.prisma.loanMarks.findMany({
+    // Determine if we should skip user scope for team leads filtering by team members
+    const teamLead = isTeamLead(user);
+    const hasAssignedCollectorFilter = filters.assignedCollector?.length > 0;
+
+    // Team leads (both collectors and lawyers) can see team members' payment commitments when filtering by assignedCollector
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+    const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    const queryOptions: any = {
       where,
       ...paginationParams,
       include: {
@@ -954,11 +1131,21 @@ export class AdminService {
           }
         }
       }
-    });
-    const total = await this.prisma.loanMarks.count({
-      where: where,
-    });
-    return this.paginationService.createPaginatedResult(data, total, { page, limit, skip });
+    }
+
+    if (skipUserScope) {
+      queryOptions._skipUserScope = true;
+    }
+
+    const [loanMarks, total] = await Promise.all([
+      this.permissionsHelper.loanMarks.findMany(queryOptions),
+      this.permissionsHelper.loanMarks.count({
+        where,
+        ...(skipUserScope ? { _skipUserScope: true } : {})
+      }),
+    ]);
+
+    return this.paginationService.createPaginatedResult(loanMarks, total, { page, limit, skip });
   }
 
   async getLegalStages() {
@@ -1529,7 +1716,7 @@ export class AdminService {
     };
   }
 
-  async getFuturePayments(getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto) {
+  async getFuturePayments(getFuturePaymentsDto: GetFuturePaymentsWithPaginationDto, user: any) {
     const { page, limit, search, skip } = getFuturePaymentsDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
@@ -1595,76 +1782,92 @@ export class AdminService {
       where.PaymentSchedule.some.paymentDate = schedulePaymentDateFilter;
     }
 
-    const [futurePayments, totalCount] = await Promise.all([
-      this.permissionsHelper.futurePayment.findMany(
-        {
-          where,
-          include: {
-            Loan: {
+    const teamLead = isTeamLead(user);
+    const hasAssignedCollectorFilter = getFuturePaymentsDto.assignedCollector?.length > 0;
+
+    const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+    const isCollector = user.role_name === Role.COLLECTOR;
+    const isLawyer = LAWYER_ROLES.includes(user.role_name);
+    const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    const queryOptions: any = {
+      where,
+      include: {
+        Loan: {
+          select: {
+            id: true,
+            publicId: true,
+            caseId: true,
+            currency: true,
+            LoanAssignment: {
               select: {
-                id: true,
-                publicId: true,
-                caseId: true,
-                currency: true,
-                LoanAssignment: {
-                  select: {
-                    User: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        Role: {
-                          select: {
-                            name: true,
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                Portfolio: {
-                  select: {
-                    id: true,
-                    name: true,
-                    portfolioSeller: {
-                      select: {
-                        id: true,
-                        name: true,
-                      }
-                    }
-                  }
-                },
-                Debtor: {
+                User: {
                   select: {
                     id: true,
                     firstName: true,
                     lastName: true,
-                    idNumber: true,
+                    Role: {
+                      select: {
+                        name: true,
+                      }
+                    }
                   }
-                },
-                PortfolioCaseGroup: {
-                  select: {
-                    id: true,
-                    groupName: true,
-                  }
-                },
+                }
               }
             },
-            PaymentSchedule: {
-              where: {
-                paymentDate: schedulePaymentDateFilter
-              },
+            Portfolio: {
               select: {
                 id: true,
-                paymentDate: true,
-                amount: true,
+                name: true,
+                portfolioSeller: {
+                  select: {
+                    id: true,
+                    name: true,
+                  }
+                }
               }
             },
+            Debtor: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                idNumber: true,
+              }
+            },
+            PortfolioCaseGroup: {
+              select: {
+                id: true,
+                groupName: true,
+              }
+            },
+          }
+        },
+        PaymentSchedule: {
+          where: {
+            paymentDate: schedulePaymentDateFilter
           },
-          ...paginationParams,
-          orderBy: { paymentDate: 'desc' },
-        }),
-      this.permissionsHelper.futurePayment.count({ where }),
+          select: {
+            id: true,
+            paymentDate: true,
+            amount: true,
+          }
+        },
+      },
+      ...paginationParams,
+      orderBy: { paymentDate: 'desc' },
+    };
+
+    if (skipUserScope) {
+      queryOptions._skipUserScope = true;
+    }
+
+    const [futurePayments, totalCount] = await Promise.all([
+      this.permissionsHelper.futurePayment.findMany(queryOptions),
+      this.permissionsHelper.futurePayment.count({
+        where,
+        ...(skipUserScope ? { _skipUserScope: true } : {})
+      }),
     ]);
 
     return this.paginationService.createPaginatedResult(futurePayments, totalCount, { page, limit, skip });

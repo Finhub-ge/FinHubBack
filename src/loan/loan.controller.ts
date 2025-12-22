@@ -27,6 +27,7 @@ import { UpdateVisitDto } from './dto/updateVisit.dto';
 import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoansFilter.dto';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
+import { UpdateCommentDto } from './dto/updateComment.dto';
 
 
 @ApiTags('Loans')
@@ -38,16 +39,16 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get()
-  getAll(@Query() filterDto: GetLoansFilterWithPaginationDto) {
-    return this.loanService.getAll(filterDto);
+  getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
+    return this.loanService.getAll(filterDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
   // @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  async exportLoans(@Query() filterDto: GetLoansFilterDto) {
-    const excelBuffer = await this.loanService.exportLoans(filterDto);
+  async exportLoans(@GetUser() user: User, @Query() filterDto: GetLoansFilterDto) {
+    const excelBuffer = await this.loanService.exportLoans(filterDto, user);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -61,6 +62,34 @@ export class LoanController {
   @Get(':publicId')
   getOne(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe) {
     return this.loanService.getOne(publicId, user);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':publicId/export/payments')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportPayments(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe,) {
+    const excelBuffer = await this.loanService.exportPayments(publicId, user);
+
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=Case_payments_${Date.now()}.xlsx`
+    });
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':publicId/export/previous-payments')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportPreviousPayments(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe,) {
+    const excelBuffer = await this.loanService.exportPreviousPayments(publicId, user);
+
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=Case_previous_payments_${Date.now()}.xlsx`
+    });
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -132,13 +161,25 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @Post(':publicId/lawyer-comment')
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.LAWYER, Role.JUNIOR_LAWYER, Role.EXECUTION_LAWYER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.LAWYER, Role.JUNIOR_LAWYER, Role.EXECUTION_LAWYER, Role.OPERATIONAL_MANAGER)
   addLawyerComment(
     @GetUser() user: User,
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() addCommentDto: AddCommentDto
   ) {
     return this.loanService.addComment(publicId, addCommentDto, user.id);
+  }
+
+  @ApiParam({ name: 'commentId', type: 'number' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Patch('comment/:commentId')
+  updateComment(
+    @GetUser() user: User,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Body() updateCommentDto: UpdateCommentDto
+  ) {
+    return this.loanService.updateComment(commentId, updateCommentDto, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -186,7 +227,7 @@ export class LoanController {
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() sssignLoanDto: AssignLoanDto
   ) {
-    return this.loanService.assignLoanToUser(publicId, sssignLoanDto, user.id);
+    return this.loanService.assignLoanToUser(publicId, sssignLoanDto, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -316,7 +357,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Post(':publicId/visit')
   addVisit(
     @GetUser() user: User,
@@ -329,7 +370,7 @@ export class LoanController {
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'visitId', type: 'number' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Patch(':publicId/visit/:visitId')
   updateVisit(
     @GetUser() user: User,
@@ -359,7 +400,7 @@ export class LoanController {
     enum: StatusMatrix_entityType,
   })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Get(':publicId/availableStatuses')
   async getAvailableStatuses(@Param('publicId') publicId: ParseUUIDPipe, @Query('entityType') entityType: StatusMatrix_entityType,) {
     return this.loanService.getAvailableStatuses(publicId, entityType);
@@ -367,7 +408,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.COLLECTOR, Role.OPERATIONAL_MANAGER)
   @Patch(':publicId/updatePortfolioGroup')
   async updatePortfolioGroup(@GetUser() user: User, @Param('publicId') publicId: ParseUUIDPipe, @Body() updatePortfolioGroupDto: UpdatePortfolioGroupDto) {
     return this.loanService.updatePortfolioGroup(publicId, user.id, updatePortfolioGroupDto);
@@ -391,5 +432,24 @@ export class LoanController {
   @Get(':publicId/availableLitigationStatuses')
   async getAvailableLitigationStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
     return this.loanService.getAvailableLitigationStatuses(publicId);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get(':publicId/availableLegalStatuses')
+  async getAvailableLegalStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
+    return this.loanService.getAvailableLegalStatuses(publicId);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Post(':publicId/request-lawyer')
+  async requestLawyer(
+    @Param('publicId') publicId: ParseUUIDPipe,
+    @GetUser() user: User
+  ) {
+    return this.loanService.requestLawyer(publicId, user.id);
   }
 }

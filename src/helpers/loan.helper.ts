@@ -5,6 +5,7 @@ import { statusToId } from "src/enums/visitStatus.enum";
 import { BadRequestException } from "@nestjs/common";
 import { PaymentScheduleItemDto } from "src/loan/dto/updateLoanStatus.dto";
 import { daysFromDate, subtractDays } from "./date.helper";
+import { LoanStatusGroups } from "src/enums/loanStatus.enum";
 const prisma = new PrismaClient();
 
 export interface LogAssignmentHistoryOptions {
@@ -123,11 +124,72 @@ export const isTeamLead = (user: any): boolean => {
   return activeTeamMembership?.teamRole === TeamMembership_teamRole.leader;
 }
 
+export const buildCommentsWhereClause = async (prisma: PrismaService, user: any, loanPublicId: string) => {
+  const teamLead = isTeamLead(user);
+  const isCollector = user.role_name === 'collector';
+
+  // Lawyers, team leads, admins: see ALL comments
+  if (!isCollector || teamLead) {
+    return { deletedAt: null };
+  }
+
+  // For collectors (non-team leads): get their LAST active assignment
+  const assignments = await prisma.loanAssignment.findMany({
+    where: {
+      Loan: { publicId: loanPublicId, deletedAt: null },
+      userId: user.id,
+      Role: { name: 'collector' }, // Only collector role assignments
+      isActive: true
+    },
+    select: { createdAt: true },
+    orderBy: { createdAt: 'desc' }, // Latest first
+    take: 1 // Get only the last one
+  });
+
+  // If no assignment found, return very restrictive filter
+  if (!assignments.length) {
+    return { id: -1 }; // No comments visible
+  }
+
+  const assignmentDate = assignments[0].createdAt;
+
+  // Build collector filter: combines BOTH requirements
+  return {
+    AND: [
+      { deletedAt: null },
+
+      // Only from assignment date onwards
+      { createdAt: { gte: assignmentDate } },
+
+      // Only own + team leads + lawyers
+      {
+        OR: [
+          { userId: user.id }, // Own comments
+          { User: { TeamMembership: { some: { teamRole: TeamMembership_teamRole.leader } } } }, // Team lead comments
+          { User: { Role: { name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] } } } } // Lawyer comments
+        ]
+      },
+
+      // Exclude other collectors' archived comments (preserve existing logic)
+      {
+        NOT: {
+          AND: [
+            { archived: true }, // Is archived
+            { userId: { not: user.id } }, // Not their own
+            { User: { Role: { name: 'collector' } } } // Is from a collector
+          ]
+        }
+      }
+    ]
+  };
+};
+
 export const getCollectorLoansWithHighActDays = async (prisma: PrismaService, userId: number): Promise<number[]> => {
   const loans = await prisma.loan.findMany({
     where: {
       // actDays: { gt: 40 },
       lastActivite: { lte: subtractDays(new Date(), 40) },
+      statusId: { notIn: LoanStatusGroups.CLOSED as any },
       LoanAssignment: {
         some: {
           isActive: true,
@@ -682,4 +744,95 @@ export const saveScheduleReminders = async (
       data: remindersData,
     });
   }
+}
+
+export const shouldSkipUserScope = (user: any, filters: any): boolean => {
+  const teamLead = isTeamLead(user);
+
+  if (!teamLead) {
+    return false;
+  }
+
+  // Collector team lead filtering by assigneduser (collectors)
+  if (user.role_name === 'collector' && filters.assigneduser?.length > 0) {
+    return true;
+  }
+
+  // Lawyer team lead filtering by any lawyer assignment
+  const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+  if (LAWYER_ROLES.includes(user.role_name)) {
+    const hasLawyerFilter =
+      filters.assignedlawyer?.length > 0 ||
+      filters.assignedjuniorLawyer?.length > 0 ||
+      filters.assignedexecutionLawyer?.length > 0;
+
+    if (hasLawyerFilter) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export const calculateLoanSummary = async (
+  permissionsHelper: any,
+  where: any,
+  skipUserScope: boolean
+) => {
+  // Fetch all loans matching the filter (respecting permissions)
+  const loans = await permissionsHelper.loan.findMany({
+    where,
+    _skipUserScope: skipUserScope,
+    select: {
+      currency: true,
+      principal: true,
+      totalDebt: true,
+      LoanRemaining: {
+        where: { deletedAt: null },
+        select: {
+          principal: true,
+          interest: true,
+          penalty: true,
+          otherFee: true,
+          legalCharges: true,
+          currentDebt: true,
+        },
+      },
+    },
+  });
+
+  // Initialize summary for all currencies
+  const summary = {
+    GEL: { title: 'GEL', cases: 0, principal: 0, debt: 0 },
+    USD: { title: 'USD', cases: 0, principal: 0, debt: 0 },
+    EUR: { title: 'EUR', cases: 0, principal: 0, debt: 0 },
+  };
+
+  // Aggregate by currency
+  loans.forEach((loan) => {
+    const currency = loan.currency?.toUpperCase() || 'GEL';
+
+    if (summary[currency]) {
+      summary[currency].cases += 1;
+
+      // Use LoanRemaining if available (current debt), otherwise use original loan values
+      if (loan.LoanRemaining && loan.LoanRemaining.length > 0) {
+        const remaining = loan.LoanRemaining[0];
+        summary[currency].principal += Number(remaining.principal || 0);
+        summary[currency].debt += Number(remaining.currentDebt || 0);
+      } else {
+        // Fallback to original loan values if LoanRemaining doesn't exist
+        summary[currency].principal += Number(loan.principal || 0);
+        summary[currency].debt += Number(loan.totalDebt || 0);
+      }
+    }
+  });
+
+  // Round to 2 decimal places
+  Object.keys(summary).forEach((currency) => {
+    summary[currency].principal = Number(summary[currency].principal.toFixed(2));
+    summary[currency].debt = Number(summary[currency].debt.toFixed(2));
+  });
+
+  return summary;
 }

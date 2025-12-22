@@ -14,14 +14,14 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get('planChart')
   getPlanChart(@Query() getPlanChartDto: GetPlanReportDto) {
     return this.dashboardService.getPlanChart(getPlanChartDto);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get('planReport')
   getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
     return this.dashboardService.getPlanReport(getPlanReportDto);

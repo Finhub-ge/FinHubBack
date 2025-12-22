@@ -4,7 +4,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { buildLoanSearchWhere, calculateWriteoff } from './loan.helper';
+import { buildLoanSearchWhere, calculateWriteoff, getActiveTeamMembership, isTeamLead } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -21,6 +21,7 @@ export const buildInitialWhereClause = () => {
 
 export const applyClosedLoansFilter = (where: any, filters: any): void => {
   where.statusId = { in: LoanStatusGroups.CLOSED };
+  where.closedAt = { not: null };
   applySearchFilter(where, filters.search);
   applyPortfolioFilters(where, filters);
 };
@@ -49,6 +50,8 @@ export const applySearchFilter = (where: any, searchTerm?: string): void => {
   const searchConditions = buildLoanSearchWhere(searchTerm);
   where.AND = where.AND || [];
   where.AND.push({ OR: searchConditions });
+
+  delete where.closedAt;
 };
 
 export const applyPortfolioFilters = (where: any, filters: any): void => {
@@ -89,17 +92,126 @@ export const applyActDaysFilter = (where: any, actDays?: number): void => {
   }
 };
 
-export const applyUserAssignmentFilter = (where: any, filters: any): void => {
-  const assignedUserIds = collectAssignedUserIds(filters);
+export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberIds?: number[]): any => {
+  // Admin and Super Admin can see everything without restrictions
+  if (user.role_name === 'super_admin' || user.role_name === 'admin' || user.role_name === 'operational_manager') {
+    return filters;
+  }
 
-  if (assignedUserIds.length === 0) return;
+  const activeTeamMembership = getActiveTeamMembership(user);
+  const teamLead = isTeamLead(user);
+  const restrictedFilters = { ...filters };
 
-  where.LoanAssignment = {
-    some: {
-      isActive: true,
-      User: { id: { in: assignedUserIds } },
-    },
-  };
+  // Handle COLLECTOR role
+  if (user.role_name === 'collector') {
+    if (teamLead && activeTeamMembership && teamMemberIds) {
+      // Collector Team Lead: Can filter by assigneduser, but only team members
+      // Validate and restrict assigneduser to only include team member IDs
+      if (restrictedFilters.assigneduser && Array.isArray(restrictedFilters.assigneduser)) {
+        // Filter to only include IDs that are in the team
+        restrictedFilters.assigneduser = restrictedFilters.assigneduser.filter(
+          (userId: number) => teamMemberIds.includes(userId)
+        );
+
+        // If after filtering, no valid users remain, remove the filter
+        if (restrictedFilters.assigneduser.length === 0) {
+          delete restrictedFilters.assigneduser;
+        }
+      }
+    } else {
+      // Collector (Not Team Lead): Remove assigneduser filter completely
+      delete restrictedFilters.assigneduser;
+    }
+  }
+
+  // Handle LAWYER roles (lawyer, junior_lawyer, execution_lawyer, super_lawyer)
+  const lawyerRoles = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
+  if (lawyerRoles.includes(user.role_name)) {
+    if (teamLead && activeTeamMembership) {
+      // Lawyer Team Lead: Can filter by any lawyer (no restrictions)
+      // Allow all lawyer filters to pass through
+    } else {
+      // Lawyer (Not Team Lead): Remove all lawyer filters
+      delete restrictedFilters.assignedlawyer;
+      delete restrictedFilters.assignedjuniorLawyer;
+      delete restrictedFilters.assignedexecutionLawyer;
+    }
+  }
+
+  return restrictedFilters;
+};
+
+export const applyUserAssignmentFilter = (where: any, filters: any, user?: any, teamMemberIds?: number[]): void => {
+  // If user is provided, apply filter restrictions based on role
+  const restrictedFilters = user ? applyUserFilterRestrictions(filters, user, teamMemberIds) : filters;
+
+  // Collect all assignment filter IDs
+  const allLawyerIds = [
+    ...(restrictedFilters.assignedlawyer || []),
+    ...(restrictedFilters.assignedjuniorLawyer || []),
+    ...(restrictedFilters.assignedexecutionLawyer || []),
+  ];
+
+  const collectorIds = restrictedFilters.assigneduser || [];
+
+  // Check for special IDs
+  const hasUnassigned = allLawyerIds.includes(-1);  // None
+  const hasPending = allLawyerIds.includes(-2);      // Pending
+
+  // Get real user IDs (exclude special IDs)
+  const realLawyerIds = allLawyerIds.filter(id => id > 0);
+  const realCollectorIds = collectorIds.filter(id => id > 0);
+  const realUserIds = [...realLawyerIds, ...realCollectorIds];
+
+  // Build conditions array for OR logic
+  const conditions = [];
+
+  // 1. Add condition for unassigned lawyers (-1)
+  if (hasUnassigned) {
+    conditions.push({
+      LoanAssignment: {
+        none: {
+          isActive: true,
+          Role: {
+            name: {
+              in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer']
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Add condition for pending requests (-2)
+  if (hasPending) {
+    conditions.push({
+      LawyerRequest: {
+        status: 'PENDING'
+      }
+    });
+  }
+
+  // 3. Add condition for real user assignments
+  if (realUserIds.length > 0) {
+    conditions.push({
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: { id: { in: realUserIds } }
+        }
+      }
+    });
+  }
+
+  // Apply the conditions
+  if (conditions.length > 1) {
+    // Multiple conditions: use OR
+    where.OR = conditions;
+  } else if (conditions.length === 1) {
+    // Single condition: merge directly
+    Object.assign(where, conditions[0]);
+  }
+  // If no conditions, don't add any filter
 };
 
 export const collectAssignedUserIds = (filters: any): number[] => {
@@ -271,6 +383,9 @@ export const getLoanIncludeConfig = () => {
         lastName: true,
         idNumber: true,
         DebtorStatus: { select: { id: true, name: true } },
+        _count: {
+          select: { Loan: true }  // This counts all loans for this debtor
+        }
       },
     },
     LoanStatus: {
@@ -322,6 +437,7 @@ export const getLoanIncludeConfig = () => {
     LoanRemaining: {
       where: { deletedAt: null },
     },
+    LawyerRequest: true,
   };
 };
 

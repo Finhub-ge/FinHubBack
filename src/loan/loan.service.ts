@@ -8,9 +8,9 @@ import { PaymentScheduleItemDto, UpdateLoanStatusDto } from './dto/updateLoanSta
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
-import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType } from '@prisma/client';
+import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
@@ -34,6 +34,8 @@ import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters,
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate } from 'src/helpers/date.helper';
+import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
+import { UpdateCommentDto } from './dto/updateComment.dto';
 
 @Injectable()
 export class LoanService {
@@ -47,7 +49,7 @@ export class LoanService {
 
   ) { }
 
-  async getAll(filterDto: GetLoansFilterWithPaginationDto): Promise<PaginatedResult<Loan>> {
+  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
     // Setup pagination
@@ -67,7 +69,26 @@ export class LoanService {
     }
 
     applyCommonFilters(where, filters);
-    applyUserAssignmentFilter(where, filters);
+
+    // Get team member IDs if user is a collector team lead
+    let teamMemberIds: number[] | undefined;
+    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+      if (activeTeamMembership) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: activeTeamMembership.teamId,
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        teamMemberIds = teamMembers.map(tm => tm.userId);
+      }
+    }
+
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
 
     // Handle complex filters with intersection ONLY if there are complex filters
     const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
@@ -91,13 +112,22 @@ export class LoanService {
       applyIntersectedIds(where, intersectedIds);
     }
 
+    // Determine if we should skip user scope in permission helper
+    // Skip only for team leads filtering by their own role type
+    const skipUserScope = shouldSkipUserScope(user, filters);
+
     // Fetch loans
     const includeConfig = getLoanIncludeConfig();
+    const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
+
+    // Add flag to skip user scope if needed
+    if (skipUserScope) {
+      loanQuery._skipUserScope = true;
+    }
+
     const [loans, totalCount] = await Promise.all([
-      this.permissionsHelper.loan.findMany(
-        buildLoanQuery(where, paginationParams, includeConfig)
-      ),
-      this.permissionsHelper.loan.count({ where }),
+      this.permissionsHelper.loan.findMany(loanQuery),
+      this.permissionsHelper.loan.count({ where, _skipUserScope: skipUserScope }),
     ]);
 
     // Enrich loans with actDays
@@ -116,15 +146,36 @@ export class LoanService {
       await mapClosedLoansDataToPaymentWriteoff(enrichedLoans, this.paymentsHelper);
     }
 
-    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+    // Calculate summary statistics (respects filters)
+    const summary = await calculateLoanSummary(this.permissionsHelper, where, skipUserScope);
+
+    const paginatedResult = this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+
+    // Add summary to response
+    return {
+      ...paginatedResult,
+      summary,
+    } as PaginatedResult<Loan> & { summary: any };
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
+    // Team leads should be able to view team members' loans
+    const teamLead = isTeamLead(user);
+    const isLawyer = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(user.role_name);
+    const isCollector = user.role_name === 'collector';
+
+    // Allow team access for team leads viewing individual loans
+    const allowTeamAccess = teamLead && (isLawyer || isCollector);
+
+    // Build comments WHERE clause based on user role and assignment
+    const commentsWhere = await buildCommentsWhereClause(this.prisma, user, String(publicId));
+
     const loan = await this.permissionsHelper.loan.findFirst({
       where: {
         publicId: String(publicId),
         deletedAt: null
       },
+      _allowTeamAccess: allowTeamAccess,
       include: {
         Portfolio: {
           select: {
@@ -182,6 +233,9 @@ export class LoanService {
             DebtorRealEstate: true,
             DebtorGuarantors: true,
             DebtorEnforcementRecords: true,
+            _count: {
+              select: { Loan: true }  // This counts all loans for this debtor
+            }
           }
         },
         LoanStatus: {
@@ -216,20 +270,7 @@ export class LoanService {
           }
         },
         Comments: {
-          where: user.role_name === Role.COLLECTOR && !isTeamLead(user) ? {
-            // Collectors: exclude other collectors' archived comments
-            NOT: {
-              AND: [
-                { archived: true }, // Is archived
-                { userId: { not: user.id } }, // Not their own
-                { User: { Role: { name: Role.COLLECTOR } } } // Is from a collector
-              ]
-            },
-            deletedAt: null
-          } : {
-            // Non-collectors: see ALL comments
-            deletedAt: null
-          },
+          where: commentsWhere,
           select: {
             id: true,
             comment: true,
@@ -443,6 +484,7 @@ export class LoanService {
         },
         PastPayments: true,
         CallHistory: true,
+        LawyerRequest: true,
       }
     });
 
@@ -818,6 +860,44 @@ export class LoanService {
     };
   }
 
+  async updateComment(commentId: number, updateComment: UpdateCommentDto, userId: number) {
+    // Find the comment
+    const comment = await this.prisma.comments.findFirst({
+      where: {
+        id: commentId,
+        deletedAt: null
+      }
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    // Check if user is the owner of the comment
+    if (comment.userId !== userId) {
+      throw new BadRequestException('You can only edit your own comments');
+    }
+
+    // Check if comment is less than 24 hours old
+    const hoursSinceCreation = (Date.now() - comment.createdAt.getTime()) / (1000 * 60 * 60);
+    if (hoursSinceCreation >= 24) {
+      throw new BadRequestException('Comments can only be edited within 24 hours of creation');
+    }
+
+    // Update the comment
+    await this.prisma.comments.update({
+      where: { id: commentId },
+      data: {
+        comment: updateComment.comment,
+        updatedAt: new Date()
+      }
+    });
+
+    return {
+      message: 'Comment updated successfully',
+    };
+  }
+
   async updateDeptorStatus(publicId: ParseUUIDPipe, addDebtorStatusDto: AddDebtorStatusDto, userId: number) {
     // Get the debtorId from the loan
     const loan = await this.prisma.loan.findUnique({
@@ -1106,7 +1186,7 @@ export class LoanService {
     };
   }
 
-  async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, userId: number) {
+  async assignLoanToUser(publicId: ParseUUIDPipe, assignLoanDto: AssignLoanDto, user: any) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
       select: {
@@ -1126,16 +1206,34 @@ export class LoanService {
 
     // If no userId provided → unassign
     if (!assignLoanDto.userId) {
-      return this.unassign({ loanId: loan.id, roleId: assignLoanDto.roleId, assignedBy: userId, });
+      return this.unassign({
+        loanId: loan.id,
+        roleId: assignLoanDto.roleId,
+        assignedBy: user.id,
+        hideRequest: assignLoanDto.hideRequest,
+        comment: assignLoanDto.comment,
+        userId: user.id,
+      });
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: assignLoanDto.userId, isActive: true, deletedAt: null } });
-    if (!user) throw new NotFoundException('User not found');
+    const assignedUser = await this.prisma.user.findUnique({
+      where: { id: assignLoanDto.userId, isActive: true, deletedAt: null },
+      // include: {
+      //   TeamMembership: {
+      //     where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
+      //   },
+      // }
+    });
+    if (!assignedUser) throw new NotFoundException('User not found');
 
     //Check role matches
-    if (user.roleId !== assignLoanDto.roleId) {
+    if (assignedUser.roleId !== assignLoanDto.roleId) {
       throw new BadRequestException('User role does not match roleId provided');
     }
+
+    // if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
+    //   throw new BadRequestException('User is not a team lead');
+    // }
 
     // Check if any visit is pending
     const hasPendingVisit = loan.LoanVisit.some(visit => visit.status === LoanVisit_status.pending);
@@ -1149,7 +1247,7 @@ export class LoanService {
     return await this.prisma.$transaction(async (tx) => {
       // user.id is the new user id
       // userId is the assigned by user id
-      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, userId, currentAssignment, tx);
+      await handleCommentsForReassignment(loan.id, assignLoanDto.roleId, user.id, user.id, currentAssignment, tx);
 
       // Update reminders to new user
       await tx.reminders.updateMany({
@@ -1159,15 +1257,16 @@ export class LoanService {
 
       return await this.assign({
         loanId: loan.id,
-        userId: user.id,
+        userId: assignedUser.id,
         roleId: assignLoanDto.roleId,
-        assignedBy: userId,
+        assignedBy: user.id,
+        comment: assignLoanDto.comment,
         tx
       });
     });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy, tx = null }) {
+  private async assign({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
     const dbClient = tx || this.prisma;
     // Find current active assignment for this role
     const currentAssignment = await dbClient.loanAssignment.findFirst({
@@ -1181,20 +1280,63 @@ export class LoanService {
 
     // If there is a current assignment → unassign old user
     if (currentAssignment) {
-      await this.unassign({ loanId, roleId, assignedBy, tx });
+      await this.unassign({ loanId, roleId, assignedBy, comment, userId, tx });
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, tx });
+    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy, tx = null }) {
+  private async assignNew({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
     const dbClient = tx || this.prisma;
     await dbClient.loanAssignment.create({
       data: { loanId, userId, roleId, isActive: true },
     });
 
     await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
+
+    // Get assigned user details for comment
+    const assignedUser = await dbClient.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true }
+    });
+
+    // Create comment for assignment
+    if (assignedUser) {
+      const commentText = `Assign (${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
+      await dbClient.comments.create({
+        data: {
+          loanId: loanId,
+          userId: assignedBy,
+          comment: commentText
+        }
+      });
+    }
+
+    // Check if this is a lawyer role being assigned
+    const role = await dbClient.role.findUnique({
+      where: { id: roleId },
+      select: { name: true }
+    });
+
+    if (role && LAWYER_ROLES.includes(role.name as Role)) {
+      // Check if there's a PENDING LawyerRequest for this loan
+      const pendingRequest = await dbClient.lawyerRequest.findUnique({
+        where: { loanId: loanId }
+      });
+
+      if (pendingRequest && pendingRequest.status === 'PENDING') {
+        // Update LawyerRequest to ASSIGNED
+        await dbClient.lawyerRequest.update({
+          where: { id: pendingRequest.id },
+          data: {
+            status: 'ASSIGNED',
+            assignedAt: new Date(),
+            assignedBy: assignedBy
+          }
+        });
+      }
+    }
 
     return { loanId, userId, roleId, action: 'assigned' };
   }
@@ -1203,12 +1345,18 @@ export class LoanService {
     loanId,
     roleId,
     assignedBy,
+    hideRequest = false,
+    comment,
+    userId,
     tx = null
   }: {
     loanId: number;
     roleId: number;
     assignedBy: number;
+    hideRequest?: boolean;
+    comment?: string;
     tx?: any;
+    userId?: number;
   }) {
     const dbClient = tx || this.prisma;
     // Find current active assignment
@@ -1225,6 +1373,52 @@ export class LoanService {
 
     // Log history
     await logAssignmentHistory({ prisma: dbClient, loanId, userId: currentAssignment.userId, roleId, action: 'unassigned', assignedBy });
+
+    // Create comment for unassignment if comment provided
+    if (comment) {
+      const unassigner = await dbClient.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true }
+      });
+
+      if (unassigner) {
+        const commentText = `${unassigner.firstName} ${unassigner.lastName} Removed Lawyer. Reason: ${comment}`;
+        await dbClient.comments.create({
+          data: {
+            loanId: loanId,
+            userId: userId,
+            comment: commentText
+          }
+        });
+      }
+    }
+
+    // Check if this is a lawyer role being unassigned and hideRequest is true
+    if (hideRequest) {
+      const role = await dbClient.role.findUnique({
+        where: { id: roleId },
+        select: { name: true }
+      });
+
+      if (role && LAWYER_ROLES.includes(role.name as Role)) {
+        // Check if there's a LawyerRequest for this loan
+        const lawyerRequest = await dbClient.lawyerRequest.findUnique({
+          where: { loanId: loanId }
+        });
+
+        if (lawyerRequest) {
+          // Update LawyerRequest to HIDDEN
+          await dbClient.lawyerRequest.update({
+            where: { id: lawyerRequest.id },
+            data: {
+              status: 'HIDDEN',
+              hiddenAt: new Date(),
+              hiddenBy: assignedBy
+            }
+          });
+        }
+      }
+    }
     return { loanId, userId: currentAssignment.userId, roleId, action: 'unassigned' };
   }
 
@@ -1819,8 +2013,8 @@ export class LoanService {
     };
   }
 
-  async exportLoans(filterDto: GetLoansFilterDto) {
-    const loans = await this.getAll(filterDto);
+  async exportLoans(filterDto: GetLoansFilterDto, user: any) {
+    const loans = await this.getAll(filterDto, user);
 
     const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 
@@ -1866,6 +2060,7 @@ export class LoanService {
 
     const where: any = { deletedAt: null };
     const rules: Record<number, any> = {
+      60: { id: { in: [0] } },
       61: { id: { notIn: [6] } },
       62: { id: { in: [6] } },
       64: { id: { in: [8] } },
@@ -1881,5 +2076,223 @@ export class LoanService {
       }
     }
     return this.prisma.litigationStage.findMany({ where });
+  }
+
+  async getAvailableLegalStatuses(publicId: ParseUUIDPipe) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        LoanLegalStage: true,
+      },
+    });
+
+    if (!loan) throw new NotFoundException('Loan not found');
+
+    const where: any = { deletedAt: null };
+    const rules: Record<number, any> = {
+      60: { id: { in: [61, 63, 64] } },
+      61: { id: { in: [60, 62] } },
+      62: { id: { in: [60] } },
+      63: { id: { in: [65] } },
+      64: { id: { in: [0] } },
+      65: { id: { in: [0] } },
+    };
+
+    if (loan.LoanLegalStage.length > 0) {
+      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+      const stageCode = lastStage.legalStageId;
+
+      if (rules[stageCode]) {
+        Object.assign(where, rules[stageCode]);
+      }
+    }
+
+    return await this.prisma.legalStage.findMany({ where });
+  }
+
+  async requestLawyer(publicId: ParseUUIDPipe, requestedBy: number) {
+    // Find the loan
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        LawyerRequest: true
+      }
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    // Check if there's already a request
+    const existingRequest = loan.LawyerRequest;
+
+    if (existingRequest) {
+      if (existingRequest.status === 'PENDING') {
+        throw new BadRequestException('A lawyer request is already pending for this loan');
+      }
+      if (existingRequest.status === 'HIDDEN') {
+        throw new BadRequestException('This loan has been marked as hidden and cannot request a lawyer again');
+      }
+      // If status is ASSIGNED, allow new request (user can request again)
+    }
+
+    // Create new request with PENDING status
+    const request = await this.prisma.lawyerRequest.create({
+      data: {
+        loanId: loan.id,
+        requestedBy: requestedBy,
+        status: 'PENDING',
+        pendingAt: new Date()
+      },
+      include: {
+        User_LawyerRequest_requestedByToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      }
+    });
+
+    return {
+      message: 'Lawyer request submitted successfully',
+      request
+    };
+  }
+
+  async exportPayments(publicId: ParseUUIDPipe, user: any) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        Transaction: true,
+      },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const columns = [
+      'CreatedAt',
+      'Date',
+      'Payment',
+      'Principal',
+      'Interest',
+      'Penalty',
+      'OtherFees',
+      'LegalCharges',
+      'Currency',
+    ];
+
+    const data = loan.Transaction.map(transaction => ({
+      CreatedAt: transaction.createdAt?.toISOString().split('T')[0],
+      Date: transaction.paymentDate?.toISOString().split('T')[0],
+      Payment: transaction.amount || '',
+      Principal: transaction.principal || '',
+      Interest: transaction.interest || '',
+      Penalty: transaction.penalty || '',
+      OtherFees: transaction.fees || '',
+      LegalCharges: transaction.legal || '',
+      Currency: transaction.currency || 'GEL',
+    }));
+
+    // Calculate totals
+    const totals = data.reduce(
+      (acc, row) => ({
+        Payment: acc.Payment + Number(row.Payment || 0),
+        Principal: acc.Principal + Number(row.Principal || 0),
+        Interest: acc.Interest + Number(row.Interest || 0),
+        Penalty: acc.Penalty + Number(row.Penalty || 0),
+        OtherFees: acc.OtherFees + Number(row.OtherFees || 0),
+        LegalCharges: acc.LegalCharges + Number(row.LegalCharges || 0),
+      }),
+      {
+        Payment: 0,
+        Principal: 0,
+        Interest: 0,
+        Penalty: 0,
+        OtherFees: 0,
+        LegalCharges: 0,
+      }
+    );
+
+    // Add total row
+    data.push({
+      CreatedAt: '',
+      Date: `Total (${data.length} transactions)`,
+      Payment: totals.Payment.toFixed(2),
+      Principal: totals.Principal.toFixed(2),
+      Interest: totals.Interest.toFixed(2),
+      Penalty: totals.Penalty.toFixed(2),
+      OtherFees: totals.OtherFees.toFixed(2),
+      LegalCharges: totals.LegalCharges.toFixed(2),
+      Currency: '',
+    });
+
+    return await generateExcel(data, columns, 'Case Payments');
+  }
+
+  async exportPreviousPayments(publicId: ParseUUIDPipe, user: any) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        PastPayments: true,
+      },
+    });
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const columns = [
+      'Date',
+      'Payment',
+      'Principal',
+      'Interest',
+      'Penalty',
+      'OtherFees',
+      'Currency',
+    ];
+
+    const data = loan.PastPayments.map(payment => ({
+      Date: payment.paymentDate?.toISOString().split('T')[0],
+      Payment: payment.payment || '',
+      Principal: payment.principal || '',
+      Interest: payment.interest || '',
+      Penalty: payment.penalty || '',
+      OtherFees: payment.otherFee || '',
+      Currency: payment.currency || 'GEL',
+    }));
+
+    // Calculate totals
+    const totals = data.reduce(
+      (acc, row) => ({
+        Payment: acc.Payment + (row.Payment || ''),
+        Principal: acc.Principal + (row.Principal || ''),
+        Interest: acc.Interest + (row.Interest || ''),
+        Penalty: acc.Penalty + (row.Penalty || ''),
+        OtherFees: acc.OtherFees + (row.OtherFees || ''),
+      }),
+      {
+        Payment: '',
+        Principal: '',
+        Interest: '',
+        Penalty: '',
+        OtherFees: '',
+      }
+    );
+
+    // Add total row
+    data.push({
+      Date: `Total (${data.length} payments)`,
+      Payment: totals.Payment.toString(),
+      Principal: totals.Principal.toString(),
+      Interest: totals.Interest.toString(),
+      Penalty: totals.Penalty.toString(),
+      OtherFees: totals.OtherFees.toString(),
+      Currency: '',
+    });
+
+    return await generateExcel(data, columns, 'Previous Payments');
   }
 }

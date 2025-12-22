@@ -397,7 +397,7 @@ export class UserService {
     }
 
     // Add UNASSIGNED users only for Admins / Super-admins
-    const isAdmin = ['admin', 'super-admin'].includes(loggedInRole);
+    const isAdmin = ['admin', 'super-admin', 'operational_manager'].includes(loggedInRole);
 
     if (isAdmin && role && role.length > 0) {
       const assignedUserIds = new Set(memberships.map(m => m.userId));
@@ -429,6 +429,35 @@ export class UserService {
       }
     }
 
+    // Add dummy "None" and "Pending" entries for lawyer roles
+    const isLawyerFilter = role?.some(r =>
+      ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(r)
+    );
+
+    if (isLawyerFilter) {
+      // Add special team for dummy entries
+      result.unshift({
+        teamId: -1,
+        teamName: 'Special Filters',
+        teamLeaderId: null,
+        teamLeader: null,
+        teamLeaderRole: null,
+        members: [
+          {
+            id: -1,
+            firstName: 'None',
+            lastName: '(Unassigned)',
+            role: 'special'
+          },
+          {
+            id: -2,
+            firstName: 'Pending',
+            lastName: '(Requested)',
+            role: 'special'
+          }
+        ]
+      });
+    }
     return result;
   }
 

@@ -278,6 +278,10 @@ export class AuthService {
         {},
       );
     }
-    return currentUser
+    // Add canRequestLawyer property for specific user
+    return {
+      ...currentUser,
+      canRequestLawyer: currentUser.id === 62
+    };
   }
 }
