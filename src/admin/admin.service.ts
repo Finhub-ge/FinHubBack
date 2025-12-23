@@ -209,6 +209,7 @@ export class AdminService {
             }
           },
           LoanStatus: true,
+          Portfolio: true,
         }
       }
     };
