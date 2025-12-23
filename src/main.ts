@@ -52,7 +52,7 @@ async function bootstrap() {
     res.json(document);
   });
   const reflector = app.get(Reflector)
-  app.enableCors();
+
   await app.listen(4444);
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
