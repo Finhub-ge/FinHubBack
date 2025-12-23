@@ -13,6 +13,17 @@ async function bootstrap() {
     }),
   );
 
+  app.enableCors({
+    origin: [
+      'https://new.myfinhub.info',  // Your production frontend
+      'http://localhost:3000',       // Local development
+      'http://localhost:5173',       // Vite default
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   const config = new DocumentBuilder()
     .setTitle('FinHub Api')
     .setDescription('Full API description')
