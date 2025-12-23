@@ -39,6 +39,7 @@ model Comments {
   @@index([archivedBy], map: "fk_comments_archivedBy")
   @@index([loanId, archived, deletedAt], map: "idx_comments_loan_archived")
   @@index([userId, archived, loanId], map: "idx_comments_user_archived")
+  @@index([loanId, createdAt, deletedAt], map: "idx_loan_created_deleted")
 }
 
 model ContactLabel {
@@ -228,6 +229,9 @@ model Loan {
   @@index([statusId])
   @@index([groupId], map: "idx_group")
   @@index([caseId], map: "caseDtl")
+  @@index([closedAt], map: "idx_closedAt")
+  @@index([lastActivite], map: "idx_lastActivite")
+  @@index([statusId, deletedAt], map: "idx_status_deleted")
 }
 
 model LoanAttribute {
@@ -383,6 +387,10 @@ model Transaction {
   @@index([loanId], map: "fk_Transactions_1_idx")
   @@index([userId], map: "fk_Transactions_2_idx")
   @@index([transactionChannelAccountId], map: "fk_Transactions_3_idx")
+  @@index([currency], map: "idx_currency")
+  @@index([deleted], map: "idx_deleted")
+  @@index([deleted, paymentDate], map: "idx_deleted_date")
+  @@index([paymentDate], map: "idx_paymentDate")
 }
 
 model TransactionChannelAccounts {
@@ -475,7 +483,9 @@ model User {
   @@index([accountId])
   @@index([deletedAt])
   @@index([email])
-  @@index([roleId], map: "User_roleId_fkey")
+  @@index([isActive], map: "idx_isActive")
+  @@index([roleId], map: "idx_roleId")
+  @@index([roleId, isActive], map: "idx_role_active")
 }
 
 model portfolioSeller {
@@ -509,6 +519,9 @@ model Tasks {
   @@index([fromUser], map: "fk_Tasks_2")
   @@index([toUserId], map: "fk_Tasks_3")
   @@index([taskStatusId], map: "fk_Tasks_4")
+  @@index([deadline], map: "idx_deadline")
+  @@index([deletedAt], map: "idx_deletedAt")
+  @@index([toUserId, taskStatusId, deletedAt], map: "idx_user_status_deleted")
 }
 
 model SmsHistory {
@@ -551,6 +564,10 @@ model LoanAssignment {
   @@index([loanId], map: "fk_LoanAssignment_1")
   @@index([userId], map: "fk_LoanAssignment_2")
   @@index([roleId], map: "fk_LoanAssignment_3")
+  @@index([createdAt], map: "idx_createdAt")
+  @@index([isActive], map: "idx_isActive")
+  @@index([loanId, userId, isActive, deletedAt], map: "idx_loan_user_active")
+  @@index([userId, isActive, roleId], map: "idx_user_active_role")
 }
 
 model LoanAssignmentHistory {
@@ -601,6 +618,8 @@ model Committee {
   @@index([requesterId], map: "idx_committee_2")
   @@index([responderId], map: "idx_committee_3")
   @@index([uploadId], map: "fk_committee_upload_4")
+  @@index([status], map: "idx_status")
+  @@index([status, deletedAt], map: "idx_status_deleted")
 }
 
 model Marks {
@@ -894,6 +913,10 @@ model TeamMembership {
   @@unique([teamId, userId, deletedAt], map: "unique_active_membership")
   @@index([teamId], map: "fk_TeamMemberships_1")
   @@index([userId], map: "fk_TeamMemberships_2")
+  @@index([deletedAt], map: "idx_deletedAt")
+  @@index([teamRole, deletedAt], map: "idx_role_deleted")
+  @@index([teamRole], map: "idx_teamRole")
+  @@index([userId, deletedAt], map: "idx_user_deleted")
 }
 
 model City {
@@ -923,6 +946,8 @@ model LoanAddress {
   @@index([loanId], map: "fk_LoanAddress_1")
   @@index([cityId], map: "fk_LoanAddress_2")
   @@index([userId], map: "fk_LoanAddress_3")
+  @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt], map: "idx_loan_deleted")
 }
 
 model LoanVisit {
@@ -944,6 +969,8 @@ model LoanVisit {
   @@index([loanId], map: "fk_LoanVisit_1")
   @@index([userId], map: "fk_LoanVisit_3")
   @@index([loanAddressId], map: "fk_LoanVisit_2")
+  @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt, createdAt], map: "idx_loan_deleted_created")
 }
 
 model StatusMatrix {
@@ -1079,6 +1106,8 @@ model Reminders {
   @@index([toUserId], map: "fk_Reminders_3_idx")
   @@index([deletedAt], map: "idx_deletedAt")
   @@index([status], map: "idx_status")
+  @@index([deadline], map: "idx_deadline")
+  @@index([toUserId, deadline, deletedAt], map: "idx_user_deadline_deleted")
 }
 
 model CollectorsMonthlyTarget {
@@ -2073,6 +2102,7 @@ model LawyerRequest {
   @@index([loanId], map: "idx_loan_id")
   @@index([requestedBy], map: "idx_requested_by")
   @@index([status], map: "idx_status")
+  @@index([status, loanId], map: "idx_status_loan")
 }
 
 enum PaymentCommitment_type {
