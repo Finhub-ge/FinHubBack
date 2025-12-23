@@ -13,16 +13,16 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors({
-    origin: [
-      'https://new.myfinhub.info',  // Your production frontend
-      'http://localhost:3000',       // Local development
-      'http://localhost:5173',       // Vite default
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
+  // app.enableCors({
+  //   origin: [
+  //     'https://new.myfinhub.info',  // Your production frontend
+  //     'http://localhost:3000',       // Local development
+  //     'http://localhost:5173',       // Vite default
+  //   ],
+  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  //   credentials: true,
+  //   allowedHeaders: ['Content-Type', 'Authorization'],
+  // });
 
   const config = new DocumentBuilder()
     .setTitle('FinHub Api')
@@ -52,7 +52,7 @@ async function bootstrap() {
     res.json(document);
   });
   const reflector = app.get(Reflector)
-
+  app.enableCors();
   await app.listen(4444);
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
