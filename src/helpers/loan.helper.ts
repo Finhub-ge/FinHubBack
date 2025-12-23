@@ -836,3 +836,86 @@ export const calculateLoanSummary = async (
 
   return summary;
 }
+export const calculateLoanSummaryNew = async (
+  permissionsHelper: any,
+  where: any,
+  skipUserScope: boolean
+) => {
+  // Calculate summaries for each currency in parallel
+  const [gelData, usdData, eurData] = await Promise.all([
+    calculateCurrencySummary(permissionsHelper, where, skipUserScope, 'GEL'),
+    calculateCurrencySummary(permissionsHelper, where, skipUserScope, 'USD'),
+    calculateCurrencySummary(permissionsHelper, where, skipUserScope, 'EUR'),
+  ]);
+
+  return {
+    GEL: gelData,
+    USD: usdData,
+    EUR: eurData,
+  };
+};
+
+// Helper function to calculate summary for a specific currency
+async function calculateCurrencySummary(
+  permissionsHelper: any,
+  where: any,
+  skipUserScope: boolean,
+  currency: string
+) {
+  // Build where clause for this currency
+  const currencyWhere = {
+    ...where,
+    currency: { equals: currency },
+  };
+
+  // Count cases for this currency
+  const cases = await permissionsHelper.loan.count({
+    where: currencyWhere,
+    _skipUserScope: skipUserScope,
+  });
+
+  // If no cases, return zero summary immediately
+  if (cases === 0) {
+    return { title: currency, cases: 0, principal: 0, debt: 0 };
+  }
+
+  // Fetch only the fields we need (much faster than fetching all loan data)
+  const loans = await permissionsHelper.loan.findMany({
+    where: currencyWhere,
+    _skipUserScope: skipUserScope,
+    select: {
+      principal: true,
+      totalDebt: true,
+      LoanRemaining: {
+        where: { deletedAt: null },
+        select: {
+          principal: true,
+          currentDebt: true,
+        },
+        take: 1, // Only get the first LoanRemaining record
+      },
+    },
+  });
+
+  // Calculate totals
+  let totalPrincipal = 0;
+  let totalDebt = 0;
+
+  loans.forEach((loan) => {
+    if (loan.LoanRemaining && loan.LoanRemaining.length > 0) {
+      const remaining = loan.LoanRemaining[0];
+      totalPrincipal += Number(remaining.principal || 0);
+      totalDebt += Number(remaining.currentDebt || 0);
+    } else {
+      totalPrincipal += Number(loan.principal || 0);
+      totalDebt += Number(loan.totalDebt || 0);
+    }
+  });
+
+  return {
+    title: currency,
+    cases,
+    principal: Number(totalPrincipal.toFixed(2)),
+    debt: Number(totalDebt.toFixed(2)),
+  };
+}
