@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole } from '@prisma/client';
+import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole, Prisma } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -194,7 +194,21 @@ export class AdminService {
       },
       Loan: {
         include: {
-          Debtor: true
+          Debtor: true,
+          LoanRemaining: {
+            where: { deletedAt: null }
+          },
+          PaymentCommitment: {
+            where: { deletedAt: null, isActive: 1 },
+            orderBy: { createdAt: Prisma.SortOrder.asc },
+            take: 1,
+            include: {
+              PaymentSchedule: {
+                where: { deletedAt: null }
+              }
+            }
+          },
+          LoanStatus: true,
         }
       }
     };
