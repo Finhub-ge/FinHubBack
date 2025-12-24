@@ -286,6 +286,7 @@ model LoanStatusHistory {
   @@index([loanId])
   @@index([newStatusId], map: "LoanStatusHistory_newStatusId_fkey")
   @@index([oldStatusId], map: "LoanStatusHistory_oldStatusId_fkey")
+  @@index([loanId, deletedAt, createdAt], map: "idx_lsh_loan_deleted_created")
 }
 
 model PaymentCommitment {
@@ -649,6 +650,7 @@ model LoanMarks {
   @@index([loanId], map: "idx_LoanMarks_1")
   @@index([markId], map: "idx_LoanMarks_2")
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt, createdAt], map: "idx_lm_loan_deleted_created")
 }
 
 model LegalStage {
@@ -679,6 +681,7 @@ model LoanLegalStage {
   @@index([legalStageId], map: "idx_LoanLegalStage_2")
   @@index([userId], map: "idx_LoanLegalStage_3")
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt, createdAt], map: "idx_lls_loan_deleted_created")
 }
 
 model CollateralStatus {
@@ -709,6 +712,7 @@ model LoanCollateralStatus {
   @@index([collateralStatusId], map: "idx_LoanCollateralStatus_2")
   @@index([userId], map: "idx_LoanCollateralStatus_3")
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt, createdAt], map: "idx_lcs_loan_deleted_created")
 }
 
 model LitigationStage {
@@ -739,6 +743,7 @@ model LoanLitigationStage {
   @@index([litigationStageId], map: "idx_LoanLitigationStage_2")
   @@index([userId], map: "idx_LoanLitigationStage_3")
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([loanId, deletedAt, createdAt], map: "idx_llits_loan_deleted_created")
 }
 
 model Templates {

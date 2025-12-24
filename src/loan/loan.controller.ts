@@ -40,7 +40,7 @@ export class LoanController {
   @AllRoles()
   @Get()
   getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
-    return this.loanService.getAll1(filterDto, user);
+    return this.loanService.getAll(filterDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

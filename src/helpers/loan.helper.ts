@@ -647,17 +647,14 @@ export const getLatestLoanIds = async (
 };
 
 export const calculateWriteoff = async (
-  publicId: string,
+  loan: any,
   paymentsHelper: any
 ): Promise<any> => {
   const toNumber = (v: any) => Number(v) || 0;
-  const loan = await prisma.loan.findUnique({
-    where: { publicId },
-  });
 
-  const totalPayments = await paymentsHelper.getTotalPaymentsByPublicId(publicId);
+  const totalPayments =
+    await paymentsHelper.getTotalPaymentsByPublicId(loan.publicId);
 
-  // 3. Convert to numbers
   const initPrincipal = toNumber(loan.principal);
   const initInterest = toNumber(loan.interest);
   const initPenalty = toNumber(loan.penalty);
@@ -672,21 +669,13 @@ export const calculateWriteoff = async (
   const totalPaidLegalCharges = toNumber(totalPayments.paidLegalCharges);
   const totalPaymentsAmount = toNumber(totalPayments.totalPayments);
 
-  // // 4. Calculate remaining (init - paid)
-  const writeoffPrincipal = initPrincipal - totalPaidPrincipal;
-  const writeoffInterest = initInterest - totalPaidInterest;
-  const writeoffPenalty = initPenalty - totalPaidPenalty;
-  const writeoffOtherFee = initOtherFee - totalPaidOtherFee;
-  const writeoffLegalCharges = initLegalCharges - totalPaidLegalCharges;
-  const writeoffDebt = initDebt - totalPaymentsAmount;
-
   return {
-    principal: writeoffPrincipal,
-    interest: writeoffInterest,
-    penalty: writeoffPenalty,
-    otherFee: writeoffOtherFee,
-    legalCharges: writeoffLegalCharges,
-    totalWriteOff: writeoffDebt,
+    principal: initPrincipal - totalPaidPrincipal,
+    interest: initInterest - totalPaidInterest,
+    penalty: initPenalty - totalPaidPenalty,
+    otherFee: initOtherFee - totalPaidOtherFee,
+    legalCharges: initLegalCharges - totalPaidLegalCharges,
+    totalWriteOff: initDebt - totalPaymentsAmount,
   };
 };
 

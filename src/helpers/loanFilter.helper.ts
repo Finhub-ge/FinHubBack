@@ -242,7 +242,7 @@ export const applyClosedDateRangeFilter = (where: any, filters: any): void => {
 // ==================== COMPLEX FILTERS ====================
 
 
-export const fetchLatestRecordFilterIds = async (
+export const fetchLatestRecordFilterIds1 = async (
   prisma: PrismaService,
   filters: any
 ): Promise<Map<string, number[]>> => {
@@ -318,6 +318,104 @@ export const fetchLatestRecordFilterIds = async (
   return results;
 };
 
+export const fetchLatestRecordFilterIds = async (
+  prisma: PrismaService,
+  filters: any
+): Promise<Map<string, number[]>> => {
+  // Build array of promises to execute in parallel
+  const filterPromises: Array<{ key: string; promise: Promise<number[]> }> = [];
+
+  // Collateral status
+  if (filters.collateralstatus?.length) {
+    filterPromises.push({
+      key: 'collateralstatus',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanCollateralStatus',
+        'collateralStatus',
+        filters.collateralstatus
+      )
+    });
+  }
+
+  // City
+  if (filters.city?.length) {
+    filterPromises.push({
+      key: 'city',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanAddress',
+        'city',
+        filters.city
+      )
+    });
+  }
+
+  // Visit status
+  if (filters.visitStatus?.length) {
+    const statusStrings = mapVisitStatusIds(filters.visitStatus);
+    filterPromises.push({
+      key: 'visitStatus',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanVisit',
+        'status',
+        statusStrings
+      )
+    });
+  }
+
+  // Litigation stage
+  if (filters.litigationstage?.length) {
+    filterPromises.push({
+      key: 'litigationstage',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanLitigationStage',
+        'litigationStage',
+        filters.litigationstage
+      )
+    });
+  }
+
+  // Legal stage
+  if (filters.legalstage?.length) {
+    filterPromises.push({
+      key: 'legalstage',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanLegalStage',
+        'legalStage',
+        filters.legalstage
+      )
+    });
+  }
+
+  // Marks
+  if (filters.marks?.length) {
+    filterPromises.push({
+      key: 'marks',
+      promise: getLatestLoanIdsByField(
+        prisma,
+        'LoanMarks',
+        'mark',
+        filters.marks
+      )
+    });
+  }
+
+  // Execute all filter queries in parallel
+  const filterResults = await Promise.all(filterPromises.map(fp => fp.promise));
+
+  // Map results back to their keys
+  const results = new Map<string, number[]>();
+  filterPromises.forEach((fp, index) => {
+    results.set(fp.key, filterResults[index]);
+  });
+
+  return results;
+};
+
 export const getLatestLoanIdsByField = async (
   prisma: PrismaService,
   tableName: string,
@@ -365,7 +463,7 @@ export const calculateLoanIdIntersection = (
 
 // ==================== QUERY CONFIGURATION ====================
 
-export const getLoanIncludeConfig = () => {
+export const getLoanIncludeConfig1 = () => {
   return {
     Portfolio: {
       select: {
@@ -441,6 +539,49 @@ export const getLoanIncludeConfig = () => {
   };
 };
 
+export const getLoanIncludeConfig = () => {
+  return {
+    Portfolio: {
+      select: {
+        id: true,
+        name: true,
+        portfolioSeller: { select: { id: true, name: true } },
+      },
+    },
+    PortfolioCaseGroup: {
+      select: { id: true, groupName: true },
+    },
+    Debtor: {
+      select: {
+        firstName: true,
+        lastName: true,
+        idNumber: true,
+        DebtorStatus: { select: { id: true, name: true } },
+        _count: {
+          select: { Loan: true }  // This counts all loans for this debtor
+        }
+      },
+    },
+    LoanStatus: {
+      select: { id: true, name: true },
+    },
+    LoanAssignment: {
+      where: { isActive: true },
+      select: {
+        createdAt: true,
+        User: { select: { id: true, firstName: true, lastName: true } },
+        Role: { select: { name: true } },
+      },
+    },
+    LoanRemaining: {
+      where: { deletedAt: null },
+    },
+    LawyerRequest: true,
+    // NOTE: Latest records (LoanStatusHistory, LoanCollateralStatus, etc.)
+    // are loaded separately via batchLoadLatestRecords() for performance
+  };
+};
+
 export const getLatestRecordConfig = (relationName: string) => {
   return {
     where: { deletedAt: null },
@@ -452,17 +593,301 @@ export const getLatestRecordConfig = (relationName: string) => {
   };
 };
 
+// ==================== BATCH LOADING LATEST RECORDS ====================
+
+
+export const batchLoadLatestRecords = async (
+  prisma: PrismaService,
+  loanIds: number[]
+): Promise<{
+  statusHistory: Map<number, any>;
+  collateralStatus: Map<number, any>;
+  litigationStage: Map<number, any>;
+  legalStage: Map<number, any>;
+  marks: Map<number, any>;
+  addresses: Map<number, any>;
+  visits: Map<number, any>;
+}> => {
+  if (loanIds.length === 0) {
+    return {
+      statusHistory: new Map(),
+      collateralStatus: new Map(),
+      litigationStage: new Map(),
+      legalStage: new Map(),
+      marks: new Map(),
+      addresses: new Map(),
+      visits: new Map(),
+    };
+  }
+
+  // Execute all queries in parallel - 7 queries total instead of N×6
+  const [
+    statusHistoryRecords,
+    collateralStatusRecords,
+    litigationStageRecords,
+    legalStageRecords,
+    marksRecords,
+    addressRecords,
+    visitRecords,
+  ] = await Promise.all([
+    // Latest status history
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lsh.*
+      FROM LoanStatusHistory lsh
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanStatusHistory
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lsh.loanId = latest.loanId AND lsh.createdAt = latest.maxCreated
+      WHERE lsh.deletedAt IS NULL
+    `),
+
+    // Latest collateral status
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lcs.*, cs.id as collateralStatusId, cs.title as collateralStatusTitle
+      FROM LoanCollateralStatus lcs
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanCollateralStatus
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lcs.loanId = latest.loanId AND lcs.createdAt = latest.maxCreated
+      INNER JOIN CollateralStatus cs ON lcs.collateralStatusId = cs.id
+      WHERE lcs.deletedAt IS NULL
+    `),
+
+    // Latest litigation stage
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lls.*, ls.id as litigationStageId, ls.title as litigationStageTitle
+      FROM LoanLitigationStage lls
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanLitigationStage
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lls.loanId = latest.loanId AND lls.createdAt = latest.maxCreated
+      INNER JOIN LitigationStage ls ON lls.litigationStageId = ls.id
+      WHERE lls.deletedAt IS NULL
+    `),
+
+    // Latest legal stage
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lls.*, ls.id as legalStageId, ls.title as legalStageTitle
+      FROM LoanLegalStage lls
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanLegalStage
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lls.loanId = latest.loanId AND lls.createdAt = latest.maxCreated
+      INNER JOIN LegalStage ls ON lls.legalStageId = ls.id
+      WHERE lls.deletedAt IS NULL
+    `),
+
+    // Latest marks
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lm.*, m.id as markId, m.title as markTitle
+      FROM LoanMarks lm
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanMarks
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lm.loanId = latest.loanId AND lm.createdAt = latest.maxCreated
+      INNER JOIN Marks m ON lm.markId = m.id
+      WHERE lm.deletedAt IS NULL
+    `),
+
+    // Latest address
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT la.*, c.id as cityId, c.city as cityName
+      FROM LoanAddress la
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanAddress
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON la.loanId = latest.loanId AND la.createdAt = latest.maxCreated
+      INNER JOIN City c ON la.cityId = c.id
+      WHERE la.deletedAt IS NULL
+    `),
+
+    // Latest visit
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT lv.*, la.id as addressId, la.address as addressText
+      FROM LoanVisit lv
+      INNER JOIN (
+        SELECT loanId, MAX(createdAt) as maxCreated
+        FROM LoanVisit
+        WHERE loanId IN (${loanIds.join(',')}) AND deletedAt IS NULL
+        GROUP BY loanId
+      ) latest ON lv.loanId = latest.loanId AND lv.createdAt = latest.maxCreated
+      LEFT JOIN LoanAddress la ON lv.loanAddressId = la.id
+      WHERE lv.deletedAt IS NULL
+    `),
+  ]);
+
+  // Convert arrays to Maps for O(1) lookup
+  return {
+    statusHistory: new Map(statusHistoryRecords.map(r => [r.loanId, r])),
+    collateralStatus: new Map(collateralStatusRecords.map(r => [r.loanId, r])),
+    litigationStage: new Map(litigationStageRecords.map(r => [r.loanId, r])),
+    legalStage: new Map(legalStageRecords.map(r => [r.loanId, r])),
+    marks: new Map(marksRecords.map(r => [r.loanId, r])),
+    addresses: new Map(addressRecords.map(r => [r.loanId, r])),
+    visits: new Map(visitRecords.map(r => [r.loanId, r])),
+  };
+};
+
+/**
+ * Attach latest records to loans (maps data to Prisma format)
+ */
+export const attachLatestRecordsToLoans = (
+  loans: any[],
+  latestRecords: Awaited<ReturnType<typeof batchLoadLatestRecords>>
+): void => {
+  for (const loan of loans) {
+    const loanId = loan.id;
+
+    // Attach status history
+    const statusHistory = latestRecords.statusHistory.get(loanId);
+    loan.LoanStatusHistory = statusHistory ? [{
+      id: statusHistory.id,
+      newStatusId: statusHistory.newStatusId,
+      createdAt: statusHistory.createdAt,
+    }] : [];
+
+    // Attach collateral status
+    const collateralStatus = latestRecords.collateralStatus.get(loanId);
+    loan.LoanCollateralStatus = collateralStatus ? [{
+      CollateralStatus: {
+        id: collateralStatus.collateralStatusId,
+        title: collateralStatus.collateralStatusTitle,
+      }
+    }] : [];
+
+    // Attach litigation stage
+    const litigationStage = latestRecords.litigationStage.get(loanId);
+    loan.LoanLitigationStage = litigationStage ? [{
+      LitigationStage: {
+        id: litigationStage.litigationStageId,
+        title: litigationStage.litigationStageTitle,
+      }
+    }] : [];
+
+    // Attach legal stage
+    const legalStage = latestRecords.legalStage.get(loanId);
+    loan.LoanLegalStage = legalStage ? [{
+      LegalStage: {
+        id: legalStage.legalStageId,
+        title: legalStage.legalStageTitle,
+      }
+    }] : [];
+
+    // Attach marks
+    const marks = latestRecords.marks.get(loanId);
+    loan.LoanMarks = marks ? [{
+      Marks: {
+        id: marks.markId,
+        title: marks.markTitle,
+      }
+    }] : [];
+
+    // Attach address
+    const address = latestRecords.addresses.get(loanId);
+    loan.LoanAddress = address ? [{
+      id: address.id,
+      address: address.address,
+      type: address.type,
+      City: {
+        id: address.cityId,
+        city: address.cityName,
+      }
+    }] : [];
+
+    // Attach visit
+    const visit = latestRecords.visits.get(loanId);
+    loan.LoanVisit = visit ? [{
+      id: visit.id,
+      status: visit.status,
+      comment: visit.comment,
+      LoanAddress: visit.addressId ? {
+        id: visit.addressId,
+        address: visit.addressText,
+      } : null,
+    }] : [];
+  }
+};
+
 // ==================== DATA ENRICHMENT ====================
+
+export const mapClosedLoansDataToPaymentWriteoff1 = async (
+  loans: any[],
+  paymentsHelper: any
+): Promise<void> => {
+  for (const loan of loans) {
+    loan.remainingChanges = await calculateWriteoff(
+      loan,
+      paymentsHelper
+    );
+  }
+};
+
+export const batchCalculateWriteoffs = async (
+  loans: any[],
+  paymentsHelper: any
+): Promise<void> => {
+  if (loans.length === 0) return;
+
+  const toNumber = (v: any) => Number(v) || 0;
+
+  // 1. Batch fetch all transaction totals in ONE query (instead of N queries)
+  const loanIds = loans.map(loan => loan.id);
+  const paymentsMap = await paymentsHelper.getBatchedTotalPaymentsByLoanIds(loanIds);
+
+  // 2. Calculate writeoffs for each loan (in memory, no queries)
+  loans.forEach(loan => {
+    const totalPayments = paymentsMap.get(loan.id) || {
+      totalPayments: 0,
+      paidPrincipal: 0,
+      paidInterest: 0,
+      paidPenalty: 0,
+      paidOtherFee: 0,
+      paidLegalCharges: 0,
+    };
+
+    const initPrincipal = toNumber(loan.principal);
+    const initInterest = toNumber(loan.interest);
+    const initPenalty = toNumber(loan.penalty);
+    const initOtherFee = toNumber(loan.otherFee);
+    const initLegalCharges = toNumber(loan.legalCharges);
+    const initDebt = toNumber(loan.totalDebt);
+
+    const totalPaidPrincipal = toNumber(totalPayments.paidPrincipal);
+    const totalPaidInterest = toNumber(totalPayments.paidInterest);
+    const totalPaidPenalty = toNumber(totalPayments.paidPenalty);
+    const totalPaidOtherFee = toNumber(totalPayments.paidOtherFee);
+    const totalPaidLegalCharges = toNumber(totalPayments.paidLegalCharges);
+    const totalPaymentsAmount = toNumber(totalPayments.totalPayments);
+
+    loan.remainingChanges = {
+      principal: initPrincipal - totalPaidPrincipal,
+      interest: initInterest - totalPaidInterest,
+      penalty: initPenalty - totalPaidPenalty,
+      otherFee: initOtherFee - totalPaidOtherFee,
+      legalCharges: initLegalCharges - totalPaidLegalCharges,
+      totalWriteOff: initDebt - totalPaymentsAmount,
+    };
+  });
+};
 
 export const mapClosedLoansDataToPaymentWriteoff = async (
   loans: any[],
   paymentsHelper: any
 ): Promise<void> => {
-  await Promise.all([
-    Promise.all(loans.map(async (loan) => {
-      loan.remainingChanges = await calculateWriteoff(loan.publicId, paymentsHelper);
-    }))
-  ]);
+  // Use optimized batch version
+  await batchCalculateWriteoffs(loans, paymentsHelper);
 }
 
 export const hasAssignmentFilters = (filters: any): boolean => {
