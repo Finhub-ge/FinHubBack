@@ -49,7 +49,7 @@ export class LoanService {
 
   ) { }
 
-  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
+  async getAll1(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
     // Setup pagination
@@ -156,6 +156,138 @@ export class LoanService {
       ...paginatedResult,
       summary,
     } as PaginatedResult<Loan> & { summary: any };
+  }
+
+  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan>> {
+    const { page, limit, columns } = filterDto;
+
+    // Setup pagination
+    const paginationParams = columns
+      ? {}
+      : this.paginationService.getPaginationParams({ page, limit });
+
+    // Build where clause (extracted logic)
+    const { where, skipUserScope } = await this.buildLoansWhereClause(filterDto, user);
+
+    // Handle empty results early
+    if (where.id === -1) {
+      return this.paginationService.createPaginatedResult([], 0, { page, limit });
+    }
+
+    // Fetch loans
+    const includeConfig = getLoanIncludeConfig();
+    const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
+
+    if (skipUserScope) {
+      loanQuery._skipUserScope = true;
+    }
+
+    const [loans, totalCount] = await Promise.all([
+      this.permissionsHelper.loan.findMany(loanQuery),
+      this.permissionsHelper.loan.count({ where, _skipUserScope: skipUserScope }),
+    ]);
+
+    // Enrich loans with actDays
+    const enrichedLoans = loans.map(loan => ({
+      ...loan,
+      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+    }));
+
+    // Handle CSV export
+    if (columns) {
+      return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
+    }
+
+    // Enrich closed loans with additional data
+    if (filterDto.showOnlyClosedLoans) {
+      await mapClosedLoansDataToPaymentWriteoff(enrichedLoans, this.paymentsHelper);
+    }
+
+    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+  }
+
+  async getSummary(filterDto: GetLoansFilterDto, user: any) {
+    // Build where clause using same logic as getAll
+    const { where, skipUserScope } = await this.buildLoansWhereClause(filterDto, user);
+
+    // Handle empty results
+    if (where.id === -1) {
+      return {
+        GEL: { title: 'GEL', cases: 0, principal: 0, debt: 0 },
+        USD: { title: 'USD', cases: 0, principal: 0, debt: 0 },
+        EUR: { title: 'EUR', cases: 0, principal: 0, debt: 0 },
+      };
+    }
+
+    // Calculate summary statistics (respects filters)
+    return await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
+  }
+
+  private async buildLoansWhereClause(
+    filterDto: GetLoansFilterDto | GetLoansFilterWithPaginationDto,
+    user: any
+  ): Promise<{ where: any; skipUserScope: boolean }> {
+    const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+
+    // Build base query
+    const where = buildInitialWhereClause();
+
+    // Apply appropriate filters
+    if (showOnlyClosedLoans) {
+      applyClosedLoansFilter(where, filters);
+      applyClosedDateRangeFilter(where, filters);
+    } else {
+      applyOpenLoansFilter(where, filters, showClosedLoans);
+    }
+
+    applyCommonFilters(where, filters);
+
+    // Get team member IDs if user is a collector team lead
+    let teamMemberIds: number[] | undefined;
+    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+      if (activeTeamMembership) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: activeTeamMembership.teamId,
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        teamMemberIds = teamMembers.map(tm => tm.userId);
+      }
+    }
+
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+
+    // Handle complex filters with intersection
+    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+    // Only process intersection if there are complex filters
+    if (shouldProcessIntersection(relatedFilterIds)) {
+      // If any filter returned empty results
+      if (hasEmptyFilterResults(relatedFilterIds)) {
+        return { where: { id: -1 }, skipUserScope: false };
+      }
+
+      // Calculate intersection
+      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+
+      // If no loans match all filters
+      if (intersectedIds.length === 0) {
+        return { where: { id: -1 }, skipUserScope: false };
+      }
+
+      // Apply intersection to where clause
+      applyIntersectedIds(where, intersectedIds);
+    }
+
+    // Determine if we should skip user scope
+    const skipUserScope = shouldSkipUserScope(user, filters);
+
+    return { where, skipUserScope };
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {

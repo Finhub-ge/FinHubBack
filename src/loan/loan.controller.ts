@@ -40,7 +40,7 @@ export class LoanController {
   @AllRoles()
   @Get()
   getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
-    return this.loanService.getAll(filterDto, user);
+    return this.loanService.getAll1(filterDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -54,6 +54,13 @@ export class LoanController {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
     });
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('summary')
+  getSummary(@Query() filterDto: GetLoansFilterDto, @GetUser() user: User) {
+    return this.loanService.getSummary(filterDto, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
