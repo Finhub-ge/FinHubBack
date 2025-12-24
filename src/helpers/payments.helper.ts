@@ -115,6 +115,41 @@ export class PaymentsHelper {
     return paymentTotals;
   }
 
+  async getBatchedTotalPaymentsByLoanIds(loanIds: number[]): Promise<Map<number, any>> {
+    if (loanIds.length === 0) return new Map();
+
+    // Single query with GROUP BY instead of N aggregate queries
+    const results = await this.prisma.transaction.groupBy({
+      by: ['loanId'],
+      where: {
+        loanId: { in: loanIds }
+      },
+      _sum: {
+        amount: true,
+        principal: true,
+        interest: true,
+        penalty: true,
+        fees: true,
+        legal: true,
+      }
+    });
+
+    // Convert to Map for O(1) lookup
+    const paymentsMap = new Map();
+    results.forEach(result => {
+      paymentsMap.set(result.loanId, {
+        totalPayments: result._sum.amount || 0,
+        paidPrincipal: result._sum.principal || 0,
+        paidInterest: result._sum.interest || 0,
+        paidPenalty: result._sum.penalty || 0,
+        paidOtherFee: result._sum.fees || 0,
+        paidLegalCharges: result._sum.legal || 0,
+      });
+    });
+
+    return paymentsMap;
+  }
+
   async getTransactionByLoanId(loanId: number, prisma: Prisma.TransactionClient | PrismaClient = this.prisma) {
     return await prisma.transaction.findMany({
       where: { loanId },

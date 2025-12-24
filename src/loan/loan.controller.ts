@@ -56,6 +56,13 @@ export class LoanController {
     });
   }
 
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('summary')
+  getSummary(@Query() filterDto: GetLoansFilterDto, @GetUser() user: User) {
+    return this.loanService.getSummary(filterDto, user);
+  }
+
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()

@@ -30,7 +30,7 @@ import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate } from 'src/helpers/date.helper';
@@ -49,7 +49,7 @@ export class LoanService {
 
   ) { }
 
-  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
+  async getAll1(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
     const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
     // Setup pagination
@@ -91,7 +91,7 @@ export class LoanService {
     applyUserAssignmentFilter(where, filters, user, teamMemberIds);
 
     // Handle complex filters with intersection ONLY if there are complex filters
-    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+    const relatedFilterIds = await fetchLatestRecordFilterIds1(this.prisma, filters);
 
     // Only process intersection if there are complex filters
     if (shouldProcessIntersection(relatedFilterIds)) {
@@ -117,7 +117,7 @@ export class LoanService {
     const skipUserScope = shouldSkipUserScope(user, filters);
 
     // Fetch loans
-    const includeConfig = getLoanIncludeConfig();
+    const includeConfig = getLoanIncludeConfig1();
     const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
 
     // Add flag to skip user scope if needed
@@ -143,7 +143,7 @@ export class LoanService {
 
     // Enrich closed loans with additional data
     if (showOnlyClosedLoans) {
-      await mapClosedLoansDataToPaymentWriteoff(enrichedLoans, this.paymentsHelper);
+      await mapClosedLoansDataToPaymentWriteoff1(enrichedLoans, this.paymentsHelper);
     }
 
     // Calculate summary statistics (respects filters)
@@ -156,6 +156,198 @@ export class LoanService {
       ...paginatedResult,
       summary,
     } as PaginatedResult<Loan> & { summary: any };
+  }
+
+  async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan>> {
+    const { page, limit, columns } = filterDto;
+
+    // Setup pagination
+    const paginationParams = columns
+      ? {}
+      : this.paginationService.getPaginationParams({ page, limit });
+
+    // Parallelize: Fetch team member IDs in parallel with filter processing
+    const [teamMemberIds, filterResults] = await Promise.all([
+      this.getTeamMemberIds(user),
+      (async () => {
+        const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+        const where = buildInitialWhereClause();
+
+        if (showOnlyClosedLoans) {
+          applyClosedLoansFilter(where, filters);
+          applyClosedDateRangeFilter(where, filters);
+        } else {
+          applyOpenLoansFilter(where, filters, showClosedLoans);
+        }
+
+        applyCommonFilters(where, filters);
+
+        // Fetch complex filter IDs in parallel
+        const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+        return { where, filters, relatedFilterIds };
+      })()
+    ]);
+
+    // Apply user assignment filter with the team member IDs we just fetched
+    applyUserAssignmentFilter(filterResults.where, filterResults.filters, user, teamMemberIds);
+
+    // Process filter intersection
+    if (shouldProcessIntersection(filterResults.relatedFilterIds)) {
+      if (hasEmptyFilterResults(filterResults.relatedFilterIds)) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit });
+      }
+
+      const intersectedIds = calculateLoanIdIntersection(filterResults.relatedFilterIds);
+      if (intersectedIds.length === 0) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit });
+      }
+
+      applyIntersectedIds(filterResults.where, intersectedIds);
+    }
+
+    const skipUserScope = shouldSkipUserScope(user, filterResults.filters);
+
+    // Fetch loans
+    const includeConfig = getLoanIncludeConfig();
+    const loanQuery = buildLoanQuery(filterResults.where, paginationParams, includeConfig);
+
+    if (skipUserScope) {
+      loanQuery._skipUserScope = true;
+    }
+
+    const [loans, totalCount] = await Promise.all([
+      this.permissionsHelper.loan.findMany(loanQuery),
+      this.permissionsHelper.loan.count({ where: filterResults.where, _skipUserScope: skipUserScope }),
+    ]);
+
+    // Batch load latest records for all loans (7 queries instead of N×6)
+    if (loans.length > 0) {
+      const loanIds = loans.map(loan => loan.id);
+      const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+      attachLatestRecordsToLoans(loans, latestRecords);
+    }
+
+    // Enrich loans with actDays
+    const enrichedLoans = loans.map(loan => ({
+      ...loan,
+      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+    }));
+
+    // Handle CSV export
+    if (columns) {
+      return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
+    }
+
+    // Enrich closed loans with additional data
+    if (filterDto.showOnlyClosedLoans) {
+      await batchCalculateWriteoffs(enrichedLoans, this.paymentsHelper);
+    }
+
+    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+  }
+
+  async getSummary(filterDto: GetLoansFilterDto, user: any) {
+    // Build where clause using same logic as getAll
+    const { where, skipUserScope } = await this.buildLoansWhereClause(filterDto, user);
+
+    // Handle empty results
+    if (where.id === -1) {
+      return {
+        GEL: { title: 'GEL', cases: 0, principal: 0, debt: 0 },
+        USD: { title: 'USD', cases: 0, principal: 0, debt: 0 },
+        EUR: { title: 'EUR', cases: 0, principal: 0, debt: 0 },
+      };
+    }
+
+    // Calculate summary statistics (respects filters)
+    return await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
+  }
+
+  private async getTeamMemberIds(user: any): Promise<number[] | undefined> {
+    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+      if (activeTeamMembership) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: activeTeamMembership.teamId,
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        return teamMembers.map(tm => tm.userId);
+      }
+    }
+    return undefined;
+  }
+
+  private async buildLoansWhereClause(
+    filterDto: GetLoansFilterDto | GetLoansFilterWithPaginationDto,
+    user: any
+  ): Promise<{ where: any; skipUserScope: boolean }> {
+    const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+
+    // Build base query
+    const where = buildInitialWhereClause();
+
+    // Apply appropriate filters
+    if (showOnlyClosedLoans) {
+      applyClosedLoansFilter(where, filters);
+      applyClosedDateRangeFilter(where, filters);
+    } else {
+      applyOpenLoansFilter(where, filters, showClosedLoans);
+    }
+
+    applyCommonFilters(where, filters);
+
+    // Get team member IDs if user is a collector team lead
+    let teamMemberIds: number[] | undefined;
+    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+      if (activeTeamMembership) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: activeTeamMembership.teamId,
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        teamMemberIds = teamMembers.map(tm => tm.userId);
+      }
+    }
+
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+
+    // Handle complex filters with intersection
+    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+    // Only process intersection if there are complex filters
+    if (shouldProcessIntersection(relatedFilterIds)) {
+      // If any filter returned empty results
+      if (hasEmptyFilterResults(relatedFilterIds)) {
+        return { where: { id: -1 }, skipUserScope: false };
+      }
+
+      // Calculate intersection
+      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+
+      // If no loans match all filters
+      if (intersectedIds.length === 0) {
+        return { where: { id: -1 }, skipUserScope: false };
+      }
+
+      // Apply intersection to where clause
+      applyIntersectedIds(where, intersectedIds);
+    }
+
+    // Determine if we should skip user scope
+    const skipUserScope = shouldSkipUserScope(user, filters);
+
+    return { where, skipUserScope };
   }
 
   async getOne(publicId: ParseUUIDPipe, user: any) {
