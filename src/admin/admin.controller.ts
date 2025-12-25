@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete, UseInterceptors, UploadedFile } from "@nestjs/common";
 import { AdminService } from "./admin.service";
-import { ApiBearerAuth, ApiConsumes, ApiParam, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
 import { RolesGuard } from "src/auth/guard/roles.guard";
 import { Role } from "src/enums/role.enum";
@@ -361,5 +361,17 @@ export class AdminController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     return await this.adminService.importPlan(file.buffer, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('getCurrency')
+  @ApiQuery({ name: 'date', required: false, description: 'Date in YYYY-MM-DD format', example: '2024-12-25' })
+  @ApiQuery({ name: 'currency', required: false, description: 'Currency code', example: 'USD', enum: ['USD', 'EUR', 'GBP'] })
+  async getCurrency(
+    @Query('date') date?: string,
+    @Query('currency') currency?: string,
+  ) {
+    return await this.adminService.getCurrency(date, currency);
   }
 }
