@@ -376,6 +376,7 @@ model Transaction {
   legal                       Decimal?                     @db.Decimal(12, 2)
   transactionChannelAccountId Int?
   currency                    String?                      @default("GEL") @db.VarChar(45)
+  rate                        Decimal                      @default(1.0000) @db.Decimal(10, 4)
   comment                     String?                      @db.VarChar(255)
   createdAt                   DateTime?                    @default(now()) @db.DateTime(0)
   deleted                     Int?                         @default(0) @db.TinyInt

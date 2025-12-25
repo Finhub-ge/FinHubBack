@@ -60,4 +60,12 @@ export class AuthController {
   getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user)
   }
+
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Post('signout')
+  signOut() {
+    return { message: 'User signed out successfully' }
+  }
 }

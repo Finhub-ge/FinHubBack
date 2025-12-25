@@ -412,6 +412,8 @@ export class AdminService {
     if (!loanRemaining) {
       throw new HttpException('Loan remaining balance not found', 404);
     }
+    const currencyRate = loan.currency !== CurrencyExchange_currency.GEL ? await this.currencyHelper.getExchangeRate(data.paymentDate, loan.currency) : 1;
+    data.amount = (Number(data.amount) / currencyRate).toFixed(2).toString();
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -443,6 +445,8 @@ export class AdminService {
           data: {
             loanId: loan.id,
             amount: Number(data.amount || 0),
+            currency: loan.currency,
+            rate: currencyRate,
             paymentDate: data.paymentDate,
             transactionChannelAccountId: data.accountId,
             publicId: randomUUID(),
