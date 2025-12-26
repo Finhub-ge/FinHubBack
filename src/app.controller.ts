@@ -5,6 +5,6 @@ export class AppController {
 
   @Get()
   get() {
-    return `Hello, this is the FinHub API! production`;
+    return `Hello, this is the FinHub API!`;
   }
 }
