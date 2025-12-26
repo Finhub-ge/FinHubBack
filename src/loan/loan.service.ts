@@ -720,7 +720,7 @@ export class LoanService {
       initDebt: loan.totalDebt,
     };
 
-    const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(publicId);
+    const totalPayments = await this.paymentsHelper.getTotalPaymentsByPublicId(loan.id);
 
     const statusHistory = loan.LoanStatusHistory.map(item => ({
       status: item.LoanStatusNewStatus?.name,

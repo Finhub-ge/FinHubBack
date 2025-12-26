@@ -86,13 +86,9 @@ export class PaymentsHelper {
     })
   }
 
-  async getTotalPaymentsByPublicId(publicId) {
+  async getTotalPaymentsByPublicId(loanId: number) {
     const totals = await this.prisma.transaction.aggregate({
-      where: {
-        Loan: {
-          publicId: publicId
-        },
-      },
+      where: { loanId: loanId },
       _sum: {
         amount: true,
         principal: true,

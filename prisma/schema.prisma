@@ -376,6 +376,7 @@ model Transaction {
   legal                       Decimal?                     @db.Decimal(12, 2)
   transactionChannelAccountId Int?
   currency                    String?                      @default("GEL") @db.VarChar(45)
+  rate                        Decimal                      @default(1.0000) @db.Decimal(10, 4)
   comment                     String?                      @db.VarChar(255)
   createdAt                   DateTime?                    @default(now()) @db.DateTime(0)
   deleted                     Int?                         @default(0) @db.TinyInt
@@ -2110,6 +2111,20 @@ model LawyerRequest {
   @@index([status, loanId], map: "idx_status_loan")
 }
 
+model CurrencyExchange {
+  id        Int                       @id @default(autoincrement())
+  date      DateTime                  @db.Date
+  currency  CurrencyExchange_currency @default(USD)
+  rate      Decimal                   @db.Decimal(10, 4)
+  response  Json?
+  createdAt DateTime                  @default(now()) @db.DateTime(0)
+
+  @@unique([date, currency], map: "unique_date_currency")
+  @@index([currency], map: "idx_currency")
+  @@index([date(sort: Desc)], map: "idx_date")
+  @@index([date(sort: Desc), currency], map: "idx_date_currency")
+}
+
 enum PaymentCommitment_type {
   agreement
   promise
@@ -2199,4 +2214,11 @@ enum LawyerRequest_status {
   PENDING
   ASSIGNED
   HIDDEN
+}
+
+enum CurrencyExchange_currency {
+  USD
+  EUR
+  GBP
+  GEL
 }

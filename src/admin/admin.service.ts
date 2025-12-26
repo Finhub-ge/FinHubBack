@@ -5,7 +5,7 @@ import { UpdatePaymentDto } from "./dto/update-payment.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { randomUUID } from "crypto";
 import { CreateTaskDto } from "./dto/createTask.dto";
-import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole, Prisma } from '@prisma/client';
+import { User, Committee_status, Committee_type, StatusMatrix_entityType, CollectorMonthlyReport_status, TeamMembership_teamRole, Prisma, CurrencyExchange_currency } from '@prisma/client';
 import { CreateTaskResponseDto } from "./dto/createTaskResponse.dto";
 import { GetTasksFilterDto, GetTasksWithPaginationDto, TaskType } from "./dto/getTasksFilter.dto";
 import { ResponseCommitteeDto } from "./dto/responseCommittee.dto";
@@ -35,6 +35,7 @@ import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingRepor
 import { buildLoanQuery } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
+import { CurrencyHelper } from "src/helpers/currency.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -47,6 +48,7 @@ export class AdminService {
     private s3Helper: S3Helper,
     private readonly paginationService: PaginationService,
     private readonly permissionsHelper: PermissionsHelper,
+    private readonly currencyHelper: CurrencyHelper,
   ) { }
 
   async getDebtorContactTypes() {
@@ -410,6 +412,8 @@ export class AdminService {
     if (!loanRemaining) {
       throw new HttpException('Loan remaining balance not found', 404);
     }
+    const currencyRate = loan.currency !== CurrencyExchange_currency.GEL ? await this.currencyHelper.getExchangeRate(data.paymentDate, loan.currency) : 1;
+    data.amount = (Number(data.amount) / currencyRate).toFixed(2).toString();
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -441,6 +445,8 @@ export class AdminService {
           data: {
             loanId: loan.id,
             amount: Number(data.amount || 0),
+            currency: loan.currency,
+            rate: currencyRate,
             paymentDate: data.paymentDate,
             transactionChannelAccountId: data.accountId,
             publicId: randomUUID(),
@@ -1944,6 +1950,38 @@ export class AdminService {
       totalRecords: parsedData.length,
       skippedRecords: parsedData.length - dataToInsert.length,
       processedReports: toCreate.length + toUpdate.length,
+    };
+  }
+
+  async getCurrency(date?: string, currency?: string) {
+    // If specific currency provided, return only that one
+    if (currency) {
+      const rate = await this.currencyHelper.getExchangeRate(date, currency);
+      return {
+        success: true,
+        data: {
+          currency,
+          rate,
+          date: date
+        },
+      };
+    }
+
+    // Otherwise, return both USD and EUR
+    const [usdRate, eurRate] = await Promise.all([
+      this.currencyHelper.getExchangeRate(date, CurrencyExchange_currency.USD),
+      this.currencyHelper.getExchangeRate(date, CurrencyExchange_currency.EUR),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        date: date || new Date().toISOString().split('T')[0],
+        rates: {
+          USD: usdRate,
+          EUR: eurRate,
+        },
+      },
     };
   }
 }
