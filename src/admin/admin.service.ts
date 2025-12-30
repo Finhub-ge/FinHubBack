@@ -577,15 +577,210 @@ export class AdminService {
     throw new HttpException('Payment edited successfully', 200);
   }
 
-  async deleteTransaction(id: number) {
-    await this.prisma.transaction.delete({
-      where: {
-        id: id
+  async deleteTransaction(id: number, userId: number) {
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Get transaction with all related data
+      const transaction = await tx.transaction.findUnique({
+        where: { id },
+        include: {
+          Loan: {
+            include: {
+              LoanStatus: true,
+              LoanRemaining: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 1 }
+            }
+          }
+        }
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
       }
-    })
 
-    throw new HttpException('User deleted successfully', 200);
+      if (transaction.deleted === 1) {
+        throw new BadRequestException('Transaction already deleted');
+      }
 
+      const loan = transaction.Loan;
+      const currentRemaining = loan.LoanRemaining[0];
+
+      if (!currentRemaining) {
+        throw new NotFoundException('Loan remaining balance not found');
+      }
+
+      // 2. Check if there are transactions after this one (prevent out-of-order deletion)
+      const laterTransactions = await tx.transaction.count({
+        where: {
+          loanId: loan.id,
+          createdAt: { gt: transaction.createdAt },
+          deleted: 0,
+        }
+      });
+
+      if (laterTransactions > 0) {
+        throw new BadRequestException(
+          'Cannot delete this transaction. There are newer transactions that depend on it. Delete newer transactions first.'
+        );
+      }
+
+      // 3. Get balance history for this transaction
+      const balanceHistory = await tx.loanBalanceHistory.findFirst({
+        where: {
+          sourceType: 'PAYMENT',
+          sourceId: transaction.id,
+          deletedAt: null
+        }
+      });
+
+      // 4. REVERSE ALLOCATION - Add back the amounts that were paid
+      const newBalances = {
+        principal: Number(currentRemaining.principal) + Number(transaction.principal || 0),
+        interest: Number(currentRemaining.interest) + Number(transaction.interest || 0),
+        penalty: Number(currentRemaining.penalty) + Number(transaction.penalty || 0),
+        otherFee: Number(currentRemaining.otherFee) + Number(transaction.fees || 0),
+        legalCharges: Number(currentRemaining.legalCharges) + Number(transaction.legal || 0),
+      };
+
+      const newCurrentDebt = Number(currentRemaining.currentDebt) + Number(transaction.amount || 0);
+
+      // 5. SOFT DELETE old LoanRemaining and CREATE new one with reverted balances
+      await tx.loanRemaining.update({
+        where: { id: currentRemaining.id },
+        data: { deletedAt: new Date() }
+      });
+
+      await tx.loanRemaining.create({
+        data: {
+          loanId: loan.id,
+          principal: newBalances.principal,
+          interest: newBalances.interest,
+          penalty: newBalances.penalty,
+          otherFee: newBalances.otherFee,
+          legalCharges: newBalances.legalCharges,
+          currentDebt: newCurrentDebt,
+          agreementMin: currentRemaining.agreementMin,
+        }
+      });
+
+      // 6. SOFT DELETE balance history
+      if (balanceHistory) {
+        await tx.loanBalanceHistory.update({
+          where: { id: balanceHistory.id },
+          data: { deletedAt: new Date() }
+        });
+      }
+
+      // 7. REVERT PAYMENT SCHEDULE (if Agreement status)
+      if (loan.LoanStatus.name === 'Agreement') {
+        // Find schedules that were paid on this transaction's date
+        const schedulesUpdated = await tx.paymentSchedule.findMany({
+          where: {
+            PaymentCommitment: {
+              loanId: loan.id,
+              type: 'agreement',
+              isActive: 1,
+              deletedAt: null
+            },
+            paidDate: transaction.paymentDate,
+            deletedAt: null
+          }
+        });
+
+        // Reverse payment application to schedules
+        let amountToReverse = Number(transaction.amount || 0);
+
+        for (const schedule of schedulesUpdated.reverse()) {
+          if (amountToReverse <= 0) break;
+
+          const currentPaid = Number(schedule.paidAmount || 0);
+          const totalScheduled = Number(schedule.amount);
+          const amountToReduceFromSchedule = Math.min(amountToReverse, currentPaid);
+          const newPaidAmount = currentPaid - amountToReduceFromSchedule;
+
+          // Determine new status
+          let newStatus = 'PENDING';
+          if (newPaidAmount > 0 && newPaidAmount < totalScheduled) {
+            newStatus = 'PARTIAL';
+          } else if (newPaidAmount >= totalScheduled) {
+            newStatus = 'PAID';
+          }
+
+          await tx.paymentSchedule.update({
+            where: { id: schedule.id },
+            data: {
+              paidAmount: newPaidAmount,
+              status: newStatus,
+              paidDate: newStatus === 'PAID' ? schedule.paidDate : null
+            }
+          });
+
+          amountToReverse -= amountToReduceFromSchedule;
+        }
+      }
+
+      // 8. REVERT LOAN STATUS (if was closed by this payment)
+      const closingStatusHistory = await tx.loanStatusHistory.findFirst({
+        where: {
+          loanId: loan.id,
+          newStatusId: 12,
+          notes: { contains: 'loan balance reached 0' },
+          deletedAt: null,
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (closingStatusHistory && loan.statusId === 12 && newCurrentDebt > 0) {
+        // Reopen the loan
+        await tx.loan.update({
+          where: { id: loan.id },
+          data: {
+            statusId: closingStatusHistory.oldStatusId,
+            closedAt: null,
+          }
+        });
+
+        // Soft delete the closing status history
+        await tx.loanStatusHistory.update({
+          where: { id: closingStatusHistory.id },
+          data: { deletedAt: new Date() }
+        });
+
+        // Create new status history for reopening
+        await tx.loanStatusHistory.create({
+          data: {
+            loanId: loan.id,
+            oldStatusId: 12,
+            newStatusId: closingStatusHistory.oldStatusId,
+            changedBy: userId,
+            notes: `Loan reopened due to transaction deletion (Transaction ID: ${transaction.id})`,
+          },
+        });
+      }
+
+      // 9. REVERT COLLECTED AMOUNT (in CollectorMonthlyReport)
+      await updateCollectedAmount(loan.id, -Number(transaction.amount || 0), tx);
+
+      // 10. SOFT DELETE TRANSACTION
+      await tx.transaction.update({
+        where: { id },
+        data: {
+          deleted: 1,
+        }
+      });
+
+      // 11. CREATE TRANSACTION DELETION RECORD
+      await tx.transactionDeleted.create({
+        data: {
+          transactionId: transaction.id,
+          userId: userId,
+          deletedAt: new Date()
+        }
+      });
+
+      return {
+        message: 'Transaction deleted and all changes reverted successfully',
+        transactionId: transaction.id,
+      };
+    });
   }
 
   async createTask(data: CreateTaskDto, userId: number) {

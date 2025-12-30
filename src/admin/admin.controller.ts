@@ -102,8 +102,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('deleteTransaction/:id')
-  async deleteTransaction(@Param('id') id: string) {
-    return await this.adminService.deleteTransaction(+id);
+  async deleteTransaction(@Param('id') id: string, @GetUser() user: User) {
+    return await this.adminService.deleteTransaction(+id, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -323,7 +323,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.EXECUTION_LAWYER, Role.SUPER_LAWYER)
   @Get('report/charges')
   async getChargesReport(@Query() getChargeReportDto: GetChargeReportWithPaginationDto) {
     return await this.adminService.getCharges(getChargeReportDto, { isReport: true });

@@ -600,7 +600,9 @@ export class LoanService {
         LoanRemaining: {
           where: { deletedAt: null },
         },
-        Transaction: true,
+        Transaction: {
+          where: { deleted: 0 },
+        },
         PaymentCommitment: true,
         LoanAssignment: {
           where: { isActive: true },
