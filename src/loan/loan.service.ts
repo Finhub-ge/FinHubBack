@@ -49,114 +49,114 @@ export class LoanService {
 
   ) { }
 
-  async getAll1(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
-    const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+  // async getAll1(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan> & { summary?: any }> {
+  //   const { page, limit, columns, showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
 
-    // Setup pagination
-    const paginationParams = columns
-      ? {}
-      : this.paginationService.getPaginationParams({ page, limit });
+  //   // Setup pagination
+  //   const paginationParams = columns
+  //     ? {}
+  //     : this.paginationService.getPaginationParams({ page, limit });
 
-    // Build base query
-    const where = buildInitialWhereClause();
+  //   // Build base query
+  //   const where = buildInitialWhereClause();
 
-    // Apply appropriate filters
-    if (showOnlyClosedLoans) {
-      applyClosedLoansFilter(where, filters);
-      applyClosedDateRangeFilter(where, filters);
-    } else {
-      applyOpenLoansFilter(where, filters, showClosedLoans);
-    }
+  //   // Apply appropriate filters
+  //   if (showOnlyClosedLoans) {
+  //     applyClosedLoansFilter(where, filters);
+  //     applyClosedDateRangeFilter(where, filters);
+  //   } else {
+  //     applyOpenLoansFilter(where, filters, showClosedLoans);
+  //   }
 
-    applyCommonFilters(where, filters);
+  //   applyCommonFilters(where, filters);
 
-    // Get team member IDs if user is a collector team lead
-    let teamMemberIds: number[] | undefined;
-    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
-      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
-      if (activeTeamMembership) {
-        const teamMembers = await this.prisma.teamMembership.findMany({
-          where: {
-            teamId: activeTeamMembership.teamId,
-            deletedAt: null,
-          },
-          select: {
-            userId: true,
-          },
-        });
-        teamMemberIds = teamMembers.map(tm => tm.userId);
-      }
-    }
+  //   // Get team member IDs if user is a collector team lead
+  //   let teamMemberIds: number[] | undefined;
+  //   if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+  //     const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+  //     if (activeTeamMembership) {
+  //       const teamMembers = await this.prisma.teamMembership.findMany({
+  //         where: {
+  //           teamId: activeTeamMembership.teamId,
+  //           deletedAt: null,
+  //         },
+  //         select: {
+  //           userId: true,
+  //         },
+  //       });
+  //       teamMemberIds = teamMembers.map(tm => tm.userId);
+  //     }
+  //   }
 
-    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+  //   applyUserAssignmentFilter(where, filters, user, teamMemberIds);
 
-    // Handle complex filters with intersection ONLY if there are complex filters
-    const relatedFilterIds = await fetchLatestRecordFilterIds1(this.prisma, filters);
+  //   // Handle complex filters with intersection ONLY if there are complex filters
+  //   const relatedFilterIds = await fetchLatestRecordFilterIds1(this.prisma, filters);
 
-    // Only process intersection if there are complex filters
-    if (shouldProcessIntersection(relatedFilterIds)) {
-      // If any filter returned empty results, return empty
-      if (hasEmptyFilterResults(relatedFilterIds)) {
-        return this.paginationService.createPaginatedResult([], 0, { page, limit });
-      }
+  //   // Only process intersection if there are complex filters
+  //   if (shouldProcessIntersection(relatedFilterIds)) {
+  //     // If any filter returned empty results, return empty
+  //     if (hasEmptyFilterResults(relatedFilterIds)) {
+  //       return this.paginationService.createPaginatedResult([], 0, { page, limit });
+  //     }
 
-      // Calculate intersection
-      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+  //     // Calculate intersection
+  //     const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
 
-      // If no loans match all filters, return empty
-      if (intersectedIds.length === 0) {
-        return this.paginationService.createPaginatedResult([], 0, { page, limit });
-      }
+  //     // If no loans match all filters, return empty
+  //     if (intersectedIds.length === 0) {
+  //       return this.paginationService.createPaginatedResult([], 0, { page, limit });
+  //     }
 
-      // Apply intersection to where clause
-      applyIntersectedIds(where, intersectedIds);
-    }
+  //     // Apply intersection to where clause
+  //     applyIntersectedIds(where, intersectedIds);
+  //   }
 
-    // Determine if we should skip user scope in permission helper
-    // Skip only for team leads filtering by their own role type
-    const skipUserScope = shouldSkipUserScope(user, filters);
+  //   // Determine if we should skip user scope in permission helper
+  //   // Skip only for team leads filtering by their own role type
+  //   const skipUserScope = shouldSkipUserScope(user, filters);
 
-    // Fetch loans
-    const includeConfig = getLoanIncludeConfig1();
-    const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
+  //   // Fetch loans
+  //   const includeConfig = getLoanIncludeConfig1();
+  //   const loanQuery = buildLoanQuery(where, paginationParams, includeConfig);
 
-    // Add flag to skip user scope if needed
-    if (skipUserScope) {
-      loanQuery._skipUserScope = true;
-    }
+  //   // Add flag to skip user scope if needed
+  //   if (skipUserScope) {
+  //     loanQuery._skipUserScope = true;
+  //   }
 
-    const [loans, totalCount] = await Promise.all([
-      this.permissionsHelper.loan.findMany(loanQuery),
-      this.permissionsHelper.loan.count({ where, _skipUserScope: skipUserScope }),
-    ]);
+  //   const [loans, totalCount] = await Promise.all([
+  //     this.permissionsHelper.loan.findMany(loanQuery),
+  //     this.permissionsHelper.loan.count({ where, _skipUserScope: skipUserScope }),
+  //   ]);
 
-    // Enrich loans with actDays
-    const enrichedLoans = loans.map(loan => ({
-      ...loan,
-      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
-    }));
+  //   // Enrich loans with actDays
+  //   const enrichedLoans = loans.map(loan => ({
+  //     ...loan,
+  //     actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+  //   }));
 
-    // Handle CSV export
-    if (columns) {
-      return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
-    }
+  //   // Handle CSV export
+  //   if (columns) {
+  //     return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
+  //   }
 
-    // Enrich closed loans with additional data
-    if (showOnlyClosedLoans) {
-      await mapClosedLoansDataToPaymentWriteoff1(enrichedLoans, this.paymentsHelper);
-    }
+  //   // Enrich closed loans with additional data
+  //   if (showOnlyClosedLoans) {
+  //     await mapClosedLoansDataToPaymentWriteoff1(enrichedLoans, this.paymentsHelper);
+  //   }
 
-    // Calculate summary statistics (respects filters)
-    const summary = await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
+  //   // Calculate summary statistics (respects filters)
+  //   const summary = await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
 
-    const paginatedResult = this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+  //   const paginatedResult = this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
 
-    // Add summary to response
-    return {
-      ...paginatedResult,
-      summary,
-    } as PaginatedResult<Loan> & { summary: any };
-  }
+  //   // Add summary to response
+  //   return {
+  //     ...paginatedResult,
+  //     summary,
+  //   } as PaginatedResult<Loan> & { summary: any };
+  // }
 
   async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan>> {
     const { page, limit, columns } = filterDto;
@@ -450,6 +450,7 @@ export class LoanService {
               }
             }
           },
+          orderBy: { createdAt: 'desc' },
         },
         LoanAttribute: {
           select: {
@@ -1202,8 +1203,25 @@ export class LoanService {
       updateLoanStatusDto.agreement.schedule = adjustedSchedule;
 
       const transactions = await this.paymentsHelper.getTransactionByLoanId(loan.id);
-      if (transactions.length === 0) {
-        throw new BadRequestException('Cannot update loan status without transactions');
+      const latestCommittee = await this.prisma.committee.findFirst({
+        where: {
+          loanId: loan.id,
+          type: {
+            in: [Committee_type.discount, Committee_type.correction],
+          },
+          status: Committee_status.complete,
+          deletedAt: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      // throw only if NO transactions AND NO committee
+      if (transactions.length === 0 && !latestCommittee) {
+        throw new BadRequestException(
+          'Cannot update loan status without transactions or completed committee',
+        );
       }
     }
 
