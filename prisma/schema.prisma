@@ -86,6 +86,7 @@ model Debtor {
   updatedAt                DateTime                   @default(now()) @db.DateTime(0)
   deletedAt                DateTime?                  @db.DateTime(0)
   idNumber                 String?                    @unique(map: "idNumber_UNIQUE") @db.VarChar(45)
+  ClientOtp                ClientOtp[]
   DebtorStatus             DebtorStatus               @relation(fields: [statusId], references: [id])
   DebtorContact            DebtorContact[]
   DebtorEnforcementRecords DebtorEnforcementRecords[]
@@ -2123,6 +2124,28 @@ model CurrencyExchange {
   @@index([currency], map: "idx_currency")
   @@index([date(sort: Desc)], map: "idx_date")
   @@index([date(sort: Desc), currency], map: "idx_date_currency")
+}
+
+model ClientOtp {
+  id             Int       @id @default(autoincrement())
+  debtorId       Int
+  debtorPublicId String    @db.VarChar(36)
+  personalId     String    @db.VarChar(11)
+  otp            String    @db.VarChar(6)
+  expiresAt      DateTime  @db.DateTime(0)
+  attempts       Int       @default(0)
+  isUsed         Boolean   @default(false)
+  usedAt         DateTime? @db.DateTime(0)
+  createdAt      DateTime  @default(now()) @db.DateTime(0)
+  updatedAt      DateTime  @default(now()) @db.DateTime(0)
+  Debtor         Debtor    @relation(fields: [debtorId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_clientotp_debtor")
+
+  @@index([debtorId], map: "idx_clientotp_debtorId")
+  @@index([expiresAt], map: "idx_clientotp_expiresAt")
+  @@index([isUsed], map: "idx_clientotp_isUsed")
+  @@index([personalId], map: "idx_clientotp_personalId")
+  @@index([personalId, isUsed, expiresAt], map: "idx_clientotp_personalId_isUsed_expiresAt")
+  @@index([debtorPublicId], map: "idx_clientotp_debtorPublicId")
 }
 
 enum PaymentCommitment_type {
