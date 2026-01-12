@@ -1393,6 +1393,7 @@ model Old_db_comment {
   @@index([case_id], map: "NewIndex1")
   @@index([user_id], map: "NewIndex2")
   @@index([created_at], map: "created_at")
+  @@index([created_at], map: "created_at_2")
 }
 
 model Old_db_loanDebts {
@@ -2146,6 +2147,15 @@ model ClientOtp {
   @@index([personalId], map: "idx_clientotp_personalId")
   @@index([personalId, isUsed, expiresAt], map: "idx_clientotp_personalId_isUsed_expiresAt")
   @@index([debtorPublicId], map: "idx_clientotp_debtorPublicId")
+}
+
+model Old_db_lawyer_pending {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  case_id    Int?
+  user_id    Int?
+  status     Int?      @default(0)
+  created_at DateTime? @db.DateTime(0)
+  updated_at DateTime? @db.DateTime(0)
 }
 
 enum PaymentCommitment_type {
