@@ -250,14 +250,18 @@ export class PermissionsHelper {
   ) {
     let scopedWhere = args?.where || {};
     const searchMode = this.isSearchMode(args);
+    const isGlobalSearch = scopedWhere._isGlobalSearch === true;
     const skipUserScopeFlag = args?._skipUserScope === true;
     const allowTeamAccessFlag = args?._allowTeamAccess === true;
+
+    // Remove the custom flag before passing to Prisma
+    delete scopedWhere._isGlobalSearch;
 
     // Skip user scoping only in these cases:
     // 1. Search mode (user is searching, should see all loans)
     // 2. Explicit skipUserScope flag (set by service layer for team leads with same-role filters)
     // 3. Explicit allowTeamAccess flag (set for team leads accessing individual records)
-    const shouldSkipUserScope = searchMode || skipUserScopeFlag || allowTeamAccessFlag;
+    const shouldSkipUserScope = isGlobalSearch || skipUserScopeFlag || allowTeamAccessFlag;
 
     if (!shouldSkipUserScope) {
       scopedWhere = this.addUserScope(scopedWhere, user, model);

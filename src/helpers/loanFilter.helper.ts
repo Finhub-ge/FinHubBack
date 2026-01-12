@@ -47,9 +47,14 @@ export const applyCommonFilters = (where: any, filters: any): void => {
 export const applySearchFilter = (where: any, searchTerm?: string): void => {
   if (!searchTerm) return;
 
-  const searchConditions = buildLoanSearchWhere(searchTerm);
+  const { conditions, isGlobalSearch } = buildLoanSearchWhere(searchTerm);
+  // console.log(searchConditions);
   where.AND = where.AND || [];
-  where.AND.push({ OR: searchConditions });
+  where.AND.push({ OR: conditions });
+  // Mark as global search if needed
+  if (isGlobalSearch) {
+    where._isGlobalSearch = true;
+  }
 
   delete where.closedAt;
 };
