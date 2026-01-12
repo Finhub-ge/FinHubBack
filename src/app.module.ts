@@ -5,7 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { LoanModule } from './loan/loan.module';
 import { AppController } from './app.controller';
-import { AminModule } from './admin/admin.module';
+import { AdminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
 import { CommonModule } from './common/common.module';
@@ -25,7 +25,7 @@ import { ClientPortalModule } from './clientPortal/clientPortal.module';
     AuthModule,
     UserModule,
     LoanModule,
-    AminModule,
+    AdminModule,
     DashboardModule,
     ClientPortalModule,
   ],
