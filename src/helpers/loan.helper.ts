@@ -577,22 +577,27 @@ export const copyCurrentValues = (currentRemaining: any) => {
 
 export const buildLoanSearchWhere = (searchValue: string) => {
   const trimmed = searchValue.trim();
+
+  // Check if this is a global search (starts with #)
+  const isGlobalSearch = trimmed.startsWith('#');
+  const searchTerm = isGlobalSearch ? trimmed.substring(1).trim() : trimmed;
+
   const orConditions: Prisma.LoanWhereInput[] = [];
 
   // numeric Case ID
-  orConditions.push({ caseId: String(trimmed) });
+  orConditions.push({ caseId: String(searchTerm) });
 
   // Debtor personal ID
-  orConditions.push({ Debtor: { idNumber: trimmed } });
+  orConditions.push({ Debtor: { idNumber: searchTerm } });
 
   // Debtor first/last name
-  orConditions.push({ Debtor: { firstName: { contains: trimmed } } });
-  orConditions.push({ Debtor: { lastName: { contains: trimmed } } });
+  orConditions.push({ Debtor: { firstName: { contains: searchTerm } } });
+  orConditions.push({ Debtor: { lastName: { contains: searchTerm } } });
 
   // Debtor phone
-  orConditions.push({ Debtor: { mainPhone: { contains: trimmed } } });
+  orConditions.push({ Debtor: { mainPhone: { contains: searchTerm } } });
 
-  orConditions.push({ Debtor: { DebtorContact: { some: { value: { contains: trimmed } } } } });
+  orConditions.push({ Debtor: { DebtorContact: { some: { value: { contains: searchTerm } } } } });
 
   // Guarantors
   const guarantorFields = ['firstName', 'lastName', 'phone', 'mobile', 'idNumber'];
@@ -600,13 +605,13 @@ export const buildLoanSearchWhere = (searchValue: string) => {
     orConditions.push({
       Debtor: {
         DebtorGuarantors: {
-          some: { [field]: { contains: trimmed } },
+          some: { [field]: { contains: searchTerm } },
         },
       },
     });
   });
 
-  return orConditions;
+  return { conditions: orConditions, isGlobalSearch };
 };
 
 export const getLatestLoanIds = async (
