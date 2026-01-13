@@ -151,7 +151,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
     return { id: -1 }; // No comments visible
   }
 
-  const assignmentDate = assignments[0].createdAt;
+  // const assignmentDate = assignments[0].createdAt;
 
   // Build collector filter: combines BOTH requirements
   return {
@@ -159,7 +159,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
       { deletedAt: null },
 
       // Only from assignment date onwards
-      { createdAt: { gte: assignmentDate } },
+      // { createdAt: { gte: assignmentDate } },
 
       // Only own + team leads + lawyers
       {
