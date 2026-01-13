@@ -212,6 +212,14 @@ export class AdminService {
           },
           LoanStatus: true,
           Portfolio: true,
+          LoanAssignment: {
+            where: { isActive: true },
+            select: {
+              createdAt: true,
+              User: { select: { id: true, firstName: true, lastName: true } },
+              Role: { select: { name: true } },
+            },
+          },
         }
       }
     };
@@ -227,14 +235,14 @@ export class AdminService {
             portfolioSeller: true,
           },
         },
-        LoanAssignment: {
-          where: { isActive: true },
-          select: {
-            createdAt: true,
-            User: { select: { id: true, firstName: true, lastName: true } },
-            Role: { select: { name: true } },
-          },
-        },
+        // LoanAssignment: {
+        //   where: { isActive: true },
+        //   select: {
+        //     createdAt: true,
+        //     User: { select: { id: true, firstName: true, lastName: true } },
+        //     Role: { select: { name: true } },
+        //   },
+        // },
       });
     }
 
