@@ -314,16 +314,31 @@ export class AdminService {
       where.Loan = { is: loanFilter };
     }
 
-    const data = await this.prisma.transaction.findMany({
+    const queryOptions: any = {
       where,
       include: includes,
       ...paginationParams,
       orderBy: { id: 'desc' },
-    });
+    };
 
-    const total = await this.prisma.transaction.count({
-      where,
-    });
+
+    const [data, total] = await Promise.all([
+      this.permissionsHelper.payment.findMany(queryOptions),
+      this.permissionsHelper.payment.count({
+        where,
+      }),
+    ]);
+
+    // const data = await this.prisma.transaction.findMany({
+    //   where,
+    //   include: includes,
+    //   ...paginationParams,
+    //   orderBy: { id: 'desc' },
+    // });
+
+    // const total = await this.prisma.transaction.count({
+    //   where,
+    // });
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
     const dataObj = {

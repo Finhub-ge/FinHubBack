@@ -37,6 +37,11 @@ export class PermissionsHelper {
     return this.getScopedModel('paymentCommitment', user);
   }
 
+  get payment() {
+    const user = this.request.user;
+    return this.getScopedModel('transaction', user);
+  }
+
   get loanMarks() {
     const user = this.request.user;
     return this.getScopedModel('loanMarks', user);
@@ -131,6 +136,7 @@ export class PermissionsHelper {
       case 'committee':
       case 'paymentCommitment':
       case 'loanMarks':
+      case 'transaction':
         return { Loan: baseLoanCondition };
 
       default:
@@ -152,6 +158,7 @@ export class PermissionsHelper {
       case 'committee':
       case 'paymentCommitment':
       case 'loanMarks':
+      case 'transaction':
         return { Loan: baseLoanCondition };
 
       // Easy to add new models here:
