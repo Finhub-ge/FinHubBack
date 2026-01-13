@@ -13,11 +13,11 @@ export class GetTasksFilterDto {
   @ApiProperty({
     description: 'Search by case ID',
     required: false,
-    type: Number
+    type: String
   })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
-  caseId?: number;
+  @Transform(({ value }) => value ? value.trim() : undefined)
+  caseId?: string;
 
   @ApiProperty({ enum: TaskType, description: 'Type of task assignment', required: false })
   @IsEnum(TaskType)
