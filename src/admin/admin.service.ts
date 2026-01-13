@@ -1249,7 +1249,7 @@ export class AdminService {
       const searchTerm = filters.search;
 
       where.OR = [
-        { Loan: { caseId: Number(searchTerm) } },
+        { Loan: { caseId: searchTerm } },
         {
           Loan: {
             LoanAssignment: {
