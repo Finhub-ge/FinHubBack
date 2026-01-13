@@ -130,7 +130,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
 
   const getUserTeamLead = await prisma.teamMembership.findFirst({
     where: {
-      teamId: user.team_membership[0].teamId,
+      teamId: user.team_membership?.[0]?.teamId,
       deletedAt: null,
       teamRole: TeamMembership_teamRole.leader
     },
