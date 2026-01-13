@@ -36,6 +36,7 @@ import { buildLoanQuery } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
 import { CurrencyHelper } from "src/helpers/currency.helper";
+import { createEmptyTransactionWithLoan, findLoanBySearchTerm } from "src/helpers/transaction.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -212,6 +213,14 @@ export class AdminService {
           },
           LoanStatus: true,
           Portfolio: true,
+          LoanAssignment: {
+            where: { isActive: true },
+            select: {
+              createdAt: true,
+              User: { select: { id: true, firstName: true, lastName: true } },
+              Role: { select: { name: true } },
+            },
+          },
         }
       }
     };
@@ -226,15 +235,7 @@ export class AdminService {
           select: {
             portfolioSeller: true,
           },
-        },
-        LoanAssignment: {
-          where: { isActive: true },
-          select: {
-            createdAt: true,
-            User: { select: { id: true, firstName: true, lastName: true } },
-            Role: { select: { name: true } },
-          },
-        },
+        }
       });
     }
 
@@ -340,9 +341,25 @@ export class AdminService {
     //   where,
     // });
 
+    //NEW LOGIC: If no transactions found AND search exists, look for loan
+    let finalData = data;
+    let finalTotal = total;
+
+    if (data.length === 0 && search?.trim()) {
+      const loan = await findLoanBySearchTerm(this.prisma, search.trim());
+
+      if (loan) {
+        // Create transaction-like object with null fields but populated loan
+        const emptyTransaction = createEmptyTransactionWithLoan(loan);
+
+        finalData = [emptyTransaction];
+        finalTotal = 1;
+      }
+    }
+
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
     const dataObj = {
-      transactions: data,
+      transactions: finalData,
       paymentChannels,
     };
 
@@ -397,7 +414,7 @@ export class AdminService {
       });
     }
 
-    const paginatedResult = this.paginationService.createPaginatedResult([dataObj], total, { page, limit });
+    const paginatedResult = this.paginationService.createPaginatedResult([dataObj], finalTotal, { page, limit });
 
     // Add summary to response if it's a report
     if (options?.isReport && summary) {
