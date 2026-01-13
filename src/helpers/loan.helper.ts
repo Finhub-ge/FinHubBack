@@ -128,6 +128,17 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   const teamLead = isTeamLead(user);
   const isCollector = user.role_name === 'collector';
 
+  const getUserTeamLead = await prisma.teamMembership.findFirst({
+    where: {
+      teamId: user.team_membership[0].teamId,
+      deletedAt: null,
+      teamRole: TeamMembership_teamRole.leader
+    },
+    select: {
+      userId: true
+    }
+  });
+
   // Lawyers, team leads, admins: see ALL comments
   if (!isCollector || teamLead) {
     return { deletedAt: null };
@@ -165,7 +176,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
       {
         OR: [
           { userId: user.id }, // Own comments
-          { User: { TeamMembership: { some: { teamRole: TeamMembership_teamRole.leader } } } }, // Team lead comments
+          { userId: getUserTeamLead?.userId }, // Team lead comments
           { User: { Role: { name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] } } } } // Lawyer comments
         ]
       },
