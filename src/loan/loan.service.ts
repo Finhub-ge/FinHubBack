@@ -2264,7 +2264,9 @@ export class LoanService {
       where: { publicId: String(publicId), deletedAt: null },
       select: {
         id: true,
-        LoanLegalStage: true,
+        LoanLegalStage: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
