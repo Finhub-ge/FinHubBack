@@ -366,7 +366,7 @@ export class AdminService {
     // Calculate summary (respects filters, not pagination)
     let summary = null;
     if (options?.isReport) {
-      const allTransactions = await this.prisma.transaction.findMany({
+      const allTransactions = await this.permissionsHelper.payment.findMany({
         where,
         select: {
           currency: true,
