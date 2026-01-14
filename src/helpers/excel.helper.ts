@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { getLoanExportHeaders } from './loan.helper';
 import { normalizeName } from './accountId.helper';
+import { getPaymentReportExportHeaders } from './reports.helper';
 
 export const generateExcel = async (
   data: any[],
@@ -229,3 +230,32 @@ export const getUserExport = async (
   return buffer as unknown as Buffer;
 }
 
+export const paymentReportExport = async (data: any[], columns: string[], sheetName = 'Sheet1'): Promise<Buffer> => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  const paymentHeaders = getPaymentReportExportHeaders();
+  const displayHeaders = getDisplayHeaders(columns, paymentHeaders);
+
+  // Add header row
+  worksheet.addRow(displayHeaders);
+
+  // Style header row
+  styleHeaderRow(worksheet);
+
+  // Format and add data rows ONCE
+  const formattedData = formatData(data, columns);
+
+  formattedData.forEach((row) => {
+    worksheet.addRow(row);
+  });
+
+  // Format cells (numbers, dates, etc.)
+  formatCells(worksheet);
+
+  // Auto-fit columns
+  autoFitColumns(worksheet, columns);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer as unknown as Buffer;
+}

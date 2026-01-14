@@ -304,3 +304,61 @@ export const updateCollectedAmount = async (
 
   return updated;
 };
+
+export const preparePaymentReportExportData = (transaction: any) => {
+  const getAssignmentByRole = (roleName: string) =>
+    transaction.Loan.LoanAssignment?.find((a) => a.Role?.name === roleName);
+
+  const collector = getAssignmentByRole('collector');
+  const lawyer = getAssignmentByRole('lawyer');
+
+  return {
+    id: transaction.id,
+    caseId: transaction.Loan.caseId ?? '',
+    fullName: `${transaction.Loan.Debtor?.firstName ?? ''} ${transaction.Loan.Debtor?.lastName ?? ''}`.trim(),
+    portfolio: transaction.Loan.PortfolioCaseGroup?.groupName ?? '',
+    lender: transaction.Loan.Portfolio.portfolioSeller?.name ?? '',
+    paymentDate: transaction.paymentDate ?? '',
+    createdDate: transaction.createdAt ?? '',
+    principal: transaction.principal ?? '',
+    interest: transaction.interest ?? '',
+    penalty: transaction.penalty ?? '',
+    otherFees: transaction.fees ?? '',
+    amount: transaction.amount ?? '',
+    legalCharges: transaction.legal ?? '',
+    totalCollection: transaction.collectedAmount ?? '',
+    channelAccountN: transaction.TransactionChannelAccounts?.name ?? '',
+    currency: transaction.currency ?? '',
+    collector: collector
+      ? `${collector.User?.firstName ?? ''} ${collector.User?.lastName ?? ''}`.trim()
+      : '',
+    // legalStage: transaction.Loan.LoanLegalStage[0]?.LegalStage?.title ?? '',
+    lawyer: lawyer
+      ? `${lawyer.User?.firstName ?? ''} ${lawyer.User?.lastName ?? ''}`.trim()
+      : '',
+  };
+}
+
+export const getPaymentReportExportHeaders = (): Record<string, string> => {
+  return {
+    id: 'Id',
+    caseId: 'Loan Number',
+    fullName: 'Debtor name',
+    portfolio: 'Portfolio',
+    lender: 'Lender',
+    paymentDate: 'Payment date',
+    createdDate: 'Created date',
+    principal: 'Principal',
+    interest: 'Interest',
+    penalty: 'Penalty',
+    otherFees: 'Other Fees',
+    amount: 'Amount',
+    legalCharges: 'Legal Charges',
+    totalCollection: 'Total Collection',
+    channelAccountN: 'Channel Account N',
+    currency: 'Currency',
+    collector: 'Collector',
+    legalStage: 'Legal Stage',
+    lawyer: 'Lawyer',
+  };
+}

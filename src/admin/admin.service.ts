@@ -23,15 +23,15 @@ import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
 import { createInitialLoanRemaining, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
-import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
+import { GetPaymentReportDto, GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
 import { Role } from "src/enums/role.enum";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
-import { parseExcelBuffer } from "src/helpers/excel.helper";
+import { parseExcelBuffer, paymentReportExport } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
-import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 import { buildLoanQuery } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
@@ -178,9 +178,9 @@ export class AdminService {
   }
 
   async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, user: any, options?: { isReport?: boolean }) {
-    const { page, limit, search } = getPaymentDto;
+    const { page, limit, search, skip } = getPaymentDto;
 
-    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
     const includes = {
       TransactionChannelAccounts: {
@@ -2220,5 +2220,36 @@ export class AdminService {
         },
       },
     };
+  }
+
+  async exportPaymentReport(filters: GetPaymentReportDto, user: any) {
+    const filter = { skip: true, ...filters }
+    const paymentsResponse = await this.getTransactionList(filter, user, { isReport: true });
+    const payments = paymentsResponse.data[0]?.transactions ?? [];
+    const exportData = payments.map(transaction => preparePaymentReportExportData(transaction));
+
+    const columns = [
+      'id',
+      'caseId',
+      'fullName',
+      'portfolio',
+      'lender',
+      'paymentDate',
+      'createdDate',
+      'principal',
+      'interest',
+      'penalty',
+      'otherFees',
+      'amount',
+      'legalCharges',
+      'totalCollection',
+      'channelAccountN',
+      'currency',
+      'collector',
+      'legalStage',
+      'lawyer',
+    ];
+
+    return await paymentReportExport(exportData, columns, 'Payment Report');
   }
 }
