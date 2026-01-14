@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete, UseInterceptors, UploadedFile } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, ParseIntPipe, Post, Patch, UseGuards, Query, Delete, UseInterceptors, UploadedFile, Header, StreamableFile } from "@nestjs/common";
 import { AdminService } from "./admin.service";
 import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { JwtGuard } from "src/auth/guard/jwt.guard";
@@ -22,7 +22,7 @@ import { GetPaymentDto, GetPaymentWithPaginationDto } from "./dto/getPayment.dto
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
-import { GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
+import { GetPaymentReportDto, GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 import { FileInterceptor } from "@nestjs/platform-express";
@@ -373,5 +373,17 @@ export class AdminController {
     @Query('currency') currency?: string,
   ) {
     return await this.adminService.getCurrency(date, currency);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR)
+  @Get('paymentReport/exportExcel')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportPaymentReport(@GetUser() user: User, @Query() getPaymentReportDto: GetPaymentReportDto) {
+    const excelBuffer = await this.adminService.exportPaymentReport(getPaymentReportDto, user);
+    return new StreamableFile(Buffer.from(excelBuffer), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename=Payment_report_${Date.now()}.xlsx`
+    });
   }
 }
