@@ -376,7 +376,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @AllRoles()
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR)
   @Get('paymentReport/exportExcel')
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   async exportPaymentReport(@GetUser() user: User, @Query() getPaymentReportDto: GetPaymentReportDto) {
