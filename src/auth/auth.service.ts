@@ -10,7 +10,7 @@ import { SignUpSuperAdminDto } from "./dto/signupSuperAdmin.dto";
 import { UserSigninDto } from "./dto/userSignin.dto";
 import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { Role } from "src/enums/role.enum";
-import { TeamMembership, User } from "@prisma/client";
+import { TeamMembership, TeamMembership_teamRole, User } from "@prisma/client";
 import { randomUUID } from "crypto"
 
 
@@ -281,7 +281,7 @@ export class AuthService {
     // Add canRequestLawyer property for specific user
     return {
       ...currentUser,
-      canRequestLawyer: currentUser.id === 62
+      canRequestLawyer: currentUser?.TeamMembership[0]?.teamRole === TeamMembership_teamRole.leader
     };
   }
 }
