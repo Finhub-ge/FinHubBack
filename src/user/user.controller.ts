@@ -103,6 +103,14 @@ export class UserController {
     return this.userService.getReminders(user, { type: 'payments' })
   }
 
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @ApiParam({ name: 'reminderId', type: 'number' })
+  @Patch('update/reminder/:reminderId')
+  updateReminder(@Param('reminderId', ParseIntPipe) reminderId: number) {
+    return this.userService.updateReminder(reminderId)
+  }
+
   // @UseGuards(JwtGuard, RolesGuard)
   // @Roles(Role.ADMIN)
   // @Get('hash/Password')
