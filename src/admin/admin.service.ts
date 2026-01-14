@@ -177,7 +177,7 @@ export class AdminService {
     return this.paginationService.createPaginatedResult(data, total, { page, limit });
   }
 
-  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, options?: { isReport?: boolean }) {
+  async getTransactionList(getPaymentDto: GetPaymentWithPaginationDto | GetPaymentReportWithPaginationDto, user: any, options?: { isReport?: boolean }) {
     const { page, limit, search } = getPaymentDto;
 
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
@@ -315,6 +315,11 @@ export class AdminService {
       where.Loan = { is: loanFilter };
     }
 
+    const teamLead = isTeamLead(user);
+    const isCollector = user.role_name === Role.COLLECTOR;
+    // Team leads (collectors) see all team's transactions, members see only own
+    const allowTeamAccess = teamLead && isCollector;
+
     const queryOptions: any = {
       where,
       include: includes,
@@ -322,11 +327,15 @@ export class AdminService {
       orderBy: { id: 'desc' },
     };
 
+    if (allowTeamAccess) {
+      queryOptions._allowTeamAccess = true;
+    }
 
     const [data, total] = await Promise.all([
       this.permissionsHelper.payment.findMany(queryOptions),
       this.permissionsHelper.payment.count({
         where,
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
       }),
     ]);
 
@@ -377,6 +386,7 @@ export class AdminService {
           fees: true,
           legal: true,
         },
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
       });
 
       // Initialize summary for all currencies
