@@ -377,7 +377,7 @@ export class AdminController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
-  @Get('paymenReport/exportExcel')
+  @Get('paymentReport/exportExcel')
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   async exportPaymentReport(@GetUser() user: User, @Query() getPaymentReportDto: GetPaymentReportDto) {
     const excelBuffer = await this.adminService.exportPaymentReport(getPaymentReportDto, user);
