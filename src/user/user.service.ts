@@ -11,6 +11,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 import { getUserExport } from "src/helpers/excel.helper";
 import { Role } from "src/enums/role.enum";
+import { subtractDays } from "src/helpers/date.helper";
 
 @Injectable()
 export class UserService {
@@ -542,7 +543,7 @@ export class UserService {
           deletedAt: null,
           status: true,
           deadline: {
-            gte: new Date()
+            gte: subtractDays(new Date(), 10)
           },
           type: {
             in: [Reminders_type.Callback]
@@ -562,7 +563,7 @@ export class UserService {
           }
         },
         orderBy: {
-          deadline: 'desc'
+          deadline: 'asc'
         }
       });
     }
@@ -596,6 +597,20 @@ export class UserService {
           deadline: 'desc'
         }
       });
+    }
+  }
+
+  async updateReminder(reminderId: number) {
+    try {
+      await this.prisma.reminders.update({
+        where: { id: reminderId },
+        data: { status: false }
+      });
+      return {
+        message: 'Reminder updated successfully'
+      }
+    } catch (error) {
+      throw new ForbiddenException('Failed to update reminder');
     }
   }
 
