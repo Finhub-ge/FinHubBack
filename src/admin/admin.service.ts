@@ -1759,7 +1759,16 @@ export class AdminService {
 
   async getPortfolioSellers() {
     return await this.prisma.portfolioSeller.findMany({
-      where: { deletedAt: null, active: '1' }
+      where: { deletedAt: null, active: '1' },
+      include: {
+        Portfolio: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
     });
   }
 
