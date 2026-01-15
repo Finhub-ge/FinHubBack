@@ -276,6 +276,7 @@ export class AdminService {
           },
         },
       });
+      fullSearch.push({ comment: { contains: term } });
 
       where.OR = fullSearch;
     }
