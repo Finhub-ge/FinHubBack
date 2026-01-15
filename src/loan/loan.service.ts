@@ -1791,9 +1791,10 @@ export class LoanService {
       throw new NotFoundException('Legal stage not found');
     }
 
-    if (!loan.LoanCollateralStatus.length && legalStage.title === 'Court') {
-      throw new BadRequestException('Loan must have a collateral status before adding legal stage Court');
-    }
+    // Temporary disabled
+    // if (!loan.LoanCollateralStatus.length && legalStage.title === 'Court') {
+    //   throw new BadRequestException('Loan must have a collateral status before adding legal stage Court');
+    // }
 
     let comment = data.comment
     if (legalStage.title === 'Execution') {
@@ -1872,9 +1873,10 @@ export class LoanService {
       where: { loanId: loan.id }
     });
 
-    if (!existingCollateralStatus) {
-      throw new BadRequestException('Loan must have a collateral status before adding litigation stage');
-    }
+    // Temporary disabled
+    // if (!existingCollateralStatus) {
+    //   throw new BadRequestException('Loan must have a collateral status before adding litigation stage');
+    // }
 
 
     // Create the relationship between loan and litigation stage
@@ -2314,22 +2316,23 @@ export class LoanService {
     if (!loan) throw new NotFoundException('Loan not found');
 
     const where: any = { deletedAt: null };
-    const rules: Record<number, any> = {
-      60: { id: { in: [0] } },
-      61: { id: { notIn: [6] } },
-      62: { id: { in: [6] } },
-      64: { id: { in: [8] } },
-      65: { id: { in: [5, 8] } },
-    };
+    // Temporary disabled
+    // const rules: Record<number, any> = {
+    //   60: { id: { in: [0] } },
+    //   61: { id: { notIn: [6] } },
+    //   62: { id: { in: [6] } },
+    //   64: { id: { in: [8] } },
+    //   65: { id: { in: [5, 8] } },
+    // };
 
-    if (loan.LoanLegalStage.length > 0) {
-      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
-      const stageCode = lastStage.legalStageId;
+    // if (loan.LoanLegalStage.length > 0) {
+    //   const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+    //   const stageCode = lastStage.legalStageId;
 
-      if (rules[stageCode]) {
-        Object.assign(where, rules[stageCode]);
-      }
-    }
+    //   if (rules[stageCode]) {
+    //     Object.assign(where, rules[stageCode]);
+    //   }
+    // }
     return this.prisma.litigationStage.findMany({ where });
   }
 
@@ -2345,23 +2348,24 @@ export class LoanService {
     if (!loan) throw new NotFoundException('Loan not found');
 
     const where: any = { deletedAt: null };
-    const rules: Record<number, any> = {
-      60: { id: { in: [61, 63, 64] } },
-      61: { id: { in: [60, 62] } },
-      62: { id: { in: [60] } },
-      63: { id: { in: [65] } },
-      64: { id: { in: [0] } },
-      65: { id: { in: [0] } },
-    };
+    // Temporary disabled
+    // const rules: Record<number, any> = {
+    //   60: { id: { in: [61, 63, 64] } },
+    //   61: { id: { in: [60, 62] } },
+    //   62: { id: { in: [60] } },
+    //   63: { id: { in: [65] } },
+    //   64: { id: { in: [0] } },
+    //   65: { id: { in: [0] } },
+    // };
 
-    if (loan.LoanLegalStage.length > 0) {
-      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
-      const stageCode = lastStage.legalStageId;
+    // if (loan.LoanLegalStage.length > 0) {
+    //   const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+    //   const stageCode = lastStage.legalStageId;
 
-      if (rules[stageCode]) {
-        Object.assign(where, rules[stageCode]);
-      }
-    }
+    //   if (rules[stageCode]) {
+    //     Object.assign(where, rules[stageCode]);
+    //   }
+    // }
 
     return await this.prisma.legalStage.findMany({ where });
   }
