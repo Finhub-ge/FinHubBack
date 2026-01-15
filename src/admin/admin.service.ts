@@ -233,6 +233,8 @@ export class AdminService {
         },
         Portfolio: {
           select: {
+            id: true,
+            name: true,
             portfolioSeller: true,
           },
         }

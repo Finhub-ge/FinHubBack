@@ -66,7 +66,7 @@ export const applyPortfolioFilters = (where: any, filters: any): void => {
 
   if (filters.portfolioseller?.length) {
     where.Portfolio = {
-      portfolioSeller: { id: { in: filters.portfolioseller } },
+      id: { in: filters.portfolioseller },
     };
   }
 };

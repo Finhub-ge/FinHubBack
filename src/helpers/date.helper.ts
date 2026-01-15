@@ -80,3 +80,6 @@ export const getYear = (date: Date | string): string => {
 export const getMonth = (date: Date | string): string => {
   return (dayjs(date).tz(TIMEZONE).month() + 1).toString();
 }
+
+export const getMinutesAgo = (min: number) =>
+  new Date(Date.now() - min * 60 * 1000);

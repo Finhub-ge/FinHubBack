@@ -29,11 +29,11 @@ import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
-import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
+import { LoanStatusGroups, LoanStatusId } from 'src/enums/loanStatus.enum';
 import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
-import { daysFromDate } from 'src/helpers/date.helper';
+import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
 import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
 
@@ -1043,13 +1043,15 @@ export class LoanService {
         User: { select: { id: true, firstName: true, lastName: true } }
       }
     })
-    await this.prisma.loan.update({
-      where: { id: loan.id },
-      data: {
-        actDays: 0,
-        lastActivite: new Date(),
-      },
-    });
+    if (loan.statusId !== LoanStatusId.NEW) {
+      await this.prisma.loan.update({
+        where: { id: loan.id },
+        data: {
+          actDays: 0,
+          lastActivite: new Date(),
+        },
+      });
+    }
     return {
       message: 'Comment added successfully',
     };
@@ -1179,6 +1181,13 @@ export class LoanService {
         'Reason/comment is required for this status change'
       );
     }
+
+    const minutesAgo = getMinutesAgo(60);
+    const lastComment = await this.prisma.comments.findFirst({
+      where: { loanId: loan.id, deletedAt: null, createdAt: { gte: minutesAgo } },
+    });
+
+    const lastActivity = loan.LoanStatus.id === LoanStatusId.NEW && lastComment ? true : false;
 
     if (status.name === 'Agreement') {
       if (!updateLoanStatusDto.agreement) {
@@ -1345,10 +1354,16 @@ export class LoanService {
         });
       }
 
+      const updateData: any = {
+        statusId: updateLoanStatusDto.statusId,
+      }
+      if (lastActivity) {
+        updateData.lastActivite = new Date();
+      }
       // Update loan status
       await tx.loan.update({
         where: { publicId: String(publicId) },
-        data: { statusId: updateLoanStatusDto.statusId },
+        data: updateData,
       });
     });
 
