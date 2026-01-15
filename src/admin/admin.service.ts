@@ -233,6 +233,8 @@ export class AdminService {
         },
         Portfolio: {
           select: {
+            id: true,
+            name: true,
             portfolioSeller: true,
           },
         }
@@ -274,6 +276,7 @@ export class AdminService {
           },
         },
       });
+      fullSearch.push({ comment: { contains: term } });
 
       where.OR = fullSearch;
     }
@@ -1759,7 +1762,16 @@ export class AdminService {
 
   async getPortfolioSellers() {
     return await this.prisma.portfolioSeller.findMany({
-      where: { deletedAt: null, active: '1' }
+      where: { deletedAt: null, active: '1' },
+      include: {
+        Portfolio: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
     });
   }
 
