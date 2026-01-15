@@ -1015,10 +1015,13 @@ export class LoanService {
     throw new HttpException('Loan attribute added successfully', 200);
   }
 
-  async addComment(publicId: ParseUUIDPipe, addCommentDto: AddCommentDto, userId: number, file?: Express.Multer.File) {
+  async addComment(publicId: ParseUUIDPipe, addCommentDto: AddCommentDto, user: any, file?: Express.Multer.File) {
     // Check if loan exists
     const loan = await this.prisma.loan.findUnique({
-      where: { publicId: String(publicId), deletedAt: null }
+      where: { publicId: String(publicId), deletedAt: null },
+      include: {
+        LoanAssignment: true,
+      }
     });
 
     if (!loan) {
@@ -1035,7 +1038,7 @@ export class LoanService {
     await this.prisma.comments.create({
       data: {
         loanId: loan.id,
-        userId,
+        userId: user.id,
         comment: addCommentDto.comment,
         uploadId: upload?.id,
       },
@@ -1043,7 +1046,13 @@ export class LoanService {
         User: { select: { id: true, firstName: true, lastName: true } }
       }
     })
-    if (loan.statusId !== LoanStatusId.NEW) {
+
+    const isUserAssigned =
+      loan.LoanAssignment?.some(
+        assignment => assignment.userId === user.id,
+      ) ?? false;
+
+    if (loan.statusId !== LoanStatusId.NEW && user.role_name === Role.COLLECTOR && isUserAssigned) {
       await this.prisma.loan.update({
         where: { id: loan.id },
         data: {
@@ -1137,12 +1146,13 @@ export class LoanService {
     throw new HttpException('Debtor status updated successfully', 200);
   }
 
-  async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, userId: number) {
+  async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, user: any) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
       select: {
         id: true,
-        LoanStatus: true
+        LoanStatus: true,
+        LoanAssignment: true,
       }
     });
 
@@ -1183,11 +1193,27 @@ export class LoanService {
     }
 
     const minutesAgo = getMinutesAgo(60);
-    const lastComment = await this.prisma.comments.findFirst({
-      where: { loanId: loan.id, deletedAt: null, createdAt: { gte: minutesAgo } },
+    const myLastComment = await this.prisma.comments.findFirst({
+      where: {
+        loanId: loan.id,
+        deletedAt: null,
+        userId: user.id,
+        createdAt: { gte: minutesAgo },
+      },
     });
 
-    const lastActivity = loan.LoanStatus.id === LoanStatusId.NEW && lastComment ? true : false;
+    const isUserAssigned =
+      loan.LoanAssignment?.some(
+        assignment => assignment.userId === user.id,
+      ) ?? false;
+
+    const hasRecentComment = !!myLastComment;
+
+    const lastActivity =
+      loan.LoanStatus.id === LoanStatusId.NEW &&
+      hasRecentComment &&
+      user.role_name === Role.COLLECTOR &&
+      isUserAssigned;
 
     if (status.name === 'Agreement') {
       if (!updateLoanStatusDto.agreement) {
@@ -1262,7 +1288,7 @@ export class LoanService {
           loanId: loan.id,
           oldStatusId: loan.LoanStatus.id,
           newStatusId: updateLoanStatusDto.statusId,
-          changedBy: userId,
+          changedBy: user.id,
           notes: updateLoanStatusDto.comment ?? null,
         },
       });
@@ -1280,7 +1306,7 @@ export class LoanService {
             amount: updateLoanStatusDto.agreement.agreedAmount,
             paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
             comment: updateLoanStatusDto?.comment || null,
-            userId: userId,
+            userId: user.id,
             type: 'agreement',
           },
           tx
@@ -1298,7 +1324,7 @@ export class LoanService {
         await saveScheduleReminders({
           loanId: loan.id,
           commitmentId: commitment.id,
-          userId: userId,
+          userId: user.id,
           type: Reminders_type.Agreement,
         }, tx);
       }
@@ -1316,7 +1342,7 @@ export class LoanService {
             amount: updateLoanStatusDto.promise.agreedAmount,
             paymentDate: updateLoanStatusDto.promise.paymentDate,
             comment: updateLoanStatusDto?.comment || null,
-            userId: userId,
+            userId: user.id,
             type: 'promise',
           },
           tx
@@ -1337,7 +1363,7 @@ export class LoanService {
         await saveScheduleReminders({
           loanId: loan.id,
           commitmentId: commitment.id,
-          userId: userId,
+          userId: user.id,
           type: Reminders_type.Promised_to_pay,
         }, tx);
       }
