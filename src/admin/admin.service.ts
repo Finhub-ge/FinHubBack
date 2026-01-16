@@ -287,7 +287,7 @@ export class AdminService {
         loanFilter.groupId = { in: filters.portfolioId };
       }
       if (filters.portfolioseller?.length) {
-        loanFilter.Portfolio = { portfolioSeller: { id: { in: filters.portfolioseller } } };
+        loanFilter.Portfolio = { id: { in: filters.portfolioseller } };
       }
       if (filters.assignedCollector?.length) {
         loanFilter.LoanAssignment = {
