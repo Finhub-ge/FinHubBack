@@ -101,7 +101,7 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
-  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @ExceptRoles(Role.ANALYST)
   @Post(':publicId/debtor/contacts')
   addDebtorContact(
     @GetUser() user: User,
