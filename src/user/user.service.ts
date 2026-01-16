@@ -11,7 +11,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 import { getUserExport } from "src/helpers/excel.helper";
 import { Role } from "src/enums/role.enum";
-import { subtractDays } from "src/helpers/date.helper";
+import { addDays, subtractDays } from "src/helpers/date.helper";
 
 @Injectable()
 export class UserService {
@@ -543,7 +543,8 @@ export class UserService {
           deletedAt: null,
           status: true,
           deadline: {
-            gte: subtractDays(new Date(), 10)
+            gte: subtractDays(new Date(), 10),
+            lte: addDays(new Date(), 3),
           },
           type: {
             in: [Reminders_type.Callback]
