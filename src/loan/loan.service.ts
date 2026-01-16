@@ -1019,7 +1019,11 @@ export class LoanService {
     // Check if loan exists
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
-      include: {
+      select: {
+        id: true,
+        debtorId: true,
+        caseId: true,
+        statusId: true,
         LoanAssignment: true,
       }
     });
@@ -1034,33 +1038,83 @@ export class LoanService {
       upload = await this.uploadsHelper.uploadFile(file, `loans/${loan.id}/comments`);
     }
 
-    // Create the comment
-    await this.prisma.comments.create({
-      data: {
-        loanId: loan.id,
-        userId: user.id,
-        comment: addCommentDto.comment,
-        uploadId: upload?.id,
+    // Get all other loans for this debtor
+    const debtorLoans = await this.prisma.loan.findMany({
+      where: {
+        debtorId: loan.debtorId,
+        deletedAt: null,
+        id: { not: loan.id }  // Exclude current loan
       },
-      include: {
-        User: { select: { id: true, firstName: true, lastName: true } }
+      select: {
+        id: true,
+        caseId: true
       }
-    })
+    });
 
     const isUserAssigned =
       loan.LoanAssignment?.some(
         assignment => assignment.userId === user.id,
       ) ?? false;
 
-    if (loan.statusId !== LoanStatusId.NEW && user.role_name === Role.COLLECTOR && isUserAssigned) {
-      await this.prisma.loan.update({
-        where: { id: loan.id },
+    const shouldUpdateLastActivity =
+      loan.statusId !== LoanStatusId.NEW &&
+      user.role_name === Role.COLLECTOR &&
+      isUserAssigned;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Create the comment for the main loan
+      await tx.comments.create({
         data: {
-          actDays: 0,
-          lastActivite: new Date(),
+          loanId: loan.id,
+          userId: user.id,
+          comment: addCommentDto.comment,
+          uploadId: upload?.id,
         },
+        include: {
+          User: { select: { id: true, firstName: true, lastName: true } }
+        }
       });
-    }
+
+      // Create comments for all related loans with prefix
+      if (debtorLoans.length > 0) {
+        const relatedComments = debtorLoans.map(relatedLoan => ({
+          loanId: relatedLoan.id,
+          userId: user.id,
+          comment: `From case: ${loan.caseId} ${addCommentDto.comment}`,
+          uploadId: upload?.id,
+        }));
+
+        await tx.comments.createMany({
+          data: relatedComments,
+        });
+      }
+
+      // Update lastActivite for the main loan
+      if (shouldUpdateLastActivity) {
+        await tx.loan.update({
+          where: { id: loan.id },
+          data: {
+            actDays: 0,
+            lastActivite: new Date(),
+          },
+        });
+
+        // Update lastActivite for all related loans
+        if (debtorLoans.length > 0) {
+          await tx.loan.updateMany({
+            where: {
+              id: { in: debtorLoans.map(l => l.id) },
+              deletedAt: null
+            },
+            data: {
+              actDays: 0,
+              lastActivite: new Date(),
+            }
+          });
+        }
+      }
+    });
+
     return {
       message: 'Comment added successfully',
     };
