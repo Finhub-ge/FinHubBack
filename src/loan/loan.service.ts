@@ -1151,6 +1151,8 @@ export class LoanService {
       where: { publicId: String(publicId), deletedAt: null },
       select: {
         id: true,
+        caseId: true,
+        debtorId: true,
         LoanStatus: true,
         LoanAssignment: true,
       }
@@ -1214,6 +1216,30 @@ export class LoanService {
       hasRecentComment &&
       user.role_name === Role.COLLECTOR &&
       isUserAssigned;
+
+    // Determine if this status should update all debtor's loans (exclude Promise and Agreement)
+    const shouldUpdateAllLoans = ![
+      LoanStatusId.PROMISED_TO_PAY,  // 26
+      LoanStatusId.AGREEMENT,          // 3
+      LoanStatusId.AGREEMENT_CANCELED, // 14
+    ].includes(updateLoanStatusDto.statusId);
+
+    // Get all other loans for this debtor
+    let debtorLoans: { id: number; statusId: number; publicId: string }[] = [];
+    if (shouldUpdateAllLoans) {
+      debtorLoans = await this.prisma.loan.findMany({
+        where: {
+          debtorId: loan.debtorId,
+          deletedAt: null,
+          id: { not: loan.id }  // Exclude current loan
+        },
+        select: {
+          id: true,
+          statusId: true,
+          publicId: true
+        }
+      });
+    }
 
     if (status.name === 'Agreement') {
       if (!updateLoanStatusDto.agreement) {
@@ -1292,6 +1318,37 @@ export class LoanService {
           notes: updateLoanStatusDto.comment ?? null,
         },
       });
+
+      if (shouldUpdateAllLoans && debtorLoans.length > 0) {
+        // Create history records for all other loans
+        const historyRecords = debtorLoans.map(debtorLoan => ({
+          loanId: debtorLoan.id,
+          oldStatusId: debtorLoan.statusId,
+          newStatusId: updateLoanStatusDto.statusId,
+          changedBy: user.id,
+          notes: `Status changed from Case: ${loan.caseId}${updateLoanStatusDto.comment ? `: ${updateLoanStatusDto.comment}` : ''}`
+        }));
+
+        await tx.loanStatusHistory.createMany({
+          data: historyRecords,
+        });
+
+        // Update all other debtor's loans with the new status and lastActivite
+        const updateData: any = {
+          statusId: updateLoanStatusDto.statusId,
+        };
+        if (lastActivity) {
+          updateData.lastActivite = new Date();
+        }
+
+        await tx.loan.updateMany({
+          where: {
+            publicId: { in: debtorLoans.map(l => l.publicId) },
+            deletedAt: null
+          },
+          data: updateData
+        });
+      }
 
       // Handle Agreement status
       if (status.name === 'Agreement') {
@@ -1556,7 +1613,7 @@ export class LoanService {
 
     // Create comment for assignment
     if (assignedUser) {
-      const commentText = `Assign (${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
+      const commentText = `Assign(${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
       await dbClient.comments.create({
         data: {
           loanId: loanId,
@@ -1635,7 +1692,7 @@ export class LoanService {
       });
 
       if (unassigner) {
-        const commentText = `${unassigner.firstName} ${unassigner.lastName} Removed Lawyer. Reason: ${comment}`;
+        const commentText = `${unassigner.firstName} ${unassigner.lastName} Removed Lawyer.Reason: ${comment}`;
         await dbClient.comments.create({
           data: {
             loanId: loanId,
