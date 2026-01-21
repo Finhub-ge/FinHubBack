@@ -15,7 +15,7 @@ export const findLoanBySearchTerm = async (
   const term = searchTerm.trim();
 
   // Build search conditions for non-closed loans
-  const loan = await prisma.loan.findFirst({
+  const loan = await prisma.loan.findMany({
     where: {
       deletedAt: null,
       // Exclude closed loans

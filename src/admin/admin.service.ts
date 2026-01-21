@@ -357,17 +357,19 @@ export class AdminService {
     let finalData = data;
     let finalTotal = total;
 
-    if (data.length === 0 && search?.trim()) {
-      const loan = await findLoanBySearchTerm(this.prisma, search.trim());
+    // if (data.length === 0 && search?.trim()) {
+    const loan = await findLoanBySearchTerm(this.prisma, search?.trim() || '');
 
-      if (loan) {
-        // Create transaction-like object with null fields but populated loan
-        const emptyTransaction = createEmptyTransactionWithLoan(loan);
+    const existingLoanIds = new Set(data.map(tx => tx.loanId));
 
-        finalData = [emptyTransaction];
-        finalTotal = 1;
-      }
-    }
+    const missingLoans = loan.filter(
+      loan => !existingLoanIds.has(loan.id),
+    );
+
+    const emptyTransactions = missingLoans.map(createEmptyTransactionWithLoan);
+
+    finalData = [...data, ...emptyTransactions];
+    finalTotal += emptyTransactions.length;
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
     const dataObj = {
