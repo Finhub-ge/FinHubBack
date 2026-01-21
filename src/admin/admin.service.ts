@@ -360,16 +360,18 @@ export class AdminService {
     // if (data.length === 0 && search?.trim()) {
     const loan = await findLoanBySearchTerm(this.prisma, search?.trim() || '');
 
-    const existingLoanIds = new Set(data.map(tx => tx.loanId));
+    if (loan?.length > 0) {
+      const existingLoanIds = new Set(data.map(tx => tx.loanId));
 
-    const missingLoans = loan.filter(
-      loan => !existingLoanIds.has(loan.id),
-    );
+      const missingLoans = loan?.filter(
+        loan => !existingLoanIds.has(loan.id),
+      );
 
-    const emptyTransactions = missingLoans.map(createEmptyTransactionWithLoan);
+      const emptyTransactions = missingLoans.map(createEmptyTransactionWithLoan);
 
-    finalData = [...data, ...emptyTransactions];
-    finalTotal += emptyTransactions.length;
+      finalData = [...data, ...emptyTransactions];
+      finalTotal += emptyTransactions.length;
+    }
 
     const paymentChannels = await this.paymentHelper.gettransactionChannels()
     const dataObj = {
