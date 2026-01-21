@@ -121,9 +121,16 @@ export class AuthService {
           email: dto.email,
           isActive: true
         },
-        include: {
-          Role: true,
-          TeamMembership: true,
+        select: {
+          id: true,
+          email: true,
+          accountId: true,
+          hash: true,
+          Role: { select: { name: true } },
+          TeamMembership: {
+            where: { deletedAt: null },
+            //     select: { id: true, teamId: true, teamRole: true }
+          }
         },
       });
 
@@ -159,9 +166,16 @@ export class AuthService {
         where: {
           id: user.id,
         },
-        include: {
-          Role: true,
-          TeamMembership: true,
+        select: {
+          id: true,
+          email: true,
+          accountId: true,
+          hash: true,
+          Role: { select: { name: true } },
+          TeamMembership: {
+            where: { deletedAt: null },
+            // select: { id: true, teamId: true, teamRole: true, createdAt: true, updatedAt: true, deletedAt: true, userId: true, joinedAt: true }
+          }
         },
       });
 
@@ -256,6 +270,7 @@ export class AuthService {
           updatedAt: true,
           Role: true,
           TeamMembership: {
+            where: { deletedAt: null },
             select: {
               id: true,
               teamId: true,
