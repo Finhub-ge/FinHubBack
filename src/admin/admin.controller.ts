@@ -316,7 +316,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR, Role.COLLECTOR)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR, Role.COLLECTOR, Role.CONTROLLER)
   @Get('report/payments')
   async getPaymentsReport(@GetUser() user: User, @Query() getPaymentReportDto: GetPaymentReportWithPaginationDto) {
     return await this.adminService.getTransactionList(getPaymentReportDto, user, { isReport: true });
