@@ -294,9 +294,12 @@ export class AuthService {
       );
     }
     // Add canRequestLawyer property for specific user
+    const LAWYER_REQUEST_OVERRIDE_USER_IDS = [58];
     return {
       ...currentUser,
-      canRequestLawyer: currentUser?.TeamMembership[0]?.teamRole === TeamMembership_teamRole.leader
+      canRequestLawyer:
+        currentUser?.TeamMembership?.[0]?.teamRole === TeamMembership_teamRole.leader ||
+        LAWYER_REQUEST_OVERRIDE_USER_IDS.includes(currentUser.id),
     };
   }
 }

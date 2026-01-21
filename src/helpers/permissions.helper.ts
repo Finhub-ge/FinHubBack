@@ -88,7 +88,15 @@ export class PermissionsHelper {
   }
 
   private addUserScope(where: any, user: AuthenticatedRequest['user'], model: string) {
-    if (user.role_name === Role.SUPER_ADMIN || user.role_name === Role.ADMIN || user.role_name === Role.SUPER_LAWYER || user.role_name === Role.OPERATIONAL_MANAGER || user.role_name === Role.OPERATIONAL_DIRECTOR || user.role_name === Role.ACCOUNTANT) {
+    if (
+      user.role_name === Role.SUPER_ADMIN ||
+      user.role_name === Role.ADMIN ||
+      user.role_name === Role.SUPER_LAWYER ||
+      user.role_name === Role.OPERATIONAL_MANAGER ||
+      user.role_name === Role.OPERATIONAL_DIRECTOR ||
+      user.role_name === Role.ACCOUNTANT ||
+      user.role_name === Role.CONTROLLER
+    ) {
       return where;
     }
 
