@@ -56,6 +56,15 @@ export const applySearchFilter = (where: any, searchTerm?: string): void => {
     where._isGlobalSearch = true;
   }
 
+  //exclude CLOSED only for NON-global search
+  if (!isGlobalSearch) {
+    where.AND.push({
+      statusId: {
+        notIn: LoanStatusGroups.CLOSED as unknown as number[],
+      },
+    });
+  }
+
   delete where.closedAt;
 };
 
