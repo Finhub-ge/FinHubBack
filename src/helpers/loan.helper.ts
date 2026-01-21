@@ -469,7 +469,7 @@ export const updateLoanRemaining = async (prisma: Prisma.TransactionClient | Pri
   });
 
   const currentDebt = Number(currentRemaining.currentDebt);
-  const difference = currentDebt - newAgreementMin;
+  const difference = Math.round(currentDebt - newAgreementMin);
 
   const newLoanData = calculateNewLoanValues(currentRemaining, difference);
 
