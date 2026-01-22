@@ -28,7 +28,7 @@ import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
-import { generateExcel } from 'src/helpers/excel.helper';
+import { generateExcel, generateExcelStream } from 'src/helpers/excel.helper';
 import { LoanStatusGroups, LoanStatusId } from 'src/enums/loanStatus.enum';
 import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
@@ -36,6 +36,7 @@ import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
 import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
+import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class LoanService {
@@ -2380,11 +2381,24 @@ export class LoanService {
   }
 
   async exportLoans(filterDto: GetLoansFilterDto, user: any) {
-    const loans = await this.getAll(filterDto, user);
+    // const loans = await this.getAll(filterDto, user);
 
-    const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+    // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 
-    return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+    // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+
+    const CHUNK_SIZE = 5000;
+
+    // Create async generator for chunked data loading
+    const dataGenerator = this.createLoanDataGenerator(filterDto, user, CHUNK_SIZE);
+
+    // Use streaming Excel generation
+    return await generateExcelStream(
+      dataGenerator,
+      filterDto.columns,
+      'Loans Report'
+    );
+
   }
 
   async addLoanReminder(publicId: ParseUUIDPipe, data: AddLoanReminderDto, userId: number) {
@@ -2664,5 +2678,46 @@ export class LoanService {
     });
 
     return await generateExcel(data, columns, 'Previous Payments');
+  }
+
+  private async *createLoanDataGenerator(
+    filterDto: GetLoansFilterDto,
+    user: any,
+    chunkSize: number
+  ): AsyncGenerator<any[], void, unknown> {
+    let currentPage = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        // Fetch chunk with pagination
+        const chunk = await this.getAll(
+          {
+            ...filterDto,
+            page: currentPage,
+            limit: chunkSize,
+          },
+          user
+        );
+
+        if (chunk.data.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        // Transform loans to export format
+        const loanExportData = chunk.data.map(loan => prepareLoanExportData(loan));
+
+        yield loanExportData;
+
+        // Check if we have more data
+        hasMore = chunk.data.length === chunkSize;
+        currentPage++;
+
+      } catch (error) {
+        console.error(`Error fetching chunk at page ${currentPage}:`, error);
+        throw new Error(`Export failed at page ${currentPage}: ${error.message}`);
+      }
+    }
   }
 }

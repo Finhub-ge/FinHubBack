@@ -19,7 +19,7 @@ export const generateExcel = async (
   worksheet.addRow(displayHeaders);
 
   // Style header row
-  styleHeaderRow(worksheet);
+  // styleHeaderRow(worksheet);
 
   // Format and add data rows ONCE
   const formattedData = formatData(data, columns);
@@ -31,7 +31,7 @@ export const generateExcel = async (
   formatCells(worksheet);
 
   // Auto-fit columns
-  autoFitColumns(worksheet, columns);
+  // autoFitColumns(worksheet, columns);
 
   // Generate buffer
   const buffer = await workbook.xlsx.writeBuffer();
@@ -148,16 +148,16 @@ const formatCells = (worksheet: ExcelJS.Worksheet): void => {
         cell.numFmt = '#,##0';
       }
 
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: rowNumber % 2 === 0 ? 'FFFFFFFF' : 'e6def9' },
-      };
+      // cell.fill = {
+      //   type: 'pattern',
+      //   pattern: 'solid',
+      //   fgColor: { argb: rowNumber % 2 === 0 ? 'FFFFFFFF' : 'e6def9' },
+      // };
     });
-    row.alignment = {
-      vertical: 'middle',
-      horizontal: 'left',
-    };
+    // row.alignment = {
+    //   vertical: 'middle',
+    //   horizontal: 'left',
+    // };
   });
 };
 
@@ -259,3 +259,77 @@ export const paymentReportExport = async (data: any[], columns: string[], sheetN
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as unknown as Buffer;
 }
+
+export const generateExcelStream = async (
+  dataGenerator: AsyncGenerator<any[], void, unknown>,
+  columns: string[],
+  sheetName = 'Sheet1',
+  headerMap?: Record<string, string>
+): Promise<Buffer> => {
+  const { PassThrough } = require('stream');
+  const chunks: Buffer[] = [];
+
+  // Create a PassThrough stream to collect data
+  const bufferStream = new PassThrough();
+
+  bufferStream.on('data', (chunk: Buffer) => {
+    chunks.push(chunk);
+  });
+
+  // Wait for stream to finish
+  const streamFinished = new Promise<void>((resolve, reject) => {
+    bufferStream.on('end', resolve);
+    bufferStream.on('error', reject);
+  });
+
+  // Create workbook with proper writable stream
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    stream: bufferStream,
+    useStyles: false, // Disable styles for performance
+    useSharedStrings: false, // Disable shared strings for performance
+  });
+
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  // Set fixed column widths (avoid auto-fit for performance)
+  worksheet.columns = columns.map(col => ({
+    key: col,
+    width: 15,
+  }));
+
+  // Add header row
+  const loanHeaders = headerMap || getLoanExportHeaders();
+  const displayHeaders = getDisplayHeaders(columns, loanHeaders);
+  const headerRow = worksheet.addRow(displayHeaders);
+
+  // Style header row (simple styling only)
+  headerRow.font = { bold: true };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: '845adf' },
+  };
+  headerRow.commit();
+
+  // Process data in chunks
+  for await (const dataChunk of dataGenerator) {
+    const formattedData = formatData(dataChunk, columns);
+
+    for (const rowData of formattedData) {
+      const row = worksheet.addRow(rowData);
+      row.commit(); // Commit each row immediately
+    }
+  }
+
+  // Commit worksheet and workbook
+  worksheet.commit();
+  await workbook.commit();
+
+  // Wait for all data to be written
+  await streamFinished;
+
+  // Combine all chunks into a single buffer
+  return Buffer.concat(chunks);
+};
+
+

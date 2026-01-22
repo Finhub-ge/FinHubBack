@@ -53,6 +53,11 @@ async function bootstrap() {
   });
   const reflector = app.get(Reflector)
   app.enableCors();
+
+  // Set global server timeout to 10 minutes
+  const server = app.getHttpServer();
+  server.setTimeout(600000); // 10 minutes
+
   await app.listen(4444);
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
