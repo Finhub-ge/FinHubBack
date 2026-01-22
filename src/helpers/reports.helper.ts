@@ -317,7 +317,7 @@ export const preparePaymentReportExportData = (transaction: any) => {
     caseId: transaction.Loan.caseId ?? '',
     fullName: `${transaction.Loan.Debtor?.firstName ?? ''} ${transaction.Loan.Debtor?.lastName ?? ''}`.trim(),
     portfolio: transaction.Loan.PortfolioCaseGroup?.groupName ?? '',
-    lender: transaction.Loan.Portfolio.portfolioSeller?.name ?? '',
+    lender: transaction.Loan.Portfolio?.name ?? '',
     paymentDate: transaction.paymentDate ?? '',
     createdDate: transaction.createdAt ?? '',
     principal: transaction.principal ?? '',

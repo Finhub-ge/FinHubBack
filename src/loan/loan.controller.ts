@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, SetMetadata, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -28,7 +28,7 @@ import { GetLoansFilterDto, GetLoansFilterWithPaginationDto } from './dto/getLoa
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { UpdateCommentDto } from './dto/updateComment.dto';
-
+import { Response } from 'express';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -43,11 +43,30 @@ export class LoanController {
     return this.loanService.getAll(filterDto, user);
   }
 
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @AllRoles()
+  // @Get('exportExcel')
+  // // @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  // async exportLoans(@GetUser() user: User, @Query() filterDto: GetLoansFilterDto) {
+  //   const excelBuffer = await this.loanService.exportLoans(filterDto, user);
+
+  //   return new StreamableFile(Buffer.from(excelBuffer), {
+  //     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  //     disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
+  //   });
+  // }
+
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
-  // @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  async exportLoans(@GetUser() user: User, @Query() filterDto: GetLoansFilterDto) {
+  async exportLoans(
+    @GetUser() user: User,
+    @Query() filterDto: GetLoansFilterDto,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    // Set longer timeout for large exports
+    res.setTimeout(600000); // 10 minutes
+
     const excelBuffer = await this.loanService.exportLoans(filterDto, user);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
