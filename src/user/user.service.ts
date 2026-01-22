@@ -299,6 +299,154 @@ export class UserService {
     return { message: 'User updated successfully' };
   }
 
+  async getEligibleRegionalManagers(filters: GetUsersFilterDto) {
+    // Regional managers can be SUPER_ADMIN, ADMIN, or OPERATIONAL_MANAGER
+    const eligibleRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER];
+
+    const where: any = {
+      deletedAt: null,
+      isActive: true
+    };
+
+    // Get role IDs for eligible roles
+    const roleIds = await this.prisma.role.findMany({
+      where: { name: { in: eligibleRoles } },
+      select: { id: true }
+    });
+
+    where.roleId = { in: roleIds.map(r => r.id) };
+
+    // Apply search filter if provided
+    if (filters.search) {
+      const terms = filters.search.split(" ").filter(Boolean);
+
+      if (terms.length >= 2) {
+        const first = terms[0];
+        const last = terms.slice(1).join(" ");
+
+        where.AND = [
+          { firstName: { contains: first } },
+          { lastName: { contains: last } }
+        ];
+      } else {
+        const term = terms[0];
+        const numberId = Number(term);
+
+        where.OR = [
+          ...(Number.isInteger(numberId) ? [{ id: numberId }] : []),
+          { firstName: { contains: term } },
+          { lastName: { contains: term } },
+          { email: { contains: term } },
+        ];
+      }
+    }
+
+    return await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        accountId: true,
+        Role: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: [
+        { firstName: 'asc' },
+        { lastName: 'asc' }
+      ]
+    });
+  }
+
+  async getManagedRegions(user: User) {
+    return await this.prisma.region.findMany({
+      where: {
+        managerId: user.id,
+        deletedAt: null
+      },
+      include: {
+        Team: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+  }
+
+  async getManagedRegionTeamsWithMembers(user: User) {
+    // Get regions managed by user
+    const regions = await this.prisma.region.findMany({
+      where: {
+        managerId: user.id,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        name: true,
+        isActive: true
+      }
+    });
+
+    const regionIds = regions.map(r => r.id);
+
+    // Get teams belonging to managed regions
+    const teams = await this.prisma.team.findMany({
+      where: {
+        regionId: { in: regionIds },
+        deletedAt: null
+      },
+      include: {
+        Region: {
+          select: {
+            id: true,
+            name: true,
+            isActive: true
+          }
+        },
+        TeamMembership: {
+          where: { deletedAt: null },
+          include: {
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                accountId: true,
+                isActive: true,
+                Role: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    return {
+      regions,
+      teams,
+      totalRegions: regions.length,
+      totalTeams: teams.length,
+      totalMembers: teams.reduce((sum, team) => sum + team.TeamMembership.length, 0)
+    };
+  }
+
   async getUsersGroupedByTeamLeader(filters: GetUsersFilterDto, user: any) {
     const { role } = filters;
 

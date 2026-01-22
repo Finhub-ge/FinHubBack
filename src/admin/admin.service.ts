@@ -37,6 +37,9 @@ import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
 import { CurrencyHelper } from "src/helpers/currency.helper";
 import { createEmptyTransactionWithLoan, findLoanBySearchTerm } from "src/helpers/transaction.helper";
+import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
+import { UpdateRegionDto } from "./dto/updateRegion.dto";
+import { CreateRegionDto } from "./dto/createRegion.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1917,6 +1920,265 @@ export class AdminService {
         message: `Successfully assigned ${data.userIds.length} users to team`
       };
     }
+  }
+
+  async createRegion(data: CreateRegionDto) {
+    // Validate manager exists if provided
+    if (data.managerId) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: data.managerId, deletedAt: null }
+      });
+      if (!manager) {
+        throw new BadRequestException('Manager not found');
+      }
+    }
+
+    await this.prisma.region.create({
+      data: {
+        name: data.name,
+        managerId: data.managerId || null,
+        isActive: data.isActive ?? false
+      }
+    });
+
+    return {
+      message: 'Region created successfully'
+    };
+  }
+
+  async getRegions() {
+    const regions = await this.prisma.region.findMany({
+      where: { deletedAt: null },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        Team: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Add team count to each region
+    return regions.map(region => ({
+      ...region,
+      teamCount: region.Team.length
+    }));
+  }
+
+  async getRegion(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            Role: {
+              select: {
+                name: true
+              }
+            }
+          }
+        },
+        Team: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            TeamMembership: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                teamRole: true,
+                User: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    return {
+      ...region,
+      teamCount: region.Team.length
+    };
+  }
+
+  async updateRegion(regionId: number, data: UpdateRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Validate manager exists if being updated
+    if (data.managerId !== undefined && data.managerId !== null) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: data.managerId, deletedAt: null }
+      });
+      if (!manager) {
+        throw new BadRequestException('Manager not found');
+      }
+    }
+
+    await this.prisma.region.update({
+      where: { id: regionId },
+      data: data
+    });
+
+    return {
+      message: 'Region updated successfully'
+    };
+  }
+
+  async deleteRegion(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Unassign all teams from this region first
+    await this.prisma.team.updateMany({
+      where: { regionId: regionId },
+      data: { regionId: null }
+    });
+
+    // Then soft delete region
+    await this.prisma.region.update({
+      where: { id: regionId },
+      data: {
+        deletedAt: new Date()
+      }
+    });
+
+    return {
+      message: 'Region deleted successfully'
+    };
+  }
+
+  async assignTeamsToRegion(regionId: number, data: AssignTeamsToRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Validate all teams exist
+    const teams = await this.prisma.team.findMany({
+      where: {
+        id: { in: data.teamIds },
+        deletedAt: null
+      }
+    });
+
+    if (teams.length !== data.teamIds.length) {
+      throw new BadRequestException('One or more teams not found');
+    }
+
+    // Assign teams to region (will move from old region if already assigned)
+    await this.prisma.team.updateMany({
+      where: {
+        id: { in: data.teamIds }
+      },
+      data: {
+        regionId: regionId
+      }
+    });
+
+    return {
+      message: `Successfully assigned ${data.teamIds.length} teams to region`
+    };
+  }
+
+  async removeTeamsFromRegion(regionId: number, data: AssignTeamsToRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Remove teams from region
+    await this.prisma.team.updateMany({
+      where: {
+        id: { in: data.teamIds },
+        regionId: regionId
+      },
+      data: {
+        regionId: null
+      }
+    });
+
+    return {
+      message: `Successfully removed ${data.teamIds.length} teams from region`
+    };
+  }
+
+  async getRegionTeams(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    return await this.prisma.team.findMany({
+      where: {
+        regionId: regionId,
+        deletedAt: null
+      },
+      include: {
+        TeamMembership: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            teamRole: true,
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
   }
 
   async getCity() {

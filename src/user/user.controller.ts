@@ -55,6 +55,27 @@ export class UserController {
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Get('eligibleRegionalManagers')
+  getEligibleRegionalManagers(@Query() filterDto: GetUsersFilterDto) {
+    return this.userService.getEligibleRegionalManagers(filterDto);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Get('managedRegions')
+  getManagedRegions(@GetUser() user: User) {
+    return this.userService.getManagedRegions(user);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Get('managedRegionTeams')
+  getManagedRegionTeamsWithMembers(@GetUser() user: User) {
+    return this.userService.getManagedRegionTeamsWithMembers(user);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get(':roleId')
   getUsersByRoleId(@Param('roleId') roleId: string) {
     return this.userService.getUsersByRoleId(roleId)
