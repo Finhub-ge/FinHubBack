@@ -1068,7 +1068,16 @@ export class AdminService {
         // Update loan statusId to 12
         await tx.loan.update({
           where: { id: committee.loanId },
-          data: { statusId: 12, closedAt: new Date() }
+          data: { statusId: 12, closedAt: new Date(), updatedAt: new Date() }
+        });
+        await tx.loanStatusHistory.create({
+          data: {
+            loanId: committee.loanId,
+            oldStatusId: committee.Loan.statusId,
+            newStatusId: 12,
+            changedBy: userId,
+            notes: 'Committee closed the case',
+          },
         });
       }
 
