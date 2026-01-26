@@ -6,6 +6,7 @@ import { TbcPayWhitelistGuard } from './guards/tbcpay-whitelist.guard';
 import { XmlResponseHelper } from './helpers/xml-response.helper';
 import { AdminModule } from 'src/admin/admin.module';
 import { OnlinePaymentCommonService } from '../../common/services/online-payment-common.service';
+import { PaymentsHelper } from 'src/helpers/payments.helper';
 
 @Module({
   imports: [ConfigModule, AdminModule],
@@ -15,6 +16,7 @@ import { OnlinePaymentCommonService } from '../../common/services/online-payment
     TbcPayWhitelistGuard,
     XmlResponseHelper,
     OnlinePaymentCommonService, // Common service used directly
+    PaymentsHelper,
   ],
   exports: [TbcPayService],
 })

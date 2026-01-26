@@ -34,7 +34,7 @@ export class TbcPayCheckRequestDto {
 }
 
 /**
- * TBC Pay PAY request DTO (to be implemented)
+ * TBC Pay PAY request DTO
  */
 export class TbcPayPayRequestDto {
   @ApiProperty({ enum: ['pay'], example: 'pay' })
@@ -43,5 +43,27 @@ export class TbcPayPayRequestDto {
   @IsIn(['pay'])
   command: 'pay';
 
-  // TODO: Add PAY command parameters
+  @ApiProperty({
+    description: 'Case identifier (Loan.caseId)',
+    example: 'FL-2024-001234'
+  })
+  @IsString()
+  @IsNotEmpty()
+  caseId: string;
+
+  @ApiProperty({
+    description: 'Unique TBC transaction ID',
+    example: '1234567890'
+  })
+  @IsString()
+  @IsNotEmpty()
+  txn_id: string;
+
+  @ApiProperty({
+    description: 'Payment amount',
+    example: '100.50'
+  })
+  @IsString()
+  @IsNotEmpty()
+  sum: string;
 }
