@@ -30,6 +30,7 @@ import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { CreateRegionDto } from "./dto/createRegion.dto";
 import { UpdateRegionDto } from "./dto/updateRegion.dto";
 import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
+import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -310,8 +311,8 @@ export class AdminController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @Get('getRegions')
-  async getRegions() {
-    return await this.adminService.getRegions();
+  async getRegions(@Query() filters: GetRegionsFilterDto) {
+    return await this.adminService.getRegions(filters);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

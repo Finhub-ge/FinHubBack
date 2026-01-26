@@ -40,6 +40,7 @@ import { createEmptyTransactionWithLoan, findLoanBySearchTerm } from "src/helper
 import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
 import { UpdateRegionDto } from "./dto/updateRegion.dto";
 import { CreateRegionDto } from "./dto/createRegion.dto";
+import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1933,6 +1934,14 @@ export class AdminService {
       }
     }
 
+    // Validate activation requirements
+    if (data.isActive === true) {
+      if (!data.managerId) {
+        throw new BadRequestException('Cannot activate region: Manager must be assigned before activation');
+      }
+      // Note: Teams can be assigned after creation, so we only check manager during creation
+    }
+
     await this.prisma.region.create({
       data: {
         name: data.name,
@@ -1946,9 +1955,33 @@ export class AdminService {
     };
   }
 
-  async getRegions() {
+  async getRegions(filters?: GetRegionsFilterDto) {
+    const where: any = { deletedAt: null };
+
+    // Apply isActive filter if provided
+    if (filters?.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    // Apply search filter for region name or manager name
+    if (filters?.search) {
+      const searchTerm = filters.search.trim();
+      where.OR = [
+        { name: { contains: searchTerm } },
+        {
+          User: {
+            OR: [
+              { firstName: { contains: searchTerm } },
+              { lastName: { contains: searchTerm } },
+              { email: { contains: searchTerm } }
+            ]
+          }
+        }
+      ];
+    }
+
     const regions = await this.prisma.region.findMany({
-      where: { deletedAt: null },
+      where,
       include: {
         User: {
           select: {
@@ -2031,7 +2064,13 @@ export class AdminService {
 
   async updateRegion(regionId: number, data: UpdateRegionDto) {
     const region = await this.prisma.region.findUnique({
-      where: { id: regionId }
+      where: { id: regionId },
+      include: {
+        Team: {
+          where: { deletedAt: null },
+          select: { id: true }
+        }
+      }
     });
 
     if (!region || region.deletedAt !== null) {
@@ -2045,6 +2084,26 @@ export class AdminService {
       });
       if (!manager) {
         throw new BadRequestException('Manager not found');
+      }
+    }
+
+    // Validate activation requirements
+    if (data.isActive === true) {
+      const finalManagerId = data.managerId !== undefined ? data.managerId : region.managerId;
+      const teamCount = region.Team.length;
+
+      const errors: string[] = [];
+
+      if (!finalManagerId) {
+        errors.push('Manager must be assigned');
+      }
+
+      if (teamCount === 0) {
+        errors.push('At least one team must be assigned');
+      }
+
+      if (errors.length > 0) {
+        throw new BadRequestException(`Cannot activate region: ${errors.join(', ')} before activation`);
       }
     }
 
@@ -2100,11 +2159,31 @@ export class AdminService {
       where: {
         id: { in: data.teamIds },
         deletedAt: null
+      },
+      select: {
+        id: true,
+        name: true,
+        regionId: true,
+        Region: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
 
     if (teams.length !== data.teamIds.length) {
       throw new BadRequestException('One or more teams not found');
+    }
+
+    // After: Block ANY team that has a region assignment
+    const alreadyAssignedTeams = teams.filter(team => team.regionId !== null);
+    if (alreadyAssignedTeams.length > 0) {
+      const teamDetails = alreadyAssignedTeams.map(t =>
+        `${t.name} (in region: ${t.Region?.name || 'Unknown'})`
+      ).join(', ');
+      throw new BadRequestException(`Team(s) already assigned to another region: ${teamDetails}`);
     }
 
     // Assign teams to region (will move from old region if already assigned)
