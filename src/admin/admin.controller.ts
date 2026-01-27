@@ -244,7 +244,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
+  @AllRoles()
   @Get('file/:id')
   async downloadFile(@Param('id') id: number) {
     return await this.adminService.downloadFile(id)
