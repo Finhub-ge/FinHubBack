@@ -270,6 +270,18 @@ export const hasLoanAssignmentInWhere = (where: any): boolean => {
   return false;
 };
 
+// Check if LoanAssignment filter exists in transaction WHERE (nested under Loan.is)
+export const hasLoanAssignmentInTransactionWhere = (where: any): boolean => {
+  if (!where) return false;
+
+  // Transaction queries have: where.Loan.is.LoanAssignment
+  if (where.Loan?.is?.LoanAssignment) {
+    return true;
+  }
+
+  return false;
+};
+
 export const applyClosedDateRangeFilter = (where: any, filters: any): void => {
   if (!filters.closedDateStart && !filters.closedDateEnd) return;
 

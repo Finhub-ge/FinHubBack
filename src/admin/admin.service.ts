@@ -32,7 +32,7 @@ import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer, paymentReportExport } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
 import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
-import { buildLoanQuery } from "src/helpers/loanFilter.helper";
+import { buildLoanQuery, hasLoanAssignmentInTransactionWhere } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
 import { CurrencyHelper } from "src/helpers/currency.helper";
@@ -332,6 +332,11 @@ export class AdminService {
     const allowRegionalAccess = regionalManager && isCollector;
     const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
+    // Check if there's an explicit LoanAssignment filter (from assignedCollector)
+    // If there is, skip user scope to allow the explicit filter to work
+    const hasExplicitAssignment = hasLoanAssignmentInTransactionWhere(where);
+    const skipUserScope = hasExplicitAssignment;
+
     const queryOptions: any = {
       where,
       include: includes,
@@ -339,11 +344,11 @@ export class AdminService {
       orderBy: { id: 'desc' },
     };
 
-    if (allowTeamAccess) {
+    if (skipUserScope) {
+      queryOptions._skipUserScope = true;
+    } else if (allowTeamAccess) {
       queryOptions._allowTeamAccess = true;
-    }
-
-    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+    } else if (allowRegionalAccess && regionalTeamIds.length > 0) {
       queryOptions._allowRegionalAccess = true;
       queryOptions._regionalTeamIds = regionalTeamIds;
     }
@@ -407,7 +412,7 @@ export class AdminService {
           fees: true,
           legal: true,
         },
-        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       });
 
       // Initialize summary for all currencies
@@ -2074,7 +2079,12 @@ export class AdminService {
             name: true,
             description: true,
             TeamMembership: {
-              where: { deletedAt: null },
+              where: {
+                deletedAt: null,
+                User: {
+                  deletedAt: null, isActive: true,
+                }
+              },
               select: {
                 id: true,
                 teamRole: true,
