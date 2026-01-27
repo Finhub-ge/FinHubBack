@@ -2074,7 +2074,12 @@ export class AdminService {
             name: true,
             description: true,
             TeamMembership: {
-              where: { deletedAt: null },
+              where: {
+                deletedAt: null,
+                User: {
+                  deletedAt: null, isActive: true,
+                }
+              },
               select: {
                 id: true,
                 teamRole: true,
