@@ -53,7 +53,7 @@ export class PermissionsHelper {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, _allowRegionalAccess, _regionalTeamIds, ...cleanArgs } = args || {};
 
         return this.prisma[model].findMany({
           ...cleanArgs,
@@ -65,7 +65,7 @@ export class PermissionsHelper {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, _allowRegionalAccess, _regionalTeamIds, ...cleanArgs } = args || {};
 
         return this.prisma[model].findFirst({
           ...cleanArgs,
@@ -77,7 +77,7 @@ export class PermissionsHelper {
         const scopedWhere = await this.buildScopedWhere(model, user, args);
 
         // Remove custom properties that Prisma doesn't recognize
-        const { _skipUserScope, _allowTeamAccess, ...cleanArgs } = args || {};
+        const { _skipUserScope, _allowTeamAccess, _allowRegionalAccess, _regionalTeamIds, ...cleanArgs } = args || {};
 
         return this.prisma[model].count({
           ...cleanArgs,
@@ -111,6 +111,51 @@ export class PermissionsHelper {
 
     const scopeCondition = this.buildTeamScopeCondition(user, model);
     return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
+  }
+
+  private addRegionalScope(where: any, user: AuthenticatedRequest['user'], model: string, regionalTeamIds: number[]) {
+    if (user.role_name === Role.SUPER_ADMIN || user.role_name === Role.ADMIN || user.role_name === Role.SUPER_LAWYER || user.role_name === Role.OPERATIONAL_MANAGER) {
+      return where;
+    }
+
+    const scopeCondition = this.buildRegionalScopeCondition(regionalTeamIds, model);
+    return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
+  }
+
+  private buildRegionalScopeCondition(regionalTeamIds: number[], model: string) {
+    if (!regionalTeamIds || regionalTeamIds.length === 0) {
+      return null;
+    }
+
+    const baseLoanCondition = {
+      LoanAssignment: {
+        some: {
+          isActive: true,
+          User: {
+            TeamMembership: {
+              some: {
+                teamId: { in: regionalTeamIds },
+                deletedAt: null,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    switch (model) {
+      case 'loan':
+        return baseLoanCondition;
+
+      case 'committee':
+      case 'paymentCommitment':
+      case 'loanMarks':
+      case 'transaction':
+        return { Loan: baseLoanCondition };
+
+      default:
+        return null;
+    }
   }
 
   private buildTeamScopeCondition(user: AuthenticatedRequest['user'], model: string) {
@@ -268,6 +313,8 @@ export class PermissionsHelper {
     const isGlobalSearch = scopedWhere._isGlobalSearch === true;
     const skipUserScopeFlag = args?._skipUserScope === true;
     const allowTeamAccessFlag = args?._allowTeamAccess === true;
+    const allowRegionalAccessFlag = args?._allowRegionalAccess === true;
+    const regionalTeamIds = args?._regionalTeamIds || [];
 
     // Remove the custom flag before passing to Prisma
     delete scopedWhere._isGlobalSearch;
@@ -276,10 +323,14 @@ export class PermissionsHelper {
     // 1. Search mode (user is searching, should see all loans)
     // 2. Explicit skipUserScope flag (set by service layer for team leads with same-role filters)
     // 3. Explicit allowTeamAccess flag (set for team leads accessing individual records)
-    const shouldSkipUserScope = isGlobalSearch || skipUserScopeFlag || allowTeamAccessFlag;
+    // 4. Explicit allowRegionalAccess flag (set for regional managers)
+    const shouldSkipUserScope = isGlobalSearch || skipUserScopeFlag || allowTeamAccessFlag || allowRegionalAccessFlag;
 
     if (!shouldSkipUserScope) {
       scopedWhere = this.addUserScope(scopedWhere, user, model);
+    } else if (allowRegionalAccessFlag && regionalTeamIds.length > 0) {
+      // For regional access, apply regional-based scope (highest precedence)
+      scopedWhere = this.addRegionalScope(scopedWhere, user, model, regionalTeamIds);
     } else if (allowTeamAccessFlag) {
       // For team access, apply team-based scope instead of user-only scope
       scopedWhere = this.addTeamScope(scopedWhere, user, model);

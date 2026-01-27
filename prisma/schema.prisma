@@ -473,6 +473,7 @@ model User {
   LoanStatusHistory                                               LoanStatusHistory[]
   LoanVisit                                                       LoanVisit[]
   PaymentCommitment                                               PaymentCommitment[]
+  Region                                                          Region[]
   Reminders_Reminders_fromUserIdToUser                            Reminders[]                  @relation("Reminders_fromUserIdToUser")
   Reminders_Reminders_toUserIdToUser                              Reminders[]                  @relation("Reminders_toUserIdToUser")
   Tasks_Tasks_fromUserToUser                                      Tasks[]                      @relation("Tasks_fromUserToUser")
@@ -899,10 +900,14 @@ model Team {
   id             Int              @id @default(autoincrement())
   name           String           @db.VarChar(255)
   description    String?          @db.VarChar(255)
+  regionId       Int?
   createdAt      DateTime         @default(now()) @db.DateTime(0)
   updatedAt      DateTime         @default(now()) @db.DateTime(0)
   deletedAt      DateTime?        @db.DateTime(0)
+  Region         Region?          @relation(fields: [regionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_team_region")
   TeamMembership TeamMembership[]
+
+  @@index([regionId], map: "fk_team_region")
 }
 
 model TeamMembership {
@@ -1500,6 +1505,7 @@ model Old_db_loans {
   @@index([ID_Number], map: "ID_Number")
   @@index([Lawyer_ID], map: "Lawyer_ID")
   @@index([LoanID], map: "NewIndex1")
+  @@index([Collector_ID, Status, Collection_Status_ID], map: "idx_loans_collector_status")
   @@fulltext([Case, Full_Name, ID_Number, Collector], map: "idx_loans_search")
 }
 
@@ -1542,6 +1548,7 @@ model Old_db_paymentnew {
   @@index([payment_date], map: "payment_payment_date_index")
   @@index([portfolio_id], map: "portfolio_id")
   @@index([user_id], map: "user_id")
+  @@index([employee_id, payment_date], map: "idx_paymentnew_emp_date")
   @@fulltext([comment], map: "idx_payment_comment")
 }
 
@@ -2156,6 +2163,32 @@ model Old_db_lawyer_pending {
   status     Int?      @default(0)
   created_at DateTime? @db.DateTime(0)
   updated_at DateTime? @db.DateTime(0)
+}
+
+model Old_db_legal_stage {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  case_id       BigInt    @db.UnsignedBigInt
+  case_stage_id Int       @db.UnsignedInt
+  user_id       BigInt    @db.UnsignedBigInt
+  created_at    DateTime? @db.Timestamp(0)
+  updated_at    DateTime? @db.Timestamp(0)
+  comment       String?   @db.Text
+
+  @@index([case_id], map: "case_id")
+}
+
+model Region {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  managerId Int?
+  isActive  Boolean   @default(false)
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  User      User?     @relation(fields: [managerId], references: [id], onUpdate: NoAction, map: "fk_region_manager")
+  Team      Team[]
+
+  @@index([managerId], map: "idx_region_managerId")
 }
 
 enum PaymentCommitment_type {
