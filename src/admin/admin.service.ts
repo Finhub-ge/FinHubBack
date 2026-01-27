@@ -22,7 +22,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
-import { createInitialLoanRemaining, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
+import { createInitialLoanRemaining, getRegionalTeamIds, isRegionalManager, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportDto, GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
@@ -323,9 +323,14 @@ export class AdminService {
     }
 
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const isCollector = user.role_name === Role.COLLECTOR;
     // Team leads (collectors) see all team's transactions, members see only own
     const allowTeamAccess = teamLead && isCollector;
+
+    // Regional managers see transactions from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && isCollector;
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -338,11 +343,16 @@ export class AdminService {
       queryOptions._allowTeamAccess = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [data, total] = await Promise.all([
       this.permissionsHelper.payment.findMany(queryOptions),
       this.permissionsHelper.payment.count({
         where,
-        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -1111,12 +1121,17 @@ export class AdminService {
 
     // For committees: team leads should see all team's committees by default
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
 
     // Team leads (collectors and lawyers) see all team's committees, members see only own
     const allowTeamAccess = teamLead && (isCollector || isLawyer);
+
+    // Regional managers see committees from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -1207,11 +1222,17 @@ export class AdminService {
       queryOptions._allowTeamAccess = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [committees, totalCount] = await Promise.all([
       this.permissionsHelper.committee.findMany(queryOptions),
       this.permissionsHelper.committee.count({
         where,
-        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -1327,6 +1348,7 @@ export class AdminService {
 
     // Determine if we should skip user scope for team leads filtering by team members
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const hasAssignedCollectorFilter = filters.assignedCollector?.length > 0;
 
     // Team leads (both collectors and lawyers) can see team members' payment commitments when filtering by assignedCollector
@@ -1334,6 +1356,10 @@ export class AdminService {
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
     const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    // Regional managers see loan marks from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -1406,11 +1432,17 @@ export class AdminService {
       queryOptions._skipUserScope = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [loanMarks, total] = await Promise.all([
       this.permissionsHelper.loanMarks.findMany(queryOptions),
       this.permissionsHelper.loanMarks.count({
         where,
-        ...(skipUserScope ? { _skipUserScope: true } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -2398,12 +2430,17 @@ export class AdminService {
     }
 
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const hasAssignedCollectorFilter = getFuturePaymentsDto.assignedCollector?.length > 0;
 
     const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
     const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    // Regional managers see future payments from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -2477,11 +2514,17 @@ export class AdminService {
       queryOptions._skipUserScope = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [futurePayments, totalCount] = await Promise.all([
       this.permissionsHelper.futurePayment.findMany(queryOptions),
       this.permissionsHelper.futurePayment.count({
         where,
-        ...(skipUserScope ? { _skipUserScope: true } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 

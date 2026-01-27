@@ -12,6 +12,7 @@ import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 import { getUserExport } from "src/helpers/excel.helper";
 import { Role } from "src/enums/role.enum";
 import { addDays, subtractDays } from "src/helpers/date.helper";
+import { getRegionalTeamIds, isRegionalManager } from "src/helpers/loan.helper";
 
 @Injectable()
 export class UserService {
@@ -300,21 +301,22 @@ export class UserService {
   }
 
   async getEligibleRegionalManagers(filters: GetUsersFilterDto) {
-    // Regional managers can be SUPER_ADMIN, ADMIN, or OPERATIONAL_MANAGER
-    const eligibleRoles = [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER];
-
     const where: any = {
       deletedAt: null,
       isActive: true
     };
 
-    // Get role IDs for eligible roles
-    const roleIds = await this.prisma.role.findMany({
-      where: { name: { in: eligibleRoles } },
-      select: { id: true }
-    });
+    // Apply role filter if provided, otherwise return all active users
+    if (filters.role && filters.role.length > 0) {
+      const roleIds = await this.prisma.role.findMany({
+        where: { name: { in: filters.role } },
+        select: { id: true }
+      });
 
-    where.roleId = { in: roleIds.map(r => r.id) };
+      if (roleIds.length > 0) {
+        where.roleId = { in: roleIds.map(r => r.id) };
+      }
+    }
 
     // Apply search filter if provided
     if (filters.search) {
@@ -459,18 +461,31 @@ export class UserService {
       ?.filter(m => m.teamRole === 'leader')
       .map(m => m.teamId) || [];
 
+    const regionalManager = isRegionalManager(user);
+    const regionalTeamIds = regionalManager ? getRegionalTeamIds(user) : [];
+
     const filterHasCollector = role?.includes(Role.COLLECTOR);
 
+    // Regional manager + filter=collector → restrict to regional teams
+    if (isCollectorUser && filterHasCollector && regionalManager && regionalTeamIds.length > 0) {
+      const collectorTeamFilter = { teamId: { in: regionalTeamIds } };
+    }
     // Collector + filter=collector + NOT leader → return []
-    if (isCollectorUser && filterHasCollector && !isLeader) {
+    else if (isCollectorUser && filterHasCollector && !isLeader) {
       return [];
     }
 
-    // Collector + filter=collector + IS leader → restrict to leader teams
-    const collectorTeamFilter =
-      isCollectorUser && filterHasCollector && isLeader
-        ? { teamId: { in: leaderTeamIds } }
-        : {};
+    // Determine team filter based on user role
+    let collectorTeamFilter = {};
+    if (isCollectorUser && filterHasCollector) {
+      if (regionalManager && regionalTeamIds.length > 0) {
+        // Regional managers see all teams in their regions
+        collectorTeamFilter = { teamId: { in: regionalTeamIds } };
+      } else if (isLeader) {
+        // Team leads see only their teams
+        collectorTeamFilter = { teamId: { in: leaderTeamIds } };
+      }
+    }
 
     // Load memberships from DB
     const memberships = await this.prisma.teamMembership.findMany({

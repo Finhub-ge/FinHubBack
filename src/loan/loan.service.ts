@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew, isRegionalManager, getRegionalTeamIds } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
@@ -30,7 +30,7 @@ import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel } from 'src/helpers/excel.helper';
 import { LoanStatusGroups, LoanStatusId } from 'src/enums/loanStatus.enum';
-import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, hasLoanAssignmentInWhere, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
@@ -206,8 +206,10 @@ export class LoanService {
       applyIntersectedIds(filterResults.where, intersectedIds);
     }
 
-    const skipUserScope = shouldSkipUserScope(user, filterResults.filters);
-
+    // Skip user scope if:
+    // 1. User has explicit assignment filter (checked by shouldSkipUserScope)
+    // 2. OR there's already a LoanAssignment filter in WHERE (from applyUserAssignmentFilter)
+    const skipUserScope = shouldSkipUserScope(user, filterResults.filters) || hasLoanAssignmentInWhere(filterResults.where);
     // Fetch loans
     const includeConfig = getLoanIncludeConfig();
     const loanQuery = buildLoanQuery(filterResults.where, paginationParams, includeConfig);
@@ -265,7 +267,25 @@ export class LoanService {
   }
 
   private async getTeamMemberIds(user: any): Promise<number[] | undefined> {
-    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
+    // Regional managers get all members from all their managed region teams
+    if (isRegionalManager(user)) {
+      const regionalTeamIds = getRegionalTeamIds(user);
+      if (regionalTeamIds.length > 0) {
+        const teamMembers = await this.prisma.teamMembership.findMany({
+          where: {
+            teamId: { in: regionalTeamIds },
+            deletedAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        });
+        return teamMembers.map(tm => tm.userId);
+      }
+    }
+
+    // Team leads get members from their team
+    if (isTeamLead(user)) {
       const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
       if (activeTeamMembership) {
         const teamMembers = await this.prisma.teamMembership.findMany({
@@ -303,22 +323,44 @@ export class LoanService {
     applyCommonFilters(where, filters);
 
     // Get team member IDs if user is a collector team lead
-    let teamMemberIds: number[] | undefined;
-    if (user.role_name === Role.COLLECTOR && isTeamLead(user)) {
-      const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
-      if (activeTeamMembership) {
-        const teamMembers = await this.prisma.teamMembership.findMany({
-          where: {
-            teamId: activeTeamMembership.teamId,
-            deletedAt: null,
-          },
-          select: {
-            userId: true,
-          },
-        });
-        teamMemberIds = teamMembers.map(tm => tm.userId);
-      }
-    }
+    // let teamMemberIds: number[] | undefined;
+    // if (user.role_name === Role.COLLECTOR) {
+    //   // Regional managers get all members from all their managed region teams
+    //   if (isRegionalManager(user)) {
+    //     const regionalTeamIds = getRegionalTeamIds(user);
+    //     if (regionalTeamIds.length > 0) {
+    //       const teamMembers = await this.prisma.teamMembership.findMany({
+    //         where: {
+    //           teamId: { in: regionalTeamIds },
+    //           deletedAt: null,
+    //         },
+    //         select: {
+    //           userId: true,
+    //         },
+    //       });
+    //       teamMemberIds = teamMembers.map(tm => tm.userId);
+    //     }
+    //   }
+    //   // Team leads get members from their team
+    //   else if (isTeamLead(user)) {
+    //     const activeTeamMembership = user.team_membership?.find(tm => tm.deletedAt === null);
+    //     if (activeTeamMembership) {
+    //       const teamMembers = await this.prisma.teamMembership.findMany({
+    //         where: {
+    //           teamId: activeTeamMembership.teamId,
+    //           deletedAt: null,
+    //         },
+    //         select: {
+    //           userId: true,
+    //         },
+    //       });
+    //       teamMemberIds = teamMembers.map(tm => tm.userId);
+    //     }
+    //   }
+    // }
+
+    // Get team member IDs (uses same logic as getAll)
+    const teamMemberIds = await this.getTeamMemberIds(user);
 
     applyUserAssignmentFilter(where, filters, user, teamMemberIds);
 
@@ -340,8 +382,11 @@ export class LoanService {
         return { where: { id: -1 }, skipUserScope: false };
       }
 
-      // Apply intersection to where clause
-      applyIntersectedIds(where, intersectedIds);
+      // Skip user scope if:
+      // 1. User has explicit assignment filter (checked by shouldSkipUserScope)
+      // 2. OR there's already a LoanAssignment filter in WHERE (from applyUserAssignmentFilter)
+      // const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
+      const skipUserScope = hasLoanAssignmentInWhere(where);
     }
 
     // Determine if we should skip user scope
@@ -353,11 +398,16 @@ export class LoanService {
   async getOne(publicId: ParseUUIDPipe, user: any) {
     // Team leads should be able to view team members' loans
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const isLawyer = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(user.role_name);
     const isCollector = user.role_name === 'collector';
 
     // Allow team access for team leads viewing individual loans
     const allowTeamAccess = teamLead && (isLawyer || isCollector);
+
+    // Regional managers see loans from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isLawyer || isCollector);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     // Build comments WHERE clause based on user role and assignment
     const commentsWhere = await buildCommentsWhereClause(this.prisma, user, String(publicId));
@@ -368,6 +418,7 @@ export class LoanService {
         deletedAt: null
       },
       _allowTeamAccess: allowTeamAccess,
+      ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {}),
       include: {
         Portfolio: {
           select: {
