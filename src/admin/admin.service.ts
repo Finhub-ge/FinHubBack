@@ -22,7 +22,7 @@ import { PaginationService } from "src/common/services/pagination.service";
 import { GetChargeWithPaginationDto } from "./dto/getCharge.dto";
 import { GetMarkReportWithPaginationDto } from "./dto/getMarkReport.dto";
 import { GetCommiteesWithPaginationDto } from "./dto/getCommitees.dto";
-import { createInitialLoanRemaining, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
+import { createInitialLoanRemaining, getRegionalTeamIds, isRegionalManager, isTeamLead, updateLoanRemaining } from "src/helpers/loan.helper";
 import { GetPaymentReportDto, GetPaymentReportWithPaginationDto } from "./dto/getPaymentReport.dto";
 import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { addDays } from "src/helpers/date.helper";
@@ -37,6 +37,10 @@ import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
 import { CurrencyHelper } from "src/helpers/currency.helper";
 import { createEmptyTransactionWithLoan, findLoanBySearchTerm } from "src/helpers/transaction.helper";
+import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
+import { UpdateRegionDto } from "./dto/updateRegion.dto";
+import { CreateRegionDto } from "./dto/createRegion.dto";
+import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -319,9 +323,14 @@ export class AdminService {
     }
 
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const isCollector = user.role_name === Role.COLLECTOR;
     // Team leads (collectors) see all team's transactions, members see only own
     const allowTeamAccess = teamLead && isCollector;
+
+    // Regional managers see transactions from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && isCollector;
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -334,11 +343,16 @@ export class AdminService {
       queryOptions._allowTeamAccess = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [data, total] = await Promise.all([
       this.permissionsHelper.payment.findMany(queryOptions),
       this.permissionsHelper.payment.count({
         where,
-        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -1116,12 +1130,17 @@ export class AdminService {
 
     // For committees: team leads should see all team's committees by default
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
 
     // Team leads (collectors and lawyers) see all team's committees, members see only own
     const allowTeamAccess = teamLead && (isCollector || isLawyer);
+
+    // Regional managers see committees from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -1212,11 +1231,17 @@ export class AdminService {
       queryOptions._allowTeamAccess = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [committees, totalCount] = await Promise.all([
       this.permissionsHelper.committee.findMany(queryOptions),
       this.permissionsHelper.committee.count({
         where,
-        ...(allowTeamAccess ? { _allowTeamAccess: true } : {})
+        ...(allowTeamAccess ? { _allowTeamAccess: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -1332,6 +1357,7 @@ export class AdminService {
 
     // Determine if we should skip user scope for team leads filtering by team members
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const hasAssignedCollectorFilter = filters.assignedCollector?.length > 0;
 
     // Team leads (both collectors and lawyers) can see team members' payment commitments when filtering by assignedCollector
@@ -1339,6 +1365,10 @@ export class AdminService {
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
     const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    // Regional managers see loan marks from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -1411,11 +1441,17 @@ export class AdminService {
       queryOptions._skipUserScope = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [loanMarks, total] = await Promise.all([
       this.permissionsHelper.loanMarks.findMany(queryOptions),
       this.permissionsHelper.loanMarks.count({
         where,
-        ...(skipUserScope ? { _skipUserScope: true } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -1928,6 +1964,343 @@ export class AdminService {
     }
   }
 
+  async createRegion(data: CreateRegionDto) {
+    // Validate manager exists if provided
+    if (data.managerId) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: data.managerId, deletedAt: null }
+      });
+      if (!manager) {
+        throw new BadRequestException('Manager not found');
+      }
+    }
+
+    // Validate activation requirements
+    if (data.isActive === true) {
+      if (!data.managerId) {
+        throw new BadRequestException('Cannot activate region: Manager must be assigned before activation');
+      }
+      // Note: Teams can be assigned after creation, so we only check manager during creation
+    }
+
+    await this.prisma.region.create({
+      data: {
+        name: data.name,
+        managerId: data.managerId || null,
+        isActive: data.isActive ?? false
+      }
+    });
+
+    return {
+      message: 'Region created successfully'
+    };
+  }
+
+  async getRegions(filters?: GetRegionsFilterDto) {
+    const where: any = { deletedAt: null };
+
+    // Apply isActive filter if provided
+    if (filters?.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    // Apply search filter for region name or manager name
+    if (filters?.search) {
+      const searchTerm = filters.search.trim();
+      where.OR = [
+        { name: { contains: searchTerm } },
+        {
+          User: {
+            OR: [
+              { firstName: { contains: searchTerm } },
+              { lastName: { contains: searchTerm } },
+              { email: { contains: searchTerm } }
+            ]
+          }
+        }
+      ];
+    }
+
+    const regions = await this.prisma.region.findMany({
+      where,
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        },
+        Team: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Add team count to each region
+    return regions.map(region => ({
+      ...region,
+      teamCount: region.Team.length
+    }));
+  }
+
+  async getRegion(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId },
+      include: {
+        User: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            Role: {
+              select: {
+                name: true
+              }
+            }
+          }
+        },
+        Team: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            TeamMembership: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                teamRole: true,
+                User: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    return {
+      ...region,
+      teamCount: region.Team.length
+    };
+  }
+
+  async updateRegion(regionId: number, data: UpdateRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId },
+      include: {
+        Team: {
+          where: { deletedAt: null },
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Validate manager exists if being updated
+    if (data.managerId !== undefined && data.managerId !== null) {
+      const manager = await this.prisma.user.findUnique({
+        where: { id: data.managerId, deletedAt: null }
+      });
+      if (!manager) {
+        throw new BadRequestException('Manager not found');
+      }
+    }
+
+    // Validate activation requirements
+    if (data.isActive === true) {
+      const finalManagerId = data.managerId !== undefined ? data.managerId : region.managerId;
+      const teamCount = region.Team.length;
+
+      const errors: string[] = [];
+
+      if (!finalManagerId) {
+        errors.push('Manager must be assigned');
+      }
+
+      if (teamCount === 0) {
+        errors.push('At least one team must be assigned');
+      }
+
+      if (errors.length > 0) {
+        throw new BadRequestException(`Cannot activate region: ${errors.join(', ')} before activation`);
+      }
+    }
+
+    await this.prisma.region.update({
+      where: { id: regionId },
+      data: data
+    });
+
+    return {
+      message: 'Region updated successfully'
+    };
+  }
+
+  async deleteRegion(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Unassign all teams from this region first
+    await this.prisma.team.updateMany({
+      where: { regionId: regionId },
+      data: { regionId: null }
+    });
+
+    // Then soft delete region
+    await this.prisma.region.update({
+      where: { id: regionId },
+      data: {
+        deletedAt: new Date()
+      }
+    });
+
+    return {
+      message: 'Region deleted successfully'
+    };
+  }
+
+  async assignTeamsToRegion(regionId: number, data: AssignTeamsToRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Validate all teams exist
+    const teams = await this.prisma.team.findMany({
+      where: {
+        id: { in: data.teamIds },
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        name: true,
+        regionId: true,
+        Region: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    if (teams.length !== data.teamIds.length) {
+      throw new BadRequestException('One or more teams not found');
+    }
+
+    // After: Block ANY team that has a region assignment
+    const alreadyAssignedTeams = teams.filter(team => team.regionId !== null);
+    if (alreadyAssignedTeams.length > 0) {
+      const teamDetails = alreadyAssignedTeams.map(t =>
+        `${t.name} (in region: ${t.Region?.name || 'Unknown'})`
+      ).join(', ');
+      throw new BadRequestException(`Team(s) already assigned to another region: ${teamDetails}`);
+    }
+
+    // Assign teams to region (will move from old region if already assigned)
+    await this.prisma.team.updateMany({
+      where: {
+        id: { in: data.teamIds }
+      },
+      data: {
+        regionId: regionId
+      }
+    });
+
+    return {
+      message: `Successfully assigned ${data.teamIds.length} teams to region`
+    };
+  }
+
+  async removeTeamsFromRegion(regionId: number, data: AssignTeamsToRegionDto) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    // Remove teams from region
+    await this.prisma.team.updateMany({
+      where: {
+        id: { in: data.teamIds },
+        regionId: regionId
+      },
+      data: {
+        regionId: null
+      }
+    });
+
+    return {
+      message: `Successfully removed ${data.teamIds.length} teams from region`
+    };
+  }
+
+  async getRegionTeams(regionId: number) {
+    const region = await this.prisma.region.findUnique({
+      where: { id: regionId }
+    });
+
+    if (!region || region.deletedAt !== null) {
+      throw new BadRequestException('Region not found');
+    }
+
+    return await this.prisma.team.findMany({
+      where: {
+        regionId: regionId,
+        deletedAt: null
+      },
+      include: {
+        TeamMembership: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            teamRole: true,
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
   async getCity() {
     return await this.prisma.city.findMany({
       where: { deletedAt: null }
@@ -2066,12 +2439,17 @@ export class AdminService {
     }
 
     const teamLead = isTeamLead(user);
+    const regionalManager = isRegionalManager(user);
     const hasAssignedCollectorFilter = getFuturePaymentsDto.assignedCollector?.length > 0;
 
     const LAWYER_ROLES = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
     const isCollector = user.role_name === Role.COLLECTOR;
     const isLawyer = LAWYER_ROLES.includes(user.role_name);
     const skipUserScope = teamLead && (isCollector || isLawyer) && hasAssignedCollectorFilter;
+
+    // Regional managers see future payments from all teams under their managed regions
+    const allowRegionalAccess = regionalManager && (isCollector || isLawyer);
+    const regionalTeamIds = allowRegionalAccess ? getRegionalTeamIds(user) : [];
 
     const queryOptions: any = {
       where,
@@ -2145,11 +2523,17 @@ export class AdminService {
       queryOptions._skipUserScope = true;
     }
 
+    if (allowRegionalAccess && regionalTeamIds.length > 0) {
+      queryOptions._allowRegionalAccess = true;
+      queryOptions._regionalTeamIds = regionalTeamIds;
+    }
+
     const [futurePayments, totalCount] = await Promise.all([
       this.permissionsHelper.futurePayment.findMany(queryOptions),
       this.permissionsHelper.futurePayment.count({
         where,
-        ...(skipUserScope ? { _skipUserScope: true } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 

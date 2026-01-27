@@ -124,8 +124,31 @@ export const isTeamLead = (user: any): boolean => {
   return activeTeamMembership?.teamRole === TeamMembership_teamRole.leader;
 }
 
+export const isRegionalManager = (user: any): boolean => {
+  return user.managed_regions && user.managed_regions.length > 0;
+}
+
+export const getRegionalTeamIds = (user: any): number[] => {
+  if (!user.managed_regions || user.managed_regions.length === 0) {
+    return [];
+  }
+  // Flatten all team IDs from all managed regions
+  const teamIds: number[] = [];
+  user.managed_regions.forEach(region => {
+    if (region.Team && Array.isArray(region.Team)) {
+      region.Team.forEach(team => {
+        if (team.id) {
+          teamIds.push(team.id);
+        }
+      });
+    }
+  });
+  return teamIds;
+}
+
 export const buildCommentsWhereClause = async (prisma: PrismaService, user: any, loanPublicId: string) => {
   const teamLead = isTeamLead(user);
+  const regionalManager = isRegionalManager(user);
   const isCollector = user.role_name === 'collector';
 
   const getUserTeamLead = await prisma.teamMembership.findFirst({
@@ -140,7 +163,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   });
 
   // Lawyers, team leads, admins: see ALL comments
-  if (!isCollector || teamLead) {
+  if (!isCollector || teamLead || regionalManager) {
     return { deletedAt: null };
   }
 
@@ -753,14 +776,18 @@ export const saveScheduleReminders = async (
 
 export const shouldSkipUserScope = (user: any, filters: any): boolean => {
   const teamLead = isTeamLead(user);
+  const regionalManager = isRegionalManager(user);
 
-  if (!teamLead) {
-    return false;
-  }
+  // if (!teamLead) {
+  //   return false;
+  // }
 
   // Collector team lead filtering by assigneduser (collectors)
   if (user.role_name === 'collector' && filters.assigneduser?.length > 0) {
-    return true;
+    // Allow if team lead OR regional manager
+    if (teamLead || regionalManager) {
+      return true;
+    }
   }
 
   // Lawyer team lead filtering by any lawyer assignment
@@ -771,7 +798,8 @@ export const shouldSkipUserScope = (user: any, filters: any): boolean => {
       filters.assignedjuniorLawyer?.length > 0 ||
       filters.assignedexecutionLawyer?.length > 0;
 
-    if (hasLawyerFilter) {
+    // Allow if team lead OR regional manager
+    if (hasLawyerFilter && (teamLead || regionalManager)) {
       return true;
     }
   }

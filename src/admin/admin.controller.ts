@@ -27,6 +27,10 @@ import { GetChargeReportWithPaginationDto } from "./dto/getChargeReport.dto";
 import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
+import { CreateRegionDto } from "./dto/createRegion.dto";
+import { UpdateRegionDto } from "./dto/updateRegion.dto";
+import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
+import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -292,6 +296,82 @@ export class AdminController {
     @Body() data: ManageTeamUsersDto
   ) {
     return await this.adminService.manageTeamUsers(teamId, data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Post('createRegion')
+  async createRegion(
+    @GetUser() user: User,
+    @Body() data: CreateRegionDto
+  ) {
+    return await this.adminService.createRegion(data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Get('getRegions')
+  async getRegions(@Query() filters: GetRegionsFilterDto) {
+    return await this.adminService.getRegions(filters);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Get('getRegion/:regionId')
+  async getRegion(@Param('regionId', ParseIntPipe) regionId: number) {
+    return await this.adminService.getRegion(regionId);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Patch('updateRegion/:regionId')
+  async updateRegion(
+    @Param('regionId', ParseIntPipe) regionId: number,
+    @Body() data: UpdateRegionDto
+  ) {
+    return await this.adminService.updateRegion(regionId, data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Delete('deleteRegion/:regionId')
+  async deleteRegion(@Param('regionId', ParseIntPipe) regionId: number) {
+    return await this.adminService.deleteRegion(regionId);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Post('assignTeamsToRegion/:regionId')
+  async assignTeamsToRegion(
+    @GetUser() user: User,
+    @Param('regionId', ParseIntPipe) regionId: number,
+    @Body() data: AssignTeamsToRegionDto
+  ) {
+    return await this.adminService.assignTeamsToRegion(regionId, data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Post('removeTeamsFromRegion/:regionId')
+  async removeTeamsFromRegion(
+    @GetUser() user: User,
+    @Param('regionId', ParseIntPipe) regionId: number,
+    @Body() data: AssignTeamsToRegionDto
+  ) {
+    return await this.adminService.removeTeamsFromRegion(regionId, data);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'regionId', type: 'number' })
+  @Get('getRegionTeams/:regionId')
+  async getRegionTeams(@Param('regionId', ParseIntPipe) regionId: number) {
+    return await this.adminService.getRegionTeams(regionId);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

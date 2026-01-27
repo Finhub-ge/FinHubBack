@@ -4,7 +4,7 @@ import * as dayjs from "dayjs";
 import * as utc from "dayjs/plugin/utc";
 import * as timezone from "dayjs/plugin/timezone";
 import { LoanStatusGroups } from 'src/enums/loanStatus.enum';
-import { buildLoanSearchWhere, calculateWriteoff, getActiveTeamMembership, isTeamLead } from './loan.helper';
+import { buildLoanSearchWhere, calculateWriteoff, getActiveTeamMembership, isRegionalManager, isTeamLead } from './loan.helper';
 import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -114,22 +114,26 @@ export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberI
 
   const activeTeamMembership = getActiveTeamMembership(user);
   const teamLead = isTeamLead(user);
+  const regionalManager = isRegionalManager(user);
   const restrictedFilters = { ...filters };
 
   // Handle COLLECTOR role
   if (user.role_name === 'collector') {
-    if (teamLead && activeTeamMembership && teamMemberIds) {
-      // Collector Team Lead: Can filter by assigneduser, but only team members
-      // Validate and restrict assigneduser to only include team member IDs
-      if (restrictedFilters.assigneduser && Array.isArray(restrictedFilters.assigneduser)) {
-        // Filter to only include IDs that are in the team
-        restrictedFilters.assigneduser = restrictedFilters.assigneduser.filter(
-          (userId: number) => teamMemberIds.includes(userId)
-        );
+    // Team leads or regional managers can filter by assigneduser
+    if ((teamLead && activeTeamMembership) || regionalManager) {
+      if (teamMemberIds) {
+        // Can filter by assigneduser, but only team/region members
+        // Validate and restrict assigneduser to only include allowed member IDs
+        if (restrictedFilters.assigneduser && Array.isArray(restrictedFilters.assigneduser)) {
+          // Filter to only include IDs that are in the team/region
+          restrictedFilters.assigneduser = restrictedFilters.assigneduser.filter(
+            (userId: number) => teamMemberIds.includes(userId)
+          );
 
-        // If after filtering, no valid users remain, remove the filter
-        if (restrictedFilters.assigneduser.length === 0) {
-          delete restrictedFilters.assigneduser;
+          // If after filtering, no valid users remain, remove the filter
+          if (restrictedFilters.assigneduser.length === 0) {
+            delete restrictedFilters.assigneduser;
+          }
         }
       }
     } else {
@@ -141,7 +145,7 @@ export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberI
   // Handle LAWYER roles (lawyer, junior_lawyer, execution_lawyer, super_lawyer)
   const lawyerRoles = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'];
   if (lawyerRoles.includes(user.role_name)) {
-    if (teamLead && activeTeamMembership) {
+    if ((teamLead && activeTeamMembership) || regionalManager) {
       // Lawyer Team Lead: Can filter by any lawyer (no restrictions)
       // Allow all lawyer filters to pass through
     } else {
@@ -235,6 +239,35 @@ export const collectAssignedUserIds = (filters: any): number[] => {
     ...(filters.assignedjuniorLawyer || []),
     ...(filters.assignedexecutionLawyer || []),
   ];
+};
+
+export const hasLoanAssignmentInWhere = (where: any): boolean => {
+  if (!where) return false;
+
+  // Check if LoanAssignment filter already exists in where clause
+  if (where.LoanAssignment) {
+    return true;
+  }
+
+  // Check in OR conditions
+  if (Array.isArray(where.OR)) {
+    for (const condition of where.OR) {
+      if (condition.LoanAssignment) {
+        return true;
+      }
+    }
+  }
+
+  // Check in AND conditions
+  if (Array.isArray(where.AND)) {
+    for (const condition of where.AND) {
+      if (condition.LoanAssignment) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 };
 
 export const applyClosedDateRangeFilter = (where: any, filters: any): void => {
