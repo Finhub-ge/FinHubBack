@@ -432,6 +432,7 @@ export const prepareLoanExportData = (loan: any) => {
       ? `${execLawyer.User?.firstName ?? ''} ${execLawyer.User?.lastName ?? ''}`.trim()
       : '',
     actDay: loan.actDays ?? '',
+    lastPay: loan.Transaction?.[0]?.paymentDate ?? '',
   };
 }
 
@@ -466,6 +467,7 @@ export const getLoanExportHeaders = (): Record<string, string> => {
     juniorLawyer: 'Junior Lawyer',
     execLawyer: 'Execution Lawyer',
     actDay: 'Act Day',
+    lastPay: 'Last Payment Date',
   };
 }
 

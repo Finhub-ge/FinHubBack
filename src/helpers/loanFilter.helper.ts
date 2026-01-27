@@ -624,6 +624,15 @@ export const getLoanIncludeConfig = () => {
       where: { deletedAt: null },
     },
     LawyerRequest: true,
+    Transaction: {
+      where: { deleted: 0 },
+      select: {
+        paymentDate: true,
+        amount: true,
+      },
+      orderBy: { paymentDate: 'desc' },
+      take: 1,
+    },
     // NOTE: Latest records (LoanStatusHistory, LoanCollateralStatus, etc.)
     // are loaded separately via batchLoadLatestRecords() for performance
   };
