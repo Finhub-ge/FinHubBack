@@ -2493,22 +2493,22 @@ export class LoanService {
 
     const where: any = { deletedAt: null };
     // Temporary disabled
-    // const rules: Record<number, any> = {
-    //   60: { id: { in: [0] } },
-    //   61: { id: { notIn: [6] } },
-    //   62: { id: { in: [6] } },
-    //   64: { id: { in: [8] } },
-    //   65: { id: { in: [5, 8] } },
-    // };
+    const rules: Record<number, any> = {
+      60: { id: { in: [0] } },
+      61: { id: { notIn: [6] } },
+      62: { id: { in: [6] } },
+      64: { id: { in: [8] } },
+      65: { id: { in: [5, 8] } },
+    };
 
-    // if (loan.LoanLegalStage.length > 0) {
-    //   const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
-    //   const stageCode = lastStage.legalStageId;
+    if (loan.LoanLegalStage.length > 0) {
+      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+      const stageCode = lastStage.legalStageId;
 
-    //   if (rules[stageCode]) {
-    //     Object.assign(where, rules[stageCode]);
-    //   }
-    // }
+      if (rules[stageCode]) {
+        Object.assign(where, rules[stageCode]);
+      }
+    }
     return this.prisma.litigationStage.findMany({ where });
   }
 
@@ -2525,23 +2525,23 @@ export class LoanService {
 
     const where: any = { deletedAt: null };
     // Temporary disabled
-    // const rules: Record<number, any> = {
-    //   60: { id: { in: [61, 63, 64] } },
-    //   61: { id: { in: [60, 62] } },
-    //   62: { id: { in: [60] } },
-    //   63: { id: { in: [65] } },
-    //   64: { id: { in: [0] } },
-    //   65: { id: { in: [0] } },
-    // };
+    const rules: Record<number, any> = {
+      60: { id: { in: [61, 63, 64] } },
+      61: { id: { in: [60, 62] } },
+      62: { id: { in: [60] } },
+      63: { id: { in: [65] } },
+      64: { id: { in: [0] } },
+      65: { id: { in: [0] } },
+    };
 
-    // if (loan.LoanLegalStage.length > 0) {
-    //   const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
-    //   const stageCode = lastStage.legalStageId;
+    if (loan.LoanLegalStage.length > 0) {
+      const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
+      const stageCode = lastStage.legalStageId;
 
-    //   if (rules[stageCode]) {
-    //     Object.assign(where, rules[stageCode]);
-    //   }
-    // }
+      if (rules[stageCode]) {
+        Object.assign(where, rules[stageCode]);
+      }
+    }
 
     return await this.prisma.legalStage.findMany({ where });
   }
