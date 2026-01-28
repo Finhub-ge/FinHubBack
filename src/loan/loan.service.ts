@@ -2528,7 +2528,7 @@ export class LoanService {
     const rules: Record<number, any> = {
       60: { id: { in: [61, 63, 64] } },
       61: { id: { in: [60, 62] } },
-      62: { id: { in: [60] } },
+      62: { id: { in: [62] } },
       63: { id: { in: [65] } },
       64: { id: { in: [0] } },
       65: { id: { in: [0] } },
