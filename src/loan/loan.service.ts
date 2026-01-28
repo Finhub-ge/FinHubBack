@@ -469,7 +469,7 @@ export class LoanService {
                 labelId: true,
                 createdAt: true,
                 updatedAt: true,
-                ContactType: { select: { name: true } },
+                ContactType: { select: { id: true, name: true } },
                 ContactLabel: { select: { name: true } },
               },
               orderBy: { labelId: 'asc' }
@@ -794,6 +794,27 @@ export class LoanService {
     const caseHistory = [...statusHistory, ...assignmentHistory]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    // Get call history from Old_db_clients_call_history based on phone contacts (type=1)
+    let oldCallHistory = [];
+    if (loan.Debtor?.DebtorContact) {
+      // Extract phone numbers from contacts where type=1
+      const phoneContacts = loan.Debtor.DebtorContact
+        .filter(contact => contact.ContactType?.id === 1)
+        .map(contact => contact.value)
+        .filter(Boolean);
+
+      // Query call history if we have phone numbers
+      if (phoneContacts.length > 0) {
+        oldCallHistory = await this.prisma.old_db_clients_call_history.findMany({
+          where: {
+            Called: { in: phoneContacts }
+          },
+          orderBy: { CallDate: 'desc' },
+          take: 50 // Limit to prevent heavy queries
+        });
+      }
+    }
+
     return {
       ...loanData,
       comments,
@@ -802,6 +823,7 @@ export class LoanService {
       initialClaimBreakdown,
       totalPayments,
       caseHistory,
+      oldCallHistory
     };
   }
 
