@@ -357,7 +357,9 @@ export class AdminService {
       this.permissionsHelper.payment.findMany(queryOptions),
       this.permissionsHelper.payment.count({
         where,
-        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowTeamAccess && !skipUserScope ? { _allowTeamAccess: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 && !skipUserScope ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       }),
     ]);
 
@@ -412,7 +414,9 @@ export class AdminService {
           fees: true,
           legal: true,
         },
-        ...(allowRegionalAccess && regionalTeamIds.length > 0 ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
+        ...(skipUserScope ? { _skipUserScope: true } : {}),
+        ...(allowTeamAccess && !skipUserScope ? { _allowTeamAccess: true } : {}),
+        ...(allowRegionalAccess && regionalTeamIds.length > 0 && !skipUserScope ? { _allowRegionalAccess: true, _regionalTeamIds: regionalTeamIds } : {})
       });
 
       // Initialize summary for all currencies
