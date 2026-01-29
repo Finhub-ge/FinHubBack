@@ -20,7 +20,7 @@ export const findLoanBySearchTerm = async (
       deletedAt: null,
       // Exclude closed loans
       statusId: {
-        notIn: LoanStatusGroups.CLOSED as unknown as number[],
+        notIn: term ? [] : LoanStatusGroups.CLOSED as unknown as number[],
       },
       OR: [
         { caseId: term },
