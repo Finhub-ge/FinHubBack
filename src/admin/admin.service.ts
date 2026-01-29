@@ -1848,11 +1848,7 @@ export class AdminService {
       });
 
       return {
-        message: 'Charge deleted and all changes reverted successfully',
-        chargeId: charge.id,
-        loanId: loan.id,
-        revertedAmount: Number(charge.amount),
-        chargeType: charge.ChargeType.title,
+        message: 'Charge deleted successfully',
       };
     });
   }
