@@ -700,6 +700,7 @@ export class LoanService {
           }
         },
         Charges: {
+          where: { deletedAt: null },
           include: {
             ChargeType: { select: { title: true } },
             TransactionChannels: { select: { name: true } },
