@@ -223,6 +223,16 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Delete('deleteCharge/:chargeId')
+  async deleteCharge(
+    @Param('chargeId', ParseIntPipe) chargeId: number,
+    @GetUser() user: User
+  ) {
+    return await this.adminService.deleteCharge(chargeId, user.id);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER)
   @Get('getCharges')
   async getCharges(@Query() getChargeDto: GetChargeWithPaginationDto) {

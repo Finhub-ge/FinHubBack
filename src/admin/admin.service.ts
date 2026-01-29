@@ -1642,6 +1642,221 @@ export class AdminService {
     }
   }
 
+  async deleteCharge(chargeId: number, userId: number) {
+    // 1. Get charge with all related data
+    const charge = await this.prisma.charges.findUnique({
+      where: { id: chargeId },
+      include: {
+        Loan: {
+          include: {
+            LoanRemaining: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        },
+        ChargeType: true
+      }
+    });
+
+    if (!charge) {
+      throw new NotFoundException('Charge not found');
+    }
+
+    if (charge.deletedAt !== null) {
+      throw new BadRequestException('Charge already deleted');
+    }
+
+    const loan = charge.Loan;
+    const currentRemaining = loan.LoanRemaining[0];
+
+    if (!currentRemaining) {
+      throw new NotFoundException('Loan remaining balance not found');
+    }
+
+    // 2. Check if there are any transactions/charges AFTER this charge (prevent out-of-order deletion)
+    const [laterCharges, laterTransactions] = await Promise.all([
+      this.prisma.charges.count({
+        where: {
+          loanId: loan.id,
+          createdAt: { gt: charge.createdAt },
+          deletedAt: null,
+        }
+      }),
+      this.prisma.transaction.count({
+        where: {
+          loanId: loan.id,
+          createdAt: { gt: charge.createdAt },
+          deleted: 0,
+        }
+      })
+    ]);
+
+    if (laterCharges > 0 || laterTransactions > 0) {
+      throw new BadRequestException(
+        'Cannot delete this charge. There are newer charges or transactions that depend on it. Delete newer records first.'
+      );
+    }
+
+    // 3. Find PaymentAllocationDetail
+    const isLegalCharge = ['Court', 'Execution'].includes(charge.ChargeType.title);
+    const isOtherFee = ['Other', 'Post', 'Registry'].includes(charge.ChargeType.title);
+    const sourceType = isLegalCharge ? 'LEGAL_CHARGES_ADDED' : 'OTHER_FEE_ADDED';
+
+    const allocationDetail = await this.prisma.paymentAllocationDetail.findFirst({
+      where: {
+        loanId: loan.id,
+        sourceType: sourceType,
+        sourceId: charge.id,
+        deletedAt: null
+      }
+    });
+
+    // 4. Find LoanBalanceHistory
+    const balanceHistory = await this.prisma.loanBalanceHistory.findFirst({
+      where: {
+        loanId: loan.id,
+        sourceType: sourceType,
+        sourceId: charge.id,
+        deletedAt: null
+      }
+    });
+
+    // 5. Calculate new balances and validate
+    const newBalances: any = {
+      principal: currentRemaining.principal,
+      interest: currentRemaining.interest,
+      penalty: currentRemaining.penalty,
+      otherFee: currentRemaining.otherFee,
+      legalCharges: currentRemaining.legalCharges,
+    };
+
+    // Reverse the specific charge type increase
+    if (isLegalCharge) {
+      newBalances.legalCharges = Number(currentRemaining.legalCharges) - Number(charge.amount);
+
+      // Validate we're not going negative
+      if (newBalances.legalCharges < 0) {
+        throw new BadRequestException(
+          `Cannot delete charge: Would result in negative legal charges balance (${newBalances.legalCharges})`
+        );
+      }
+    }
+
+    if (isOtherFee) {
+      newBalances.otherFee = Number(currentRemaining.otherFee) - Number(charge.amount);
+
+      // Validate we're not going negative
+      if (newBalances.otherFee < 0) {
+        throw new BadRequestException(
+          `Cannot delete charge: Would result in negative other fees balance (${newBalances.otherFee})`
+        );
+      }
+    }
+
+    // Always decrease currentDebt and agreementMin
+    const newCurrentDebt = Number(currentRemaining.currentDebt) - Number(charge.amount);
+    const newAgreementMin = Number(currentRemaining.agreementMin) - Number(charge.amount);
+
+    // Validate debt doesn't go negative
+    if (newCurrentDebt < 0) {
+      throw new BadRequestException(
+        `Cannot delete charge: Would result in negative current debt (${newCurrentDebt})`
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. SOFT DELETE old LoanRemaining
+      await tx.loanRemaining.update({
+        where: { id: currentRemaining.id },
+        data: { deletedAt: new Date() }
+      });
+
+      // 2. CREATE new LoanRemaining with reverted balances
+      const newLoanRemaining = await tx.loanRemaining.create({
+        data: {
+          loanId: loan.id,
+          principal: newBalances.principal,
+          interest: newBalances.interest,
+          penalty: newBalances.penalty,
+          otherFee: newBalances.otherFee,
+          legalCharges: newBalances.legalCharges,
+          currentDebt: newCurrentDebt,
+          agreementMin: newAgreementMin,
+        }
+      });
+
+      // 3. SOFT DELETE old PaymentAllocationDetail (if exists)
+      if (allocationDetail) {
+        await tx.paymentAllocationDetail.update({
+          where: { id: allocationDetail.id },
+          data: { deletedAt: new Date() }
+        });
+      }
+
+      // 4. CREATE NEW PaymentAllocationDetail for the deletion (audit trail)
+      const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';
+      const deletionSourceType = isLegalCharge ? 'LEGAL_CHARGES_REMOVED' : 'OTHER_FEE_REMOVED';
+
+      await tx.paymentAllocationDetail.create({
+        data: {
+          loanId: loan.id,
+          sourceType: deletionSourceType,
+          sourceId: charge.id,
+          componentType: componentType,
+          amountAllocated: -Number(charge.amount),
+          balanceBefore: isLegalCharge
+            ? Number(currentRemaining.legalCharges)
+            : Number(currentRemaining.otherFee),
+          balanceAfter: isLegalCharge
+            ? Number(newLoanRemaining.legalCharges)
+            : Number(newLoanRemaining.otherFee),
+          allocationOrder: 1,
+        }
+      });
+
+      // 5. SOFT DELETE old LoanBalanceHistory (if exists)
+      if (balanceHistory) {
+        await tx.loanBalanceHistory.update({
+          where: { id: balanceHistory.id },
+          data: { deletedAt: new Date() }
+        });
+      }
+
+      // 6. CREATE NEW LoanBalanceHistory for the deletion (audit trail)
+      await tx.loanBalanceHistory.create({
+        data: {
+          loanId: loan.id,
+          principal: newLoanRemaining.principal,
+          interest: newLoanRemaining.interest,
+          penalty: newLoanRemaining.penalty,
+          otherFee: newLoanRemaining.otherFee,
+          legalCharges: newLoanRemaining.legalCharges,
+          totalDebt: newLoanRemaining.currentDebt,
+          sourceType: deletionSourceType,
+          sourceId: charge.id,
+        }
+      });
+
+      // 7. SOFT DELETE the Charge
+      await tx.charges.update({
+        where: { id: chargeId },
+        data: {
+          deletedAt: new Date(),
+        }
+      });
+
+      return {
+        message: 'Charge deleted and all changes reverted successfully',
+        chargeId: charge.id,
+        loanId: loan.id,
+        revertedAmount: Number(charge.amount),
+        chargeType: charge.ChargeType.title,
+      };
+    });
+  }
+
   async getCharges(getChargeDto: GetChargeWithPaginationDto | GetChargeReportWithPaginationDto, options?: { isReport?: boolean }) {
     const { page, limit, search } = getChargeDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });

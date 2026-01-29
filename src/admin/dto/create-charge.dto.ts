@@ -11,9 +11,9 @@ dayjs.extend(timezone);
 
 export class CreateChargeDto {
   @ApiProperty()
-  @IsNumber()
+  @IsString()
   @IsNotEmpty()
-  caseId: number;
+  caseId: string;
 
   @ApiProperty()
   @IsNumber()
