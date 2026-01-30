@@ -223,7 +223,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR)
   @Delete('deleteCharge/:chargeId')
   async deleteCharge(
     @Param('chargeId', ParseIntPipe) chargeId: number,
