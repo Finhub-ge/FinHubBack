@@ -27,8 +27,8 @@ export class CreateChargeDto {
 
   @ApiProperty()
   @IsNumber()
-  @IsNotEmpty()
-  accountId: number;
+  @IsOptional()
+  accountId?: number;
 
   @ApiProperty()
   @Transform(({ value }) => {
