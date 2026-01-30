@@ -464,8 +464,8 @@ export class LoanController {
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get(':publicId/availableLegalStatuses')
-  async getAvailableLegalStatuses(@Param('publicId') publicId: ParseUUIDPipe) {
-    return this.loanService.getAvailableLegalStatuses(publicId);
+  async getAvailableLegalStatuses(@Param('publicId') publicId: ParseUUIDPipe, @GetUser() user: User) {
+    return this.loanService.getAvailableLegalStatuses(publicId, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

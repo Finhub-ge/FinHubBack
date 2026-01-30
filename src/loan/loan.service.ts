@@ -2535,7 +2535,7 @@ export class LoanService {
     return this.prisma.litigationStage.findMany({ where });
   }
 
-  async getAvailableLegalStatuses(publicId: ParseUUIDPipe) {
+  async getAvailableLegalStatuses(publicId: ParseUUIDPipe, user: any) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
       select: {
@@ -2550,14 +2550,14 @@ export class LoanService {
     // Temporary disabled
     const rules: Record<number, any> = {
       60: { id: { in: [61, 63, 64] } },
-      61: { id: { in: [60, 62] } },
+      61: { id: { in: [62] } },
       62: { id: { in: [62] } },
       63: { id: { in: [65] } },
-      64: { id: { in: [0] } },
-      65: { id: { in: [0] } },
+      64: { id: { in: [61, 62] } },
+      65: { id: { in: [62] } },
     };
 
-    if (loan.LoanLegalStage.length > 0) {
+    if (user.id !== 61 && loan.LoanLegalStage.length > 0) {
       const lastStage = loan.LoanLegalStage[loan.LoanLegalStage.length - 1];
       const stageCode = lastStage.legalStageId;
 
