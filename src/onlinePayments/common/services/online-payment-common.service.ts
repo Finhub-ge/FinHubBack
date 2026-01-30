@@ -24,10 +24,13 @@ export class OnlinePaymentCommonService {
 
   /**
    * Get TBC Pay channel account
-   * TransactionChannels ID 4 = TBC Pay
+   * TransactionChannels ID 2 = TBC Pay
    */
   async getTbcPayChannelAccount(): Promise<number> {
-    const TBC_PAY_CHANNEL_ID = 4;
+    const TBC_PAY_CHANNEL_ID = 2;
+
+    this.logger.log(`   🔍 Searching for TBC Pay channel account...`);
+    this.logger.log(`      Channel ID: ${TBC_PAY_CHANNEL_ID}`);
 
     const channelAccount = await this.prisma.transactionChannelAccounts.findFirst({
       where: {
@@ -37,9 +40,14 @@ export class OnlinePaymentCommonService {
     });
 
     if (!channelAccount) {
+      this.logger.error(`      ❌ TBC Pay channel account not found`);
+      this.logger.error(`      Please create in TransactionChannelAccounts table:`);
+      this.logger.error(`         transactionChannelId: ${TBC_PAY_CHANNEL_ID}`);
+      this.logger.error(`         active: 1`);
       throw new Error('TBC Pay channel account not configured. Please set up in admin panel.');
     }
 
+    this.logger.log(`      ✓ Found channel account: ID=${channelAccount.id}, Name=${channelAccount.name}`);
     return channelAccount.id;
   }
 
@@ -48,6 +56,13 @@ export class OnlinePaymentCommonService {
    */
   async logTbcPayTransaction(params: LogTbcPayTransactionParams): Promise<void> {
     try {
+      this.logger.log(`      📝 Creating TbcPayTransaction record...`);
+      this.logger.log(`         TxnId: ${params.txnId}`);
+      this.logger.log(`         Command: ${params.command}`);
+      this.logger.log(`         CaseId: ${params.caseId}`);
+      this.logger.log(`         ResultCode: ${params.resultCode}`);
+      this.logger.log(`         TransactionId: ${params.transactionId || 'none'}`);
+
       await this.prisma.tbcPayTransaction.create({
         data: {
           txnId: params.txnId,
@@ -59,10 +74,16 @@ export class OnlinePaymentCommonService {
           resultMessage: params.resultMessage,
           ipAddress: params.ipAddress,
           transactionId: params.transactionId,
+          requestData: params.requestData,
+          responseData: params.responseData,
         },
       });
+
+      this.logger.log(`      ✓ TbcPayTransaction created successfully`);
     } catch (error) {
-      this.logger.error('Error logging TBC Pay transaction:', error);
+      this.logger.error(`      ❌ Error logging TBC Pay transaction:`, error);
+      this.logger.error(`         TxnId: ${params.txnId}`);
+      this.logger.error(`         Error: ${error.message}`);
       // Don't throw - logging failure shouldn't break the payment
     }
   }
@@ -72,13 +93,25 @@ export class OnlinePaymentCommonService {
    */
   async checkDuplicateTransaction(txnId: string): Promise<boolean> {
     try {
+      this.logger.log(`      🔍 Checking for duplicate transaction...`);
+      this.logger.log(`         TxnId: ${txnId}`);
+
       const existing = await this.prisma.tbcPayTransaction.findUnique({
         where: { txnId },
       });
 
-      return !!existing;
+      const isDuplicate = !!existing;
+      this.logger.log(`      ${isDuplicate ? '⚠️ DUPLICATE FOUND' : '✓ UNIQUE'}`);
+      if (isDuplicate) {
+        this.logger.log(`         Existing record ID: ${existing.id}`);
+        this.logger.log(`         Created at: ${existing.createdAt}`);
+      }
+
+      return isDuplicate;
     } catch (error) {
-      this.logger.error('Error checking duplicate transaction:', error);
+      this.logger.error(`      ❌ Error checking duplicate transaction:`, error);
+      this.logger.error(`         TxnId: ${txnId}`);
+      this.logger.error(`         Error: ${error.message}`);
       throw error;
     }
   }
@@ -89,6 +122,10 @@ export class OnlinePaymentCommonService {
    */
   async findLoanByCaseId(caseId: string): Promise<FindLoanByCaseIdResult> {
     try {
+      this.logger.log(`      🔍 Searching for loan...`);
+      this.logger.log(`         CaseId: ${caseId}`);
+      this.logger.log(`         Filters: deletedAt=null, statusId NOT IN CLOSED`);
+
       const loan = await this.prisma.loan.findFirst({
         where: {
           caseId: caseId,
@@ -112,24 +149,40 @@ export class OnlinePaymentCommonService {
       });
 
       if (!loan) {
+        this.logger.log(`      ❌ Loan not found or closed`);
+        this.logger.log(`         CaseId: ${caseId}`);
         return {
           success: false,
           error: 'Loan not found or closed',
         };
       }
 
+      this.logger.log(`      ✓ Loan found`);
+      this.logger.log(`         Loan ID: ${loan.id}`);
+      this.logger.log(`         Status ID: ${loan.statusId}`);
+      this.logger.log(`         Debtor: ${loan.Debtor.firstName} ${loan.Debtor.lastName}`);
+
       const currentDebt = loan.LoanRemaining[0];
       if (!currentDebt) {
+        this.logger.error(`      ❌ LoanRemaining not found`);
+        this.logger.error(`         Loan ID: ${loan.id}`);
         return {
           success: false,
           error: 'Loan balance not found',
         };
       }
 
+      this.logger.log(`      ✓ LoanRemaining found`);
+      this.logger.log(`         AgreementMin: ${currentDebt.agreementMin}`);
+      this.logger.log(`         CurrentDebt: ${currentDebt.currentDebt}`);
+
       // Use agreementMin if exists, otherwise use currentDebt
       const debt = currentDebt.agreementMin && Number(currentDebt.agreementMin) > 0
         ? Number(currentDebt.agreementMin)
         : Number(currentDebt.currentDebt);
+
+      this.logger.log(`      💰 Calculated debt: ${debt}`);
+      this.logger.log(`         Using: ${debt === Number(currentDebt.agreementMin) ? 'agreementMin' : 'currentDebt'}`);
 
       return {
         success: true,
@@ -139,7 +192,9 @@ export class OnlinePaymentCommonService {
       };
 
     } catch (error) {
-      this.logger.error('Error finding loan:', error);
+      this.logger.error(`      ❌ Database error finding loan:`, error);
+      this.logger.error(`         CaseId: ${caseId}`);
+      this.logger.error(`         Error: ${error.message}`);
       return {
         success: false,
         error: 'Database error',
@@ -274,7 +329,7 @@ export class OnlinePaymentCommonService {
               loanId: loan.id,
               oldStatusId: oldStatusId,
               newStatusId: 12,
-              changedBy: null, // Automated payment
+              changedBy: 56, // Automated payment
               notes: `Automatically closed via TBC Pay (txn_id: ${params.txnId})`,
             },
           });
@@ -296,4 +351,5 @@ export class OnlinePaymentCommonService {
       };
     }
   }
+
 }

@@ -2203,6 +2203,8 @@ model TbcPayTransaction {
   resultMessage String?      @db.VarChar(255)
   ipAddress     String?      @db.VarChar(45)
   transactionId Int?
+  requestData   String?      @db.Text
+  responseData  String?      @db.Text
   createdAt     DateTime     @default(now()) @db.DateTime(0)
   updatedAt     DateTime     @default(now()) @db.DateTime(0)
   deletedAt     DateTime?    @db.DateTime(0)
@@ -2215,6 +2217,15 @@ model TbcPayTransaction {
   @@index([createdAt], map: "idx_tbc_txn_createdAt")
   @@index([deletedAt], map: "idx_tbc_txn_deletedAt")
   @@index([txnId], map: "idx_tbc_txn_txnId")
+}
+
+model Old_db_additional_data {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  case_id    Int       @db.UnsignedInt
+  title      String    @db.VarChar(255)
+  value      String    @db.Text
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
 }
 
 enum PaymentCommitment_type {

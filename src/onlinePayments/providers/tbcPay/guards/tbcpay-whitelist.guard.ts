@@ -1,31 +1,33 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class TbcPayWhitelistGuard implements CanActivate {
   private readonly logger = new Logger(TbcPayWhitelistGuard.name);
-  private readonly allowedIps: string[];
+  private readonly allowedIps: string[] = [
+    // Localhost (for testing)
+    '127.0.0.1',
+    '::1',
+    '::ffff:127.0.0.1',
 
-  constructor(private config: ConfigService) {
-    const ipsString = this.config.get<string>('TBC_PAY_WHITELIST_IPS', '');
-    this.allowedIps = ipsString.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
+    // Your internet IP (if testing from external network)
+    '109.172.176.130',
 
-    if (this.allowedIps.length === 0) {
-      this.logger.warn('⚠️  TBC_PAY_WHITELIST_IPS not configured - all IPs will be allowed (NOT RECOMMENDED FOR PRODUCTION)');
-    } else {
-      this.logger.log(`✓ TBC Pay IP whitelist: ${this.allowedIps.join(', ')}`);
-    }
+    // TBC Pay server IPs (get from TBC documentation)
+    // 'x.x.x.x',  // TBC Server 1
+    // 'y.y.y.y',  // TBC Server 2
+  ];
+
+  constructor() {
+    this.logger.log(`✓ TBC Pay IP whitelist: ${this.allowedIps.join(', ')}`);
   }
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const clientIp = this.getClientIp(request);
 
-    // If no whitelist configured, allow all (development mode)
-    if (this.allowedIps.length === 0) {
-      this.logger.warn(`⚠️  Allowing request from ${clientIp} (no whitelist configured)`);
-      return true;
-    }
+    // TEMPORARY: Discovery mode - uncomment to allow all IPs and log them
+    // this.logger.warn(`🔍 DISCOVERY MODE: Request from IP: ${clientIp}`);
+    // return true;
 
     // Check if IP is in whitelist
     const isAllowed = this.allowedIps.includes(clientIp);

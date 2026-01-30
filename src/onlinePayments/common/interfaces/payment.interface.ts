@@ -31,6 +31,8 @@ export interface LogTbcPayTransactionParams {
   resultMessage: string;
   ipAddress?: string;
   transactionId?: number;
+  requestData?: string;
+  responseData?: string;
 }
 
 /**
