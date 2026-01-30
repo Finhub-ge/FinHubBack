@@ -1545,6 +1545,11 @@ export class AdminService {
     const lawyerAssignment = loan.LoanAssignment.find(
       assignment => assignment.Role.name === 'lawyer'
     );
+    const transactionChannelAccount = await this.prisma.transactionChannelAccounts.findFirst({
+      where: { transactionChannelId: data.channel, active: 1 },
+      orderBy: { id: 'desc' },
+      take: 1
+    });
 
     await this.prisma.$transaction(async (tx) => {
       const charge = await tx.charges.create({
@@ -1554,7 +1559,7 @@ export class AdminService {
           amount: Number(data.amount),
           comment: data.comment,
           currency: loan.currency,
-          transactionChannelAccountId: data.accountId,
+          transactionChannelAccountId: transactionChannelAccount.id,
           userId: userId,
           channelId: data.channel,
           chargeDate: data.chargeDate,
