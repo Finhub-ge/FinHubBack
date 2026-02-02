@@ -566,27 +566,27 @@ export const applyReductions = (
   const otherFeeReduction = Math.min(newValues.otherFee, remainingReduction);
   newValues.otherFee -= otherFeeReduction;
   remainingReduction -= otherFeeReduction;
-
+  console.log('otherFeeReduction', otherFeeReduction)
   // 2. Reduce Penalty
   const penaltyReduction = Math.min(newValues.penalty, remainingReduction);
   newValues.penalty -= penaltyReduction;
   remainingReduction -= penaltyReduction;
-
+  console.log('penaltyReduction', penaltyReduction)
   // 3. Reduce Interest
   const interestReduction = Math.min(newValues.interest, remainingReduction);
   newValues.interest -= interestReduction;
   remainingReduction -= interestReduction;
-
+  console.log('interestReduction', interestReduction)
   // 4. Reduce Principal
   const principalReduction = Math.min(newValues.principal, remainingReduction);
   newValues.principal -= principalReduction;
   remainingReduction -= principalReduction;
-
+  console.log('principalReduction', principalReduction)
   // 5. Reduce Legal Charges
   const legalChargesReduction = Math.min(newValues.legalCharges, remainingReduction);
   newValues.legalCharges -= legalChargesReduction;
   remainingReduction -= legalChargesReduction;
-
+  console.log('legalChargesReduction', legalChargesReduction)
   return { newValues, remainingReduction };
 }
 

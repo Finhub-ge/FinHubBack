@@ -1014,7 +1014,7 @@ export class AdminService {
       // if (!currentRemaining) {
       //   await createInitialLoanRemaining(tx, committee, data.agreementMinAmount);
       // } else {
-      await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
+      // await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
       // }
 
       // Handle hopeless type
@@ -1088,6 +1088,22 @@ export class AdminService {
 
       // Handle close type
       if (finalType === Committee_type.close) {
+        await tx.loanRemaining.update({
+          where: { id: currentRemaining.id },
+          data: { deletedAt: new Date() }
+        });
+        await tx.loanRemaining.create({
+          data: {
+            loanId: committee.loanId,
+            principal: 0,
+            interest: 0,
+            penalty: 0,
+            otherFee: 0,
+            legalCharges: 0,
+            currentDebt: 0,
+            agreementMin: 0,
+          }
+        });
         // Update loan statusId to 12
         await tx.loan.update({
           where: { id: committee.loanId },
@@ -1102,6 +1118,8 @@ export class AdminService {
             notes: 'Committee closed the case',
           },
         });
+      } else {
+        await updateLoanRemaining(tx, currentRemaining, data.agreementMinAmount);
       }
 
       return { message: 'Committee response submitted successfully' };
