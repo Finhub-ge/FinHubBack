@@ -478,4 +478,14 @@ export class LoanController {
   ) {
     return this.loanService.requestLawyer(publicId, user.id);
   }
+
+  //temporary endpoint to get additional info for the user
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @AllRoles()
+  // @Get('temporary/additional-info')
+  // async getAdditionalInfo(
+  //   @GetUser() user: User
+  // ) {
+  //   return this.loanService.getAdditionalInfo(user.id);
+  // }
 }

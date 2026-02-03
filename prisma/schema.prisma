@@ -2203,6 +2203,8 @@ model TbcPayTransaction {
   resultMessage String?      @db.VarChar(255)
   ipAddress     String?      @db.VarChar(45)
   transactionId Int?
+  requestData   String?      @db.Text
+  responseData  String?      @db.Text
   createdAt     DateTime     @default(now()) @db.DateTime(0)
   updatedAt     DateTime     @default(now()) @db.DateTime(0)
   deletedAt     DateTime?    @db.DateTime(0)
