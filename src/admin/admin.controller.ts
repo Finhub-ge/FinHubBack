@@ -441,7 +441,7 @@ export class AdminController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR)
   @Post('plan/import')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
