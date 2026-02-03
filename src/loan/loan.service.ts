@@ -1631,6 +1631,8 @@ export class LoanService {
       select: {
         id: true,
         LoanVisit: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
           where: { deletedAt: null },
           select: {
             status: true,
