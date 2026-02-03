@@ -413,7 +413,7 @@ export const prepareLoanExportData = (loan: any) => {
     collateralStatus: loan?.LoanCollateralStatus[0]?.CollateralStatus?.title ?? '',
     clientStatus: loan.Debtor.DebtorStatus?.name ?? '',
     collectionStatus: loan.LoanStatus?.name ?? '',
-    statusDate: loan.LoanStatus?.createdAt ?? '',
+    statusDate: loan.LoanStatusHistory[0]?.createdAt ?? '',
     visitStatus: loan?.LoanVisit[0]?.status ?? '',
     legalStage: loan?.LoanLegalStage[0]?.LegalStage?.title ?? '',
     litigationStage: loan?.LoanLitigationStage[0]?.LitigationStage?.title ?? '',
