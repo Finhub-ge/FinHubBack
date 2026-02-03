@@ -2796,4 +2796,106 @@ export class LoanService {
       }
     }
   }
+
+  async getAdditionalInfo(userId: number) {
+    // Step 1: Fetch guarantors
+    const guarantors = await this.prisma.old_db_additional_data.findMany({
+      where: {
+        title: { contains: 'guaran' },
+      },
+      select: {
+        case_id: true,
+        value: true,
+      },
+    });
+
+    const missingCaseIds: number[] = [];
+
+    // Step 2: Track missing case_number / LoanNumber
+    for (const g of guarantors) {
+      try {
+        const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+
+        if (!value?.case_number && !value?.LoanNumber) {
+          missingCaseIds.push(g.case_id);
+        }
+      } catch {
+        missingCaseIds.push(g.case_id);
+      }
+    }
+
+    console.log('Missing case_number / LoanNumber:', missingCaseIds);
+
+    // Step 3: Collect caseIds for querying loans
+    const caseIds = guarantors
+      .map(g => {
+        try {
+          const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+          const id = value.case_number ?? value.LoanNumber ?? null;
+          return id !== null ? String(id) : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter((v): v is string => v != null);
+
+    console.log('Total case numbers:', caseIds.length);
+
+    // Step 4: Fetch loans that match these caseIds
+    const loans = await this.prisma.loan.findMany({
+      where: {
+        caseId: { in: caseIds },
+        deletedAt: null,
+      },
+      select: {
+        caseId: true,
+        Debtor: { select: { id: true } },
+      },
+    });
+
+    // Step 5: Build array for insertion into DebtorGuarantors
+    const debtorGuarantorsData = [];
+    // Find the first valid guarantor
+    // let savedCount = 0;
+    for (const g of guarantors) {
+      try {
+        const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+        const caseId = value.case_number ?? value.LoanNumber ?? null;
+
+        if (!caseId) continue; // skip if no caseId
+
+        const loan = loans.find(l => l.caseId === String(caseId));
+        if (!loan) continue; // skip if no matching loan
+
+        // Push data to insert
+        debtorGuarantorsData.push({
+          // id: g.case_id,
+          // caseId: caseId,
+          debtorId: loan.Debtor.id,
+          firstName: value.name ?? '',
+          lastName: value.lastName ?? '.',
+          phone: value.phone ?? value.Phone ?? null,
+          mobile: value.mobile ?? value.Mobile ?? null,
+          address: value.address ?? value.ActAddres ?? null,
+          idNumber: value.ID_Number ?? value.idnumber ?? null,
+        });
+        // savedCount = 1;
+        // break;
+      } catch {
+        continue;
+      }
+    }
+
+    console.log('Prepared DebtorGuarantors:', debtorGuarantorsData.length);
+
+    // Step 6: Save into DebtorGuarantors
+    if (debtorGuarantorsData.length > 0) {
+      await this.prisma.debtorGuarantors.createMany({
+        data: debtorGuarantorsData,
+        skipDuplicates: true, // avoid duplicate inserts
+      });
+    }
+
+    return debtorGuarantorsData;
+  }
 }
