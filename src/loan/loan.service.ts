@@ -1630,6 +1630,7 @@ export class LoanService {
       where: { publicId: String(publicId), deletedAt: null },
       select: {
         id: true,
+        statusId: true,
         LoanVisit: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -1702,12 +1703,13 @@ export class LoanService {
         roleId: assignLoanDto.roleId,
         assignedBy: user.id,
         comment: assignLoanDto.comment,
+        loanStatusId: loan.statusId,
         tx
       });
     });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
+  private async assign({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
     const dbClient = tx || this.prisma;
     // Find current active assignment for this role
     const currentAssignment = await dbClient.loanAssignment.findFirst({
@@ -1725,10 +1727,10 @@ export class LoanService {
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, tx });
+    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, loanStatusId, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy, comment, tx = null }) {
+  private async assignNew({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
     const dbClient = tx || this.prisma;
     await dbClient.loanAssignment.create({
       data: { loanId, userId, roleId, isActive: true },
@@ -1774,6 +1776,30 @@ export class LoanService {
             status: 'ASSIGNED',
             assignedAt: new Date(),
             assignedBy: assignedBy
+          }
+        });
+      }
+    }
+
+    if (role && role.name === Role.COLLECTOR) {
+      // update loan status to New except if status is Agreement or Agreement Canceled
+      const loanStatus = await dbClient.loanStatus.findUnique({
+        where: { id: loanStatusId },
+        select: { id: true, name: true }
+      });
+
+      if (loanStatus && loanStatus.id !== LoanStatusId.AGREEMENT && loanStatus.id !== LoanStatusId.AGREEMENT_CANCELED) {
+        await dbClient.loan.update({
+          where: { id: loanId },
+          data: { statusId: LoanStatusId.NEW, lastActivite: new Date() }
+        });
+        await dbClient.loanStatusHistory.create({
+          data: {
+            loanId: loanId,
+            oldStatusId: loanStatusId,
+            newStatusId: LoanStatusId.NEW,
+            changedBy: userId,
+            notes: 'Status changed to New because of collector assignment'
           }
         });
       }
@@ -2801,7 +2827,7 @@ export class LoanService {
     // Step 1: Fetch guarantors
     const guarantors = await this.prisma.old_db_additional_data.findMany({
       where: {
-        title: { contains: 'guaran' },
+        // title: { contains: 'guaran' },
       },
       select: {
         case_id: true,
@@ -2809,93 +2835,94 @@ export class LoanService {
       },
     });
 
-    const missingCaseIds: number[] = [];
+    // const missingCaseIds: number[] = [];
 
     // Step 2: Track missing case_number / LoanNumber
-    for (const g of guarantors) {
-      try {
-        const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+    // for (const g of guarantors) {
+    //   try {
+    //     const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
 
-        if (!value?.case_number && !value?.LoanNumber) {
-          missingCaseIds.push(g.case_id);
-        }
-      } catch {
-        missingCaseIds.push(g.case_id);
-      }
-    }
+    //     if (!value?.case_number && !value?.LoanNumber) {
+    //       missingCaseIds.push(g.case_id);
+    //     }
+    //   } catch {
+    //     missingCaseIds.push(g.case_id);
+    //   }
+    // }
 
-    console.log('Missing case_number / LoanNumber:', missingCaseIds);
+    // console.log('Missing case_number / LoanNumber:', missingCaseIds);
 
     // Step 3: Collect caseIds for querying loans
     const caseIds = guarantors
       .map(g => {
         try {
           const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
-          const id = value.case_number ?? value.LoanNumber ?? null;
-          return id !== null ? String(id) : null;
+          return value;
+          // const id = value.case_number ?? value.LoanNumber ?? null;
+          // return id !== null ? String(id) : null;
         } catch {
           return null;
         }
       })
-      .filter((v): v is string => v != null);
-
-    console.log('Total case numbers:', caseIds.length);
+    // .filter((v): v is string => v != null);
+    return caseIds;
+    // console.log('Total case numbers:', caseIds.length);
 
     // Step 4: Fetch loans that match these caseIds
-    const loans = await this.prisma.loan.findMany({
-      where: {
-        caseId: { in: caseIds },
-        deletedAt: null,
-      },
-      select: {
-        caseId: true,
-        Debtor: { select: { id: true } },
-      },
-    });
+    // const loans = await this.prisma.loan.findMany({
+    //   where: {
+    //     caseId: { in: caseIds },
+    //     deletedAt: null,
+    //   },
+    //   select: {
+    //     caseId: true,
+    //     Debtor: { select: { id: true } },
+    //   },
+    // });
 
     // Step 5: Build array for insertion into DebtorGuarantors
-    const debtorGuarantorsData = [];
+    // const debtorGuarantorsData = [];
     // Find the first valid guarantor
     // let savedCount = 0;
-    for (const g of guarantors) {
-      try {
-        const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
-        const caseId = value.case_number ?? value.LoanNumber ?? null;
+    // for (const g of guarantors) {
+    //   try {
+    //     const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+    //     const caseId = value.case_number ?? value.LoanNumber ?? null;
 
-        if (!caseId) continue; // skip if no caseId
+    //     if (!caseId) continue; // skip if no caseId
 
-        const loan = loans.find(l => l.caseId === String(caseId));
-        if (!loan) continue; // skip if no matching loan
+    //     const loan = loans.find(l => l.caseId === String(caseId));
+    //     if (!loan) continue; // skip if no matching loan
 
-        // Push data to insert
-        debtorGuarantorsData.push({
-          // id: g.case_id,
-          // caseId: caseId,
-          debtorId: loan.Debtor.id,
-          firstName: value.name ?? '',
-          lastName: value.lastName ?? '.',
-          phone: value.phone ?? value.Phone ?? null,
-          mobile: value.mobile ?? value.Mobile ?? null,
-          address: value.address ?? value.ActAddres ?? null,
-          idNumber: value.ID_Number ?? value.idnumber ?? null,
-        });
-        // savedCount = 1;
-        // break;
-      } catch {
-        continue;
-      }
-    }
+    //     // Push data to insert
+    //     debtorGuarantorsData.push({
+    //       // id: g.case_id,
+    //       // caseId: caseId,
+    //       debtorId: loan.Debtor.id,
+    //       firstName: value.name ?? '',
+    //       lastName: value.lastName ?? '.',
+    //       phone: value.phone ?? value.Phone ?? null,
+    //       mobile: value.mobile ?? value.Mobile ?? null,
+    //       address: value.address ?? value.ActAddres ?? null,
+    //       idNumber: value.ID_Number ?? value.idnumber ?? null,
+    //     });
+    //     // savedCount = 1;
+    //     // break;
+    //   } catch {
+    //     continue;
+    //   }
+    // }
 
-    console.log('Prepared DebtorGuarantors:', debtorGuarantorsData.length);
+    // console.log('Prepared DebtorGuarantors:', debtorGuarantorsData.length);
 
     // Step 6: Save into DebtorGuarantors
-    if (debtorGuarantorsData.length > 0) {
-      await this.prisma.debtorGuarantors.createMany({
-        data: debtorGuarantorsData,
-        skipDuplicates: true, // avoid duplicate inserts
-      });
-    }
+    // if (debtorGuarantorsData.length > 0) {
+    //   await this.prisma.debtorGuarantors.createMany({
+    //     data: debtorGuarantorsData,
+    //     skipDuplicates: true, // avoid duplicate inserts
+    //   });
+    // }
 
-    return debtorGuarantorsData;
+    // return debtorGuarantorsData;
   }
 }
