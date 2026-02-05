@@ -2534,6 +2534,32 @@ export class LoanService {
     };
   }
 
+  async getLoanReminder(publicId: ParseUUIDPipe, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    return await this.prisma.reminders.findMany({
+      where: { loanId: loan.id, deletedAt: null, status: true },
+      select: {
+        id: true,
+        type: true,
+        comment: true,
+        status: true,
+        deadline: true,
+        createdAt: true,
+        User_Reminders_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
+        Loan: { select: { id: true, caseId: true, Debtor: { select: { firstName: true, lastName: true } } } },
+      },
+      orderBy: { deadline: 'desc' }
+    });
+  }
+
+
   async getAvailableLitigationStatuses(publicId: ParseUUIDPipe) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },
@@ -2787,7 +2813,7 @@ export class LoanService {
     return await generateExcel(data, columns, 'Previous Payments');
   }
 
-  private async *createLoanDataGenerator(
+  private async * createLoanDataGenerator(
     filterDto: GetLoansFilterDto,
     user: any,
     chunkSize: number
