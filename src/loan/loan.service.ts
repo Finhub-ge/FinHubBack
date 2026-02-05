@@ -387,11 +387,16 @@ export class LoanService {
       // 1. User has explicit assignment filter (checked by shouldSkipUserScope)
       // 2. OR there's already a LoanAssignment filter in WHERE (from applyUserAssignmentFilter)
       // const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
-      const skipUserScope = hasLoanAssignmentInWhere(where);
+      // const skipUserScope = hasLoanAssignmentInWhere(where);
+      // Apply intersection to where clause
+      applyIntersectedIds(where, intersectedIds);
     }
 
-    // Determine if we should skip user scope
-    const skipUserScope = shouldSkipUserScope(user, filters);
+    // Skip user scope if:
+    // 1. User has explicit assignment filter (checked by shouldSkipUserScope)
+    // 2. OR there's already a LoanAssignment filter in WHERE (from applyUserAssignmentFilter)
+    // This matches the logic in getAll method to ensure consistency
+    const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
 
     return { where, skipUserScope };
   }
