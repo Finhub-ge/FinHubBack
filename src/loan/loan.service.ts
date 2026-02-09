@@ -2494,10 +2494,10 @@ export class LoanService {
 
     // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
 
-    const CHUNK_SIZE = 5000;
+    const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
 
-    // Create async generator for chunked data loading
-    const dataGenerator = this.createLoanDataGenerator(filterDto, user, CHUNK_SIZE);
+    // Create async generator for chunked data loading using cursor-based pagination
+    const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
 
     // Use streaming Excel generation
     return await generateExcelStream(
@@ -2852,6 +2852,166 @@ export class LoanService {
         throw new Error(`Export failed at page ${currentPage}: ${error.message}`);
       }
     }
+  }
+
+  /**
+ * Returns a minimal include configuration optimized for exports
+ * Only loads relations that are actually used in prepareLoanExportData
+ */
+  private getExportIncludeConfig() {
+    return {
+      Portfolio: {
+        select: {
+          id: true,
+          name: true,
+          portfolioSeller: { select: { id: true, name: true } },
+        },
+      },
+      PortfolioCaseGroup: {
+        select: { id: true, groupName: true },
+      },
+      Debtor: {
+        select: {
+          firstName: true,
+          lastName: true,
+          idNumber: true,
+          DebtorStatus: { select: { id: true, name: true } },
+        },
+      },
+      LoanStatus: {
+        select: { id: true, name: true },
+      },
+      LoanAssignment: {
+        where: { isActive: true },
+        select: {
+          createdAt: true,
+          User: { select: { id: true, firstName: true, lastName: true } },
+          Role: { select: { name: true } },
+        },
+      },
+      Transaction: {
+        where: { deleted: 0 },
+        select: {
+          paymentDate: true,
+        },
+        orderBy: { paymentDate: 'desc' },
+        take: 1,
+      },
+      // Note: LoanStatusHistory, LoanCollateralStatus, LoanLegalStage,
+      // LoanLitigationStage, LoanMarks, LoanAddress, LoanVisit
+      // are loaded separately via batchLoadLatestRecords() for better performance
+    };
+  }
+
+  /**
+ * Optimized data generator using cursor-based pagination for large exports
+ * This avoids the performance issues with OFFSET pagination on large datasets
+ */
+  private async *createLoanDataGeneratorOptimized(
+    filterDto: GetLoansFilterDto,
+    user: any,
+    chunkSize: number
+  ): AsyncGenerator<any[], void, unknown> {
+    let cursor: number | undefined = undefined;
+    let hasMore = true;
+    let processedCount = 0;
+
+    // Get team member IDs for filtering
+    const teamMemberIds = await this.getTeamMemberIds(user);
+
+    // Build filter configuration (same as getAll but without pagination)
+    const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+    const where = buildInitialWhereClause();
+
+    if (showOnlyClosedLoans) {
+      applyClosedLoansFilter(where, filters);
+      applyClosedDateRangeFilter(where, filters);
+    } else {
+      applyOpenLoansFilter(where, filters, showClosedLoans);
+    }
+
+    applyCommonFilters(where, filters);
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+
+    // Handle complex filters with intersection
+    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+    if (shouldProcessIntersection(relatedFilterIds)) {
+      if (hasEmptyFilterResults(relatedFilterIds)) {
+        return; // No data to export
+      }
+
+      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+      if (intersectedIds.length === 0) {
+        return; // No data to export
+      }
+
+      applyIntersectedIds(where, intersectedIds);
+    }
+
+    const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
+    // Use optimized include config for exports (lighter than full config)
+    const includeConfig = this.getExportIncludeConfig();
+
+    while (hasMore) {
+      try {
+        // Build cursor-based query
+        const query: any = {
+          where,
+          take: chunkSize,
+          orderBy: { id: 'asc' }, // Important: consistent ordering for cursor
+          include: includeConfig,
+          _skipUserScope: skipUserScope,
+        };
+
+        if (cursor) {
+          query.cursor = { id: cursor };
+          query.skip = 1; // Skip the cursor itself
+        }
+
+        // Fetch chunk using cursor
+        const loans = await this.permissionsHelper.loan.findMany(query);
+
+        if (loans.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        // Batch load latest records (same as getAll)
+        const loanIds = loans.map(loan => loan.id);
+        const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+        attachLatestRecordsToLoans(loans, latestRecords);
+
+        // Enrich loans with actDays
+        const enrichedLoans = loans.map(loan => ({
+          ...loan,
+          actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+        }));
+
+        // Transform loans to export format
+        const loanExportData = enrichedLoans.map(loan => prepareLoanExportData(loan));
+
+        yield loanExportData;
+
+        // Update cursor to last loan's ID
+        cursor = loans[loans.length - 1].id;
+        processedCount += loans.length;
+
+        // Check if we have more data
+        hasMore = loans.length === chunkSize;
+
+        // Log progress for monitoring
+        if (processedCount % 5000 === 0) {
+          console.log(`Export progress: ${processedCount} records processed`);
+        }
+
+      } catch (error) {
+        console.error(`Error fetching chunk at cursor ${cursor}:`, error);
+        throw new Error(`Export failed at record ${processedCount}: ${error.message}`);
+      }
+    }
+
+    console.log(`Export completed: ${processedCount} total records`);
   }
 
   async getAdditionalInfo(userId: number) {
