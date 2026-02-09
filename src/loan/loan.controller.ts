@@ -56,30 +56,108 @@ export class LoanController {
   //   });
   // }
 
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @AllRoles()
+  // @Get('exportExcel')
+  // async exportLoans(
+  //   @GetUser() user: User,
+  //   @Query() filterDto: GetLoansFilterDto,
+  //   @Res({ passthrough: true }) res: Response
+  // ) {
+  //   // Set longer timeout for large exports
+  //   res.setTimeout(600000); // 10 minutes
+
+  //   // Disable response buffering for streaming large files
+  //   res.set({
+  //     'Cache-Control': 'no-cache',
+  //     'Connection': 'keep-alive',
+  //     'X-Accel-Buffering': 'no', // Disable nginx buffering if behind nginx
+  //   });
+
+  //   const excelBuffer = await this.loanService.exportLoans(filterDto, user);
+
+  //   return new StreamableFile(Buffer.from(excelBuffer), {
+  //     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  //     disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
+  //   });
+  // }
+
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
   async exportLoans(
     @GetUser() user: User,
     @Query() filterDto: GetLoansFilterDto,
-    @Res({ passthrough: true }) res: Response
-  ) {
+    @Res() res: Response  // Remove passthrough for manual control
+  ): Promise<void> {
+    console.log('Export request received');
+
     // Set longer timeout for large exports
     res.setTimeout(600000); // 10 minutes
 
-    // Disable response buffering for streaming large files
-    res.set({
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable nginx buffering if behind nginx
-    });
+    let filePath: string | null = null;
 
-    const excelBuffer = await this.loanService.exportLoans(filterDto, user);
+    try {
+      // Generate Excel file to temporary directory
+      console.log('Starting Excel file generation...');
+      filePath = await this.loanService.exportLoans(filterDto, user);
+      console.log(`Excel file generated at: ${filePath}`);
 
-    return new StreamableFile(Buffer.from(excelBuffer), {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
-    });
+      // Get file stats
+      const fs = require('fs');
+      const stats = fs.statSync(filePath);
+      console.log(`File size: ${stats.size} bytes`);
+
+      // Set filename
+      const filename = `Cases_list_${Date.now()}.xlsx`;
+      console.log(`Sending file to client as: ${filename}`);
+
+      // Use Express's res.download() - most reliable method
+      res.download(filePath, filename, (err) => {
+        if (err) {
+          console.error('Error during download:', err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to download file' });
+          }
+        } else {
+          console.log('File sent successfully to client');
+        }
+
+        // Cleanup after download completes (success or failure)
+        this.cleanupTempFile(filePath);
+      });
+
+    } catch (error) {
+      console.error('Export failed with error:', error);
+
+      // Cleanup on error
+      if (filePath) {
+        this.cleanupTempFile(filePath);
+      }
+
+      // Send error response if headers not sent
+      if (!res.headersSent) {
+        res.status(500).json({
+          statusCode: 500,
+          message: 'Export failed',
+          error: error.message
+        });
+      }
+    }
+  }
+
+  private cleanupTempFile(filePath: string | null) {
+    if (!filePath) return;
+
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`Cleaned up temporary file: ${filePath}`);
+      }
+    } catch (error) {
+      console.error(`Failed to cleanup temporary file ${filePath}:`, error);
+    }
   }
 
   @UseGuards(JwtGuard, RolesGuard)

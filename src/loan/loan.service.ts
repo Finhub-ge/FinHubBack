@@ -10,7 +10,7 @@ import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew, isRegionalManager, getRegionalTeamIds } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew, isRegionalManager, getRegionalTeamIds, getLoanExportHeaders } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
@@ -2487,25 +2487,235 @@ export class LoanService {
     };
   }
 
-  async exportLoans(filterDto: GetLoansFilterDto, user: any) {
-    // const loans = await this.getAll(filterDto, user);
+  // async exportLoans(filterDto: GetLoansFilterDto, user: any) {
+  //   // const loans = await this.getAll(filterDto, user);
 
-    // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+  //   // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
 
-    // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+  //   // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
 
-    const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
+  //   const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
 
-    // Create async generator for chunked data loading using cursor-based pagination
-    const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
+  //   // Create async generator for chunked data loading using cursor-based pagination
+  //   const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
 
-    // Use streaming Excel generation
-    return await generateExcelStream(
-      dataGenerator,
-      filterDto.columns,
-      'Loans Report'
-    );
+  //   // Use streaming Excel generation
+  //   return await generateExcelStream(
+  //     dataGenerator,
+  //     filterDto.columns,
+  //     'Loans Report'
+  //   );
 
+  // }
+
+  async exportLoans(filterDto: GetLoansFilterDto, user: any): Promise<string> {
+    const CHUNK_SIZE = 1000; // Memory-efficient chunk size
+
+    console.log('ExportLoans: Starting export process...');
+
+    // Ensure export directory exists
+    await this.ensureExportDirectory();
+    console.log('ExportLoans: Export directory ready');
+
+    // Generate unique filename
+    const fileName = `loans_export_${Date.now()}_${Math.random().toString(36).substring(7)}.xlsx`;
+    const filePath = this.getExportFilePath(fileName);
+    console.log(`ExportLoans: Will create file at: ${filePath}`);
+
+    try {
+      // Create async generator for chunked data loading using cursor-based pagination
+      console.log('ExportLoans: Creating data generator...');
+      const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
+
+      // Use streaming Excel generation to file
+      console.log('ExportLoans: Starting Excel file generation...');
+      await this.generateExcelToFile(
+        dataGenerator,
+        filterDto.columns,
+        filePath,
+        'Loans Report'
+      );
+
+      console.log(`ExportLoans: Excel file generated successfully at ${filePath}`);
+
+      // Verify file exists and has size
+      const fs = require('fs');
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        console.log(`ExportLoans: File verified - size: ${stats.size} bytes`);
+      } else {
+        throw new Error('File was not created');
+      }
+
+      return filePath;
+
+    } catch (error) {
+      console.error('ExportLoans: Error generating Excel file:', error);
+      // Cleanup partial file on error
+      await this.deleteFileIfExists(filePath);
+      throw new Error(`Export failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ensures the export directory exists at project root
+   */
+  private async ensureExportDirectory(): Promise<void> {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const exportDir = path.join(process.cwd(), 'exports');
+
+    try {
+      await fs.access(exportDir);
+    } catch {
+      await fs.mkdir(exportDir, { recursive: true });
+      console.log(`Created export directory: ${exportDir}`);
+    }
+  }
+
+  /**
+   * Returns the full path for an export file
+   */
+  private getExportFilePath(fileName: string): string {
+    const path = require('path');
+    return path.join(process.cwd(), 'exports', fileName);
+  }
+
+  /**
+   * Deletes a file if it exists
+   */
+  private async deleteFileIfExists(filePath: string): Promise<void> {
+    try {
+      const fs = require('fs').promises;
+      await fs.unlink(filePath);
+      console.log(`Deleted file: ${filePath}`);
+    } catch (error) {
+      // File might not exist, ignore error
+      if (error.code !== 'ENOENT') {
+        console.error(`Error deleting file ${filePath}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Generates Excel file - uses standard workbook for reliability
+   * Data is still fetched in chunks for memory efficiency
+   */
+  private async generateExcelToFile(
+    dataGenerator: AsyncGenerator<any[], void, unknown>,
+    columns: string[],
+    filePath: string,
+    sheetName = 'Sheet1'
+  ): Promise<void> {
+    const ExcelJS = require('exceljs');
+    // const { getLoanExportHeaders } = require('src/helpers/loan.helper');
+
+    console.log('generateExcelToFile: Creating workbook...');
+
+    // Use regular workbook (more reliable than streaming writer)
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
+
+    // Set column widths
+    worksheet.columns = columns.map(col => ({
+      key: col,
+      width: 15,
+    }));
+
+    console.log('generateExcelToFile: Adding header row...');
+
+    // Add header row
+    const loanHeaders = getLoanExportHeaders();
+    const displayHeaders = this.getDisplayHeaders(columns, loanHeaders);
+    const headerRow = worksheet.addRow(displayHeaders);
+
+    // Style header row
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: '845adf' },
+    };
+
+    console.log('generateExcelToFile: Processing data chunks...');
+
+    // Process data in chunks and add to worksheet
+    let totalRows = 0;
+    for await (const dataChunk of dataGenerator) {
+      const formattedData = this.formatDataForExcel(dataChunk, columns);
+
+      for (const rowData of formattedData) {
+        worksheet.addRow(rowData);
+        totalRows++;
+      }
+
+      // Log progress every 5000 rows
+      if (totalRows % 10000 === 0) {
+        console.log(`Excel generation progress: ${totalRows} rows added to worksheet`);
+      }
+    }
+
+    console.log(`generateExcelToFile: All ${totalRows} rows added, writing to file...`);
+
+    // Write to file (simple and reliable)
+    await workbook.xlsx.writeFile(filePath);
+
+    console.log(`generateExcelToFile: File written successfully - ${totalRows} total rows`);
+  }
+
+  /**
+   * Returns display headers from header map
+   */
+  private getDisplayHeaders(
+    columns: string[],
+    headerMap: Record<string, string>
+  ): string[] {
+    return columns.map((col) => headerMap[col] || col);
+  }
+
+  /**
+   * Formats data for Excel export
+   */
+  private formatDataForExcel(data: any[], columns: string[]): any[][] {
+    const { Prisma } = require('@prisma/client');
+
+    return data.map((row) => {
+      return columns.map((col) => {
+        const value = row[col];
+
+        // Handle null/undefined
+        if (value === null || value === undefined) {
+          return '';
+        }
+
+        // Handle Prisma Decimal
+        if (value instanceof Prisma.Decimal) {
+          return value.toNumber();
+        }
+
+        // Keep Date objects as is
+        if (value instanceof Date) {
+          return value;
+        }
+
+        // Keep numbers as numbers
+        if (typeof value === 'number') {
+          return value;
+        }
+
+        // Try to parse as number if it's a string number
+        if (typeof value === 'string' && !isNaN(Number(value)) && value.trim() !== '') {
+          return Number(value);
+        }
+
+        // Boolean
+        if (typeof value === 'boolean') {
+          return value ? 'Yes' : 'No';
+        }
+
+        return value;
+      });
+    });
   }
 
   async addLoanReminder(publicId: ParseUUIDPipe, data: AddLoanReminderDto, userId: number) {
@@ -3001,7 +3211,7 @@ export class LoanService {
         hasMore = loans.length === chunkSize;
 
         // Log progress for monitoring
-        if (processedCount % 5000 === 0) {
+        if (processedCount % 10000 === 0) {
           console.log(`Export progress: ${processedCount} records processed`);
         }
 
