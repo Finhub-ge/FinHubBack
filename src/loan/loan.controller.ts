@@ -67,6 +67,13 @@ export class LoanController {
     // Set longer timeout for large exports
     res.setTimeout(600000); // 10 minutes
 
+    // Disable response buffering for streaming large files
+    res.set({
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering if behind nginx
+    });
+
     const excelBuffer = await this.loanService.exportLoans(filterDto, user);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
