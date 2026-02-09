@@ -70,7 +70,7 @@ export class DashboardService {
         select: { targetAmount: true, month: true, year: true, collectorId: true },
       });
 
-      const collectionWhere: any = { ...where, roleId: 7 };
+      const collectionWhere: any = { ...where, roleId: 4 };
       if (collectorId?.length) collectionWhere.userId = { in: collectorId };
 
       const collections = await this.prisma.transactionUserAssignments.findMany({
