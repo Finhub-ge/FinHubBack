@@ -471,6 +471,7 @@ model User {
   LawyerRequest_LawyerRequest_requestedByToUser                   LawyerRequest[]              @relation("LawyerRequest_requestedByToUser")
   LoanAddress                                                     LoanAddress[]
   LoanAssignment                                                  LoanAssignment[]
+  LoanAssignment_LoanAssignment_assignedByToUser                  LoanAssignment[]             @relation("LoanAssignment_assignedByToUser")
   LoanAssignment_LoanAssignment_oldUserIdToUser                   LoanAssignment[]             @relation("LoanAssignment_oldUserIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser        LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser     LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_createdByToUser")
@@ -565,6 +566,7 @@ model LoanAssignment {
   roleId                                                Int
   assignedAt                                            DateTime            @default(now()) @db.DateTime(0)
   unassignedAt                                          DateTime?           @db.DateTime(0)
+  assignedBy                                            Int?
   isActive                                              Boolean             @default(true)
   groupId                                               Int?
   portfolioId                                           Int?
@@ -582,6 +584,7 @@ model LoanAssignment {
   Loan                                                  Loan                @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_1")
   User                                                  User                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_2")
   Role                                                  Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_3")
+  User_LoanAssignment_assignedByToUser                  User?               @relation("LoanAssignment_assignedByToUser", fields: [assignedBy], references: [id], map: "fk_la_assignedBy")
   CollateralStatus                                      CollateralStatus?   @relation(fields: [collateralStatusId], references: [id], map: "fk_la_collateral_status")
   DebtorStatus                                          DebtorStatus?       @relation(fields: [debtorStatusId], references: [id], map: "fk_la_debtor_status")
   PortfolioCaseGroup                                    PortfolioCaseGroup? @relation(fields: [groupId], references: [id], map: "fk_la_group")
@@ -612,6 +615,7 @@ model LoanAssignment {
   @@index([oldLoanStatusId], map: "fk_la_old_loan_status")
   @@index([oldUserId], map: "fk_la_old_user")
   @@index([portfolioId], map: "fk_la_portfolio")
+  @@index([assignedBy], map: "fk_la_assignedBy")
 }
 
 model LoanAssignmentHistory {

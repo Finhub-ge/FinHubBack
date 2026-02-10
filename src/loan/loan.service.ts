@@ -384,12 +384,12 @@ export class LoanService {
 
     // Marks filter
     if (marks?.length) {
-      where.marksId = { in: marks };
+      where.markId = { in: marks };
     }
 
     // Assigned by filter (user who created the assignment)
     if (assignedBy?.length) {
-      where.assignedById = { in: assignedBy };
+      where.assignedBy = { in: assignedBy };
     }
 
     // Assigned date range filter
@@ -413,8 +413,8 @@ export class LoanService {
           Loan: {
             select: {
               caseId: true,
-              currency: true,
               Debtor: true,
+              currency: true,
             },
           },
           User: {
@@ -433,6 +433,9 @@ export class LoanService {
           Marks: true,
           LoanStatus_LoanAssignment_oldLoanStatusIdToLoanStatus: true,
           User_LoanAssignment_oldUserIdToUser: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          User_LoanAssignment_assignedByToUser: {
             select: { id: true, firstName: true, lastName: true },
           },
           Portfolio: true,
