@@ -413,6 +413,7 @@ export class LoanService {
           Loan: {
             select: {
               caseId: true,
+              currency: true,
               Debtor: true,
             },
           },
