@@ -48,7 +48,14 @@ export class LoanController {
   @AllRoles()
   @Get('assignedCases')
   getAssignedCases(@GetUser() user: User, @Query() filterDto: GetAssignedCasesFilterWithPaginationDto) {
-    return this.loanService.getAssignedCases(filterDto, user);
+    return this.loanService.newgetAssignedCases(filterDto, user);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('newAssignedCases')
+  newgetAssignedCases(@GetUser() user: User, @Query() filterDto: GetAssignedCasesFilterWithPaginationDto) {
+    return this.loanService.newgetAssignedCases(filterDto, user);
   }
 
   // @UseGuards(JwtGuard, RolesGuard)

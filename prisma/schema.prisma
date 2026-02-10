@@ -140,6 +140,7 @@ model DebtorStatus {
   Debtor             Debtor[]
   newStatusHistories DebtorStatusHistory[] @relation("NewStatusRelation")
   oldStatusHistories DebtorStatusHistory[] @relation("OldStatusRelation")
+  LoanAssignment     LoanAssignment[]
 
   @@index([deletedAt])
   @@index([isActive])
@@ -248,19 +249,22 @@ model LoanAttribute {
 
   @@index([attributeId], map: "fk_LoanAttribute_1_idx")
   @@index([loanId], map: "fk_LoanAttribute_2_idx")
+  @@index([loanId, attributeId], map: "index4")
 }
 
 model LoanStatus {
-  id               Int                 @id @default(autoincrement())
-  name             String              @unique
-  description      String?
-  isActive         Boolean             @default(true)
-  createdAt        DateTime            @default(now()) @db.DateTime(0)
-  updatedAt        DateTime            @default(now()) @db.DateTime(0)
-  deletedAt        DateTime?           @db.DateTime(0)
-  Loan             Loan[]
-  newStatusHistory LoanStatusHistory[] @relation("NewLoanStatusRelation")
-  oldStatusHistory LoanStatusHistory[] @relation("OldLoanStatusRelation")
+  id                                                        Int                 @id @default(autoincrement())
+  name                                                      String              @unique
+  description                                               String?
+  isActive                                                  Boolean             @default(true)
+  createdAt                                                 DateTime            @default(now()) @db.DateTime(0)
+  updatedAt                                                 DateTime            @default(now()) @db.DateTime(0)
+  deletedAt                                                 DateTime?           @db.DateTime(0)
+  Loan                                                      Loan[]
+  LoanAssignment_LoanAssignment_loanStatusIdToLoanStatus    LoanAssignment[]    @relation("LoanAssignment_loanStatusIdToLoanStatus")
+  LoanAssignment_LoanAssignment_oldLoanStatusIdToLoanStatus LoanAssignment[]    @relation("LoanAssignment_oldLoanStatusIdToLoanStatus")
+  newStatusHistory                                          LoanStatusHistory[] @relation("NewLoanStatusRelation")
+  oldStatusHistory                                          LoanStatusHistory[] @relation("OldLoanStatusRelation")
 
   @@index([deletedAt])
   @@index([isActive])
@@ -340,6 +344,7 @@ model Portfolio {
   updatedAt       DateTime         @default(now()) @db.DateTime(0)
   deletedAt       DateTime?        @db.DateTime(0)
   Loan            Loan[]
+  LoanAssignment  LoanAssignment[]
   portfolioSeller portfolioSeller? @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
 
   @@index([deletedAt])
@@ -466,6 +471,7 @@ model User {
   LawyerRequest_LawyerRequest_requestedByToUser                   LawyerRequest[]              @relation("LawyerRequest_requestedByToUser")
   LoanAddress                                                     LoanAddress[]
   LoanAssignment                                                  LoanAssignment[]
+  LoanAssignment_LoanAssignment_oldUserIdToUser                   LoanAssignment[]             @relation("LoanAssignment_oldUserIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_userIdToUser        LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_userIdToUser")
   LoanAssignmentHistory_LoanAssignmentHistory_createdByToUser     LoanAssignmentHistory[]      @relation("LoanAssignmentHistory_createdByToUser")
   LoanCollateralStatus                                            LoanCollateralStatus[]
@@ -552,19 +558,41 @@ model SmsHistory {
 }
 
 model LoanAssignment {
-  id           Int       @id @default(autoincrement())
-  loanId       Int
-  userId       Int
-  roleId       Int
-  assignedAt   DateTime  @default(now()) @db.DateTime(0)
-  unassignedAt DateTime? @db.DateTime(0)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now()) @db.DateTime(0)
-  updatedAt    DateTime  @default(now()) @db.DateTime(0)
-  deletedAt    DateTime? @db.DateTime(0)
-  Loan         Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_1")
-  User         User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_2")
-  Role         Role      @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_3")
+  id                                                    Int                 @id @default(autoincrement())
+  loanId                                                Int
+  userId                                                Int
+  oldUserId                                             Int?
+  roleId                                                Int
+  assignedAt                                            DateTime            @default(now()) @db.DateTime(0)
+  unassignedAt                                          DateTime?           @db.DateTime(0)
+  isActive                                              Boolean             @default(true)
+  groupId                                               Int?
+  portfolioId                                           Int?
+  loanRemainingId                                       Int?
+  collateralStatusId                                    Int?
+  debtorStatusId                                        Int?
+  loanStatusId                                          Int?
+  oldLoanStatusId                                       Int?
+  legalStageId                                          Int?
+  litigationStageId                                     Int?
+  markId                                                Int?
+  createdAt                                             DateTime            @default(now()) @db.DateTime(0)
+  updatedAt                                             DateTime            @default(now()) @db.DateTime(0)
+  deletedAt                                             DateTime?           @db.DateTime(0)
+  Loan                                                  Loan                @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_1")
+  User                                                  User                @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_2")
+  Role                                                  Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanAssignment_3")
+  CollateralStatus                                      CollateralStatus?   @relation(fields: [collateralStatusId], references: [id], map: "fk_la_collateral_status")
+  DebtorStatus                                          DebtorStatus?       @relation(fields: [debtorStatusId], references: [id], map: "fk_la_debtor_status")
+  PortfolioCaseGroup                                    PortfolioCaseGroup? @relation(fields: [groupId], references: [id], map: "fk_la_group")
+  LegalStage                                            LegalStage?         @relation(fields: [legalStageId], references: [id], map: "fk_la_legal_stage")
+  LitigationStage                                       LitigationStage?    @relation(fields: [litigationStageId], references: [id], map: "fk_la_litigation_stage")
+  LoanRemaining                                         LoanRemaining?      @relation(fields: [loanRemainingId], references: [id], map: "fk_la_loan_remaining")
+  LoanStatus_LoanAssignment_loanStatusIdToLoanStatus    LoanStatus?         @relation("LoanAssignment_loanStatusIdToLoanStatus", fields: [loanStatusId], references: [id], map: "fk_la_loan_status")
+  Marks                                                 Marks?              @relation(fields: [markId], references: [id], map: "fk_la_mark")
+  LoanStatus_LoanAssignment_oldLoanStatusIdToLoanStatus LoanStatus?         @relation("LoanAssignment_oldLoanStatusIdToLoanStatus", fields: [oldLoanStatusId], references: [id], map: "fk_la_old_loan_status")
+  User_LoanAssignment_oldUserIdToUser                   User?               @relation("LoanAssignment_oldUserIdToUser", fields: [oldUserId], references: [id], map: "fk_la_old_user")
+  Portfolio                                             Portfolio?          @relation(fields: [portfolioId], references: [id], map: "fk_la_portfolio")
 
   @@index([loanId], map: "fk_LoanAssignment_1")
   @@index([userId], map: "fk_LoanAssignment_2")
@@ -573,6 +601,17 @@ model LoanAssignment {
   @@index([isActive], map: "idx_isActive")
   @@index([loanId, userId, isActive, deletedAt], map: "idx_loan_user_active")
   @@index([userId, isActive, roleId], map: "idx_user_active_role")
+  @@index([collateralStatusId], map: "fk_la_collateral_status")
+  @@index([debtorStatusId], map: "fk_la_debtor_status")
+  @@index([groupId], map: "fk_la_group")
+  @@index([legalStageId], map: "fk_la_legal_stage")
+  @@index([litigationStageId], map: "fk_la_litigation_stage")
+  @@index([loanRemainingId], map: "fk_la_loan_remaining")
+  @@index([loanStatusId], map: "fk_la_loan_status")
+  @@index([markId], map: "fk_la_mark")
+  @@index([oldLoanStatusId], map: "fk_la_old_loan_status")
+  @@index([oldUserId], map: "fk_la_old_user")
+  @@index([portfolioId], map: "fk_la_portfolio")
 }
 
 model LoanAssignmentHistory {
@@ -628,12 +667,13 @@ model Committee {
 }
 
 model Marks {
-  id        Int         @id @default(autoincrement())
-  title     String      @db.VarChar(500)
-  createdAt DateTime    @default(now()) @db.DateTime(0)
-  updatedAt DateTime    @default(now()) @db.DateTime(0)
-  deletedAt DateTime?   @db.DateTime(0)
-  LoanMarks LoanMarks[]
+  id             Int              @id @default(autoincrement())
+  title          String           @db.VarChar(500)
+  createdAt      DateTime         @default(now()) @db.DateTime(0)
+  updatedAt      DateTime         @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?        @db.DateTime(0)
+  LoanAssignment LoanAssignment[]
+  LoanMarks      LoanMarks[]
 
   @@index([deletedAt], map: "idx_deletedAt")
 }
@@ -663,9 +703,11 @@ model LegalStage {
   createdAt      DateTime         @default(now()) @db.DateTime(0)
   updatedAt      DateTime         @default(now()) @db.DateTime(0)
   deletedAt      DateTime?        @db.DateTime(0)
+  LoanAssignment LoanAssignment[]
   LoanLegalStage LoanLegalStage[]
 
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([title], map: "index3")
 }
 
 model LoanLegalStage {
@@ -694,6 +736,7 @@ model CollateralStatus {
   createdAt            DateTime               @default(now()) @db.DateTime(0)
   updatedAt            DateTime               @default(now()) @db.DateTime(0)
   deletedAt            DateTime?              @db.DateTime(0)
+  LoanAssignment       LoanAssignment[]
   LoanCollateralStatus LoanCollateralStatus[]
 
   @@index([deletedAt], map: "idx_deletedAt")
@@ -725,6 +768,7 @@ model LitigationStage {
   createdAt           DateTime              @default(now()) @db.DateTime(0)
   updatedAt           DateTime              @default(now()) @db.DateTime(0)
   deletedAt           DateTime?             @db.DateTime(0)
+  LoanAssignment      LoanAssignment[]
   LoanLitigationStage LoanLitigationStage[]
 
   @@index([deletedAt], map: "idx_deletedAt")
@@ -765,19 +809,20 @@ model Templates {
 }
 
 model LoanRemaining {
-  id           Int       @id @default(autoincrement())
-  loanId       Int?
-  principal    Decimal?  @db.Decimal(12, 2)
-  interest     Decimal?  @db.Decimal(12, 2)
-  penalty      Decimal?  @db.Decimal(12, 2)
-  otherFee     Decimal?  @db.Decimal(12, 2)
-  legalCharges Decimal?  @db.Decimal(12, 2)
-  currentDebt  Decimal?  @db.Decimal(12, 2)
-  agreementMin Decimal?  @db.Decimal(12, 2)
-  createdAt    DateTime  @default(now()) @db.DateTime(0)
-  updatedAt    DateTime  @default(now()) @db.DateTime(0)
-  deletedAt    DateTime? @db.DateTime(0)
-  Loan         Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanRemaining_1")
+  id             Int              @id @default(autoincrement())
+  loanId         Int?
+  principal      Decimal?         @db.Decimal(12, 2)
+  interest       Decimal?         @db.Decimal(12, 2)
+  penalty        Decimal?         @db.Decimal(12, 2)
+  otherFee       Decimal?         @db.Decimal(12, 2)
+  legalCharges   Decimal?         @db.Decimal(12, 2)
+  currentDebt    Decimal?         @db.Decimal(12, 2)
+  agreementMin   Decimal?         @db.Decimal(12, 2)
+  createdAt      DateTime         @default(now()) @db.DateTime(0)
+  updatedAt      DateTime         @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?        @db.DateTime(0)
+  LoanAssignment LoanAssignment[]
+  Loan           Loan?            @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_LoanRemaining_1")
 
   @@index([loanId], map: "fk_LoanRemaining_1")
   @@index([deletedAt], map: "idx_deletedAt")
@@ -939,6 +984,8 @@ model City {
   updatedAt   DateTime      @default(now()) @db.DateTime(0)
   deletedAt   DateTime?     @db.DateTime(0)
   LoanAddress LoanAddress[]
+
+  @@index([city], map: "index2")
 }
 
 model LoanAddress {
@@ -1077,12 +1124,13 @@ model PaymentAllocationDetail {
 }
 
 model PortfolioCaseGroup {
-  id        Int       @id @default(autoincrement())
-  groupName String    @db.VarChar(500)
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
-  Loan      Loan[]
+  id             Int              @id @default(autoincrement())
+  groupName      String           @db.VarChar(500)
+  createdAt      DateTime         @default(now()) @db.DateTime(0)
+  updatedAt      DateTime         @default(now()) @db.DateTime(0)
+  deletedAt      DateTime?        @db.DateTime(0)
+  Loan           Loan[]
+  LoanAssignment LoanAssignment[]
 
   @@index([deletedAt], map: "idx_deletedAt")
 }
@@ -2226,6 +2274,53 @@ model Old_db_additional_data {
   value      String    @db.Text
   created_at DateTime? @db.Timestamp(0)
   updated_at DateTime? @db.Timestamp(0)
+}
+
+model Old_db_loans_assigned {
+  ID                       Int       @id @default(autoincrement())
+  LoanID                   Int?      @default(0)
+  Case                     String?   @db.VarChar(100)
+  CaseGroup_ID             Int?      @default(0)
+  CaseGroup                String?   @db.VarChar(100)
+  Collector_ID             Int?
+  Collector                String?   @db.VarChar(100)
+  Collector_ID_Old         Int?
+  Collector_Old            String?   @db.VarChar(100)
+  collection_status        String?   @default("New") @db.VarChar(100)
+  collection_status_id     Int?      @default(1)
+  collection_status_old    String?   @db.VarChar(100)
+  collection_status_id_old Int?      @default(0)
+  Case_Group_ID_old        Int       @default(0)
+  Case_Group_old           String    @default("N/A") @db.VarChar(100)
+  Portfolio_ID             Int       @default(0)
+  Portfolio                String    @default("") @db.VarChar(100)
+  Lender_ID                Int       @default(0)
+  Lender                   String    @default("N/A") @db.VarChar(100)
+  Full_Name                String?   @db.VarChar(150)
+  ID_Number                String?   @db.VarChar(50)
+  Principal                Decimal   @default(0.00) @db.Decimal(15, 2)
+  Total_Debt               Decimal   @default(0.00) @db.Decimal(15, 2)
+  Currency                 String?   @db.VarChar(10)
+  Collateral_Status_ID     Int       @default(0)
+  Collateral_Status        String    @default("N/A") @db.VarChar(100)
+  Client_Status_ID         Int       @default(0)
+  Client_Status            String    @default("N/A") @db.VarChar(100)
+  Legal_Stage_ID           Int       @default(0)
+  Legal_Stage              String    @default("N/A") @db.VarChar(100)
+  Litigation_Stage_ID      Int       @default(0)
+  Litigation_Stage         String    @default("N/A") @db.VarChar(100)
+  Mark_ID                  Int       @default(0)
+  Mark                     String    @default("N/A") @db.VarChar(100)
+  Lawyer_ID                Int       @default(0)
+  Lawyer                   String    @default("N/A") @db.VarChar(100)
+  Employee_ID              Int       @default(0)
+  Employee                 String    @default("") @db.VarChar(100)
+  Import_Date              DateTime? @db.DateTime(0)
+  mtest                    String?   @db.VarChar(512)
+
+  @@index([Case], map: "Case")
+  @@index([LoanID], map: "LoanID")
+  @@index([mtest], map: "mtest")
 }
 
 enum PaymentCommitment_type {

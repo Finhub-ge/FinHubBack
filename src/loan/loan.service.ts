@@ -251,6 +251,198 @@ export class LoanService {
     return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
   }
 
+  async newgetAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
+    const { page, limit, search, portfolio, portfolioSeller, fromAssignedUser, toAssignedUser,
+      assignedLawyer, collateralStatus, clientStatus, loanStatus, litigationStage,
+      legalStage, marks, assignedBy, assignedDateStart, assignedDateEnd } = filterDto;
+
+    // Setup pagination
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    // Build where clause for LoanAssignment
+    const where: any = {
+      deletedAt: null,
+    };
+
+    // Search filter - search by case ID, debtor info, from/to user names
+    if (search) {
+      where.OR = [
+        // Search by case ID
+        {
+          Loan: {
+            caseId: { contains: search },
+          },
+        },
+        // Search by debtor ID number
+        {
+          Loan: {
+            Debtor: {
+              idNumber: { contains: search },
+            },
+          },
+        },
+        // Search by debtor first name
+        {
+          Loan: {
+            Debtor: {
+              firstName: { contains: search },
+            },
+          },
+        },
+        // Search by debtor last name
+        {
+          Loan: {
+            Debtor: {
+              lastName: { contains: search },
+            },
+          },
+        },
+        // Search by current user (to) first name
+        {
+          User: {
+            firstName: { contains: search },
+          },
+        },
+        // Search by current user (to) last name
+        {
+          User: {
+            lastName: { contains: search },
+          },
+        },
+        // Search by old user (from) first name
+        {
+          User_LoanAssignment_oldUserIdToUser: {
+            firstName: { contains: search },
+          },
+        },
+        // Search by old user (from) last name
+        {
+          User_LoanAssignment_oldUserIdToUser: {
+            lastName: { contains: search },
+          },
+        },
+      ];
+    }
+
+    // Portfolio filter
+    if (portfolio?.length) {
+      where.portfolioCaseGroupId = { in: portfolio };
+    }
+
+    // Portfolio seller filter
+    if (portfolioSeller?.length) {
+      where.Portfolio = {
+        id: { in: portfolioSeller },
+      };
+    }
+
+    // From assigned user filter (old user - previous collector)
+    if (fromAssignedUser?.length) {
+      where.oldUserId = { in: fromAssignedUser };
+    }
+
+    // To assigned user filter (current user - current collector)
+    if (toAssignedUser?.length) {
+      where.userId = { in: toAssignedUser };
+    }
+
+    // Assigned lawyer filter (assuming lawyer role)
+    if (assignedLawyer?.length) {
+      where.AND = where.AND || [];
+      where.AND.push({
+        userId: { in: assignedLawyer },
+        Role: {
+          name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] }
+        }
+      });
+    }
+
+    // Collateral status filter
+    if (collateralStatus?.length) {
+      where.collateralStatusId = { in: collateralStatus };
+    }
+
+    // Client status filter (debtor status)
+    if (clientStatus?.length) {
+      where.debtorStatusId = { in: clientStatus };
+    }
+
+    // Loan status filter
+    if (loanStatus?.length) {
+      where.loanStatusId = { in: loanStatus };
+    }
+
+    // Litigation stage filter
+    if (litigationStage?.length) {
+      where.litigationStageId = { in: litigationStage };
+    }
+
+    // Legal stage filter
+    if (legalStage?.length) {
+      where.legalStageId = { in: legalStage };
+    }
+
+    // Marks filter
+    if (marks?.length) {
+      where.marksId = { in: marks };
+    }
+
+    // Assigned by filter (user who created the assignment)
+    if (assignedBy?.length) {
+      where.assignedById = { in: assignedBy };
+    }
+
+    // Assigned date range filter
+    if (assignedDateStart || assignedDateEnd) {
+      where.assignedAt = {};
+      if (assignedDateStart) {
+        where.assignedAt.gte = new Date(assignedDateStart);
+      }
+      if (assignedDateEnd) {
+        where.assignedAt.lte = new Date(assignedDateEnd);
+      }
+    }
+
+    // Get assignments with relations
+    const [assignments, totalCount] = await Promise.all([
+      this.prisma.loanAssignment.findMany({
+        where,
+        ...paginationParams,
+        orderBy: { assignedAt: 'desc' },
+        include: {
+          Loan: {
+            select: {
+              caseId: true,
+              Debtor: true,
+            },
+          },
+          User: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          Role: {
+            select: { id: true, name: true },
+          },
+          CollateralStatus: true,
+          DebtorStatus: true,
+          PortfolioCaseGroup: true,
+          LegalStage: true,
+          LitigationStage: true,
+          LoanRemaining: true,
+          LoanStatus_LoanAssignment_loanStatusIdToLoanStatus: true,
+          Marks: true,
+          LoanStatus_LoanAssignment_oldLoanStatusIdToLoanStatus: true,
+          User_LoanAssignment_oldUserIdToUser: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          Portfolio: true,
+        },
+      }),
+      this.prisma.loanAssignment.count({ where }),
+    ]);
+
+    return this.paginationService.createPaginatedResult(assignments, totalCount, { page, limit });
+  }
+
   async getAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
     const { page, limit, columns } = filterDto;
 
