@@ -31,7 +31,7 @@ import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto"
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer, paymentReportExport } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
-import { calculateCollectorLoanStats, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { calculateCollectorLoanStats, createOrUpdatePlanReport, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 import { buildLoanQuery, hasLoanAssignmentInTransactionWhere } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
@@ -2806,11 +2806,12 @@ export class AdminService {
       loanIds: assignments[item.collectorId] ?? []
     }));
 
+    await createOrUpdatePlanReport(enrichedData);
     // Insert targets in bulk
-    const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
-      data: enrichedData,
-      skipDuplicates: true,
-    });
+    // const insertedRows = await this.prisma.collectorsMonthlyTarget.createMany({
+    //   data: enrichedData,
+    //   skipDuplicates: true,
+    // });
 
     // Get unique collector IDs
     const collectorIds = [...new Set(dataToInsert.map(d => d.collectorId))];
@@ -2840,7 +2841,6 @@ export class AdminService {
 
     return {
       message: 'Excel imported successfully',
-      insertedCount: insertedRows.count,
       totalRecords: parsedData.length,
       skippedRecords: parsedData.length - dataToInsert.length,
       processedReports: toCreate.length + toUpdate.length,
