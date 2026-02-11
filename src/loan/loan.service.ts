@@ -262,6 +262,7 @@ export class LoanService {
     // Build where clause for LoanAssignment
     const where: any = {
       deletedAt: null,
+      roleId: 4,
     };
 
     // Search filter - search by case ID, debtor info, from/to user names
