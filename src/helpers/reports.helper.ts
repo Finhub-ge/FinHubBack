@@ -362,3 +362,68 @@ export const getPaymentReportExportHeaders = (): Record<string, string> => {
     lawyer: 'Lawyer',
   };
 }
+
+export const createOrUpdatePlanReport = async (data: any[]) => {
+  if (!data.length) return;
+
+  const existing = await prisma.collectorsMonthlyTarget.findMany({
+    where: {
+      OR: data.map((item) => ({
+        collectorId: item.collectorId,
+        month: item.month,
+        year: item.year,
+      })),
+    },
+    select: {
+      collectorId: true,
+      month: true,
+      year: true,
+    },
+  });
+
+  const existingSet = new Set(
+    existing.map(
+      (e) => `${e.collectorId}-${e.month}-${e.year}`
+    )
+  );
+
+  const toCreate = [];
+  const toUpdate = [];
+
+  for (const item of data) {
+    const key = `${item.collectorId}-${item.month}-${item.year}`;
+
+    if (existingSet.has(key)) {
+      toUpdate.push(item);
+    } else {
+      toCreate.push(item);
+    }
+  }
+
+  await prisma.$transaction([
+    // bulk create
+    ...(toCreate.length
+      ? [
+        prisma.collectorsMonthlyTarget.createMany({
+          data: toCreate,
+        }),
+      ]
+      : []),
+
+    // individual updates
+    ...toUpdate.map((item) =>
+      prisma.collectorsMonthlyTarget.update({
+        where: {
+          collectorId_year_month: {
+            collectorId: item.collectorId,
+            month: item.month,
+            year: item.year,
+          },
+        },
+        data: {
+          targetAmount: item.targetAmount,
+        },
+      })
+    ),
+  ]);
+}
