@@ -59,7 +59,11 @@ export class DashboardService {
 
     // --- NEW DATA ---
     if (newYears.length > 0 || defaultIsNew) {
-      const where: any = {};
+      const where: any = {
+        User: {
+          isActive: true,
+        },
+      };
       if (year?.length) where.year = { in: year };
 
       const targetWhere: any = { ...where };
@@ -98,7 +102,7 @@ export class DashboardService {
       const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
       // Build Prisma where clause for targets
-      const targetWhere: any = {};
+      const targetWhere: any = { User: { isActive: true } };
       if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
       if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
       if (filters.collectorId && filters.collectorId.length > 0) targetWhere.collectorId = { in: filters.collectorId };
