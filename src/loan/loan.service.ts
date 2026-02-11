@@ -251,7 +251,7 @@ export class LoanService {
     return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
   }
 
-  async newgetAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
+  async getAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
     const { page, limit, search, portfolio, portfolioSeller, fromAssignedUser, toAssignedUser,
       assignedLawyer, collateralStatus, clientStatus, loanStatus, litigationStage,
       legalStage, marks, assignedBy, assignedDateStart, assignedDateEnd } = filterDto;
@@ -415,7 +415,28 @@ export class LoanService {
               caseId: true,
               Debtor: true,
               currency: true,
-            },
+              LoanAssignment: {
+                where: { isActive: true, deletedAt: null, roleId: 2 },
+                select: {
+                  id: true,
+                  assignedAt: true,
+                  loanId: true,
+                  User: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                    }
+                  },
+                  Role: {
+                    select: {
+                      id: true,
+                      name: true,
+                    }
+                  }
+                }
+              }
+            }
           },
           User: {
             select: { id: true, firstName: true, lastName: true },
@@ -445,314 +466,6 @@ export class LoanService {
     ]);
 
     return this.paginationService.createPaginatedResult(assignments, totalCount, { page, limit });
-  }
-
-  async getAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
-    const { page, limit, columns } = filterDto;
-
-    const paginationParams = columns
-      ? {}
-      : this.paginationService.getPaginationParams({ page, limit });
-
-    // Get collector role
-    const collectorRole = await this.prisma.role.findFirst({
-      where: { name: 'collector', deletedAt: null },
-      select: { id: true },
-    });
-
-    if (!collectorRole) {
-      return this.paginationService.createPaginatedResult([], 0, { page, limit });
-    }
-
-    // Build assignment history filters
-    const assignmentWhere: any = {
-      deletedAt: null,
-      action: 'assigned',
-      roleId: collectorRole.id,
-    };
-
-    if (filterDto.assignedDateStart || filterDto.assignedDateEnd) {
-      assignmentWhere.actionDate = {};
-      if (filterDto.assignedDateStart) {
-        assignmentWhere.actionDate.gte = new Date(filterDto.assignedDateStart);
-      }
-      if (filterDto.assignedDateEnd) {
-        assignmentWhere.actionDate.lte = new Date(filterDto.assignedDateEnd);
-      }
-    }
-
-    if (filterDto.toAssignedUser?.length) {
-      assignmentWhere.userId = { in: filterDto.toAssignedUser };
-    }
-
-    if (filterDto.assignedBy?.length) {
-      assignmentWhere.createdBy = { in: filterDto.assignedBy };
-    }
-
-    // Build loan filters
-    const loanWhere: any = { deletedAt: null };
-
-    if (filterDto.search) {
-      const { conditions } = buildLoanSearchWhere(filterDto.search);
-      loanWhere.AND = loanWhere.AND || [];
-      loanWhere.AND.push({ OR: conditions });
-    }
-
-    if (filterDto.portfolio?.length) {
-      loanWhere.groupId = { in: filterDto.portfolio };
-    }
-
-    if (filterDto.portfolioSeller?.length) {
-      loanWhere.Portfolio = { sellerId: { in: filterDto.portfolioSeller } };
-    }
-
-    if (filterDto.loanStatus?.length) {
-      loanWhere.statusId = { in: filterDto.loanStatus };
-    }
-
-    if (filterDto.clientStatus?.length) {
-      loanWhere.Debtor = { DebtorStatus: { id: { in: filterDto.clientStatus } } };
-    }
-
-    const filters = {
-      collateralstatus: filterDto.collateralStatus,
-      litigationstage: filterDto.litigationStage,
-      legalstage: filterDto.legalStage,
-      marks: filterDto.marks,
-    };
-
-    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
-
-    if (shouldProcessIntersection(relatedFilterIds)) {
-      if (hasEmptyFilterResults(relatedFilterIds)) {
-        return this.paginationService.createPaginatedResult([], 0, { page, limit });
-      }
-
-      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
-      if (intersectedIds.length === 0) {
-        return this.paginationService.createPaginatedResult([], 0, { page, limit });
-      }
-
-      loanWhere.id = { in: intersectedIds };
-    }
-
-    assignmentWhere.Loan = loanWhere;
-
-    // Get assignment history records
-    const [assignmentHistory, totalCount] = await Promise.all([
-      this.prisma.loanAssignmentHistory.findMany({
-        where: assignmentWhere,
-        ...paginationParams,
-        orderBy: { actionDate: 'desc' },
-        include: {
-          Loan: {
-            include: getLoanIncludeConfig() as any,
-          },
-          User_LoanAssignmentHistory_userIdToUser: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-          User_LoanAssignmentHistory_createdByToUser: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-          Role: {
-            select: { name: true },
-          },
-        },
-      }) as any,
-      this.prisma.loanAssignmentHistory.count({ where: assignmentWhere }),
-    ]);
-
-    if (assignmentHistory.length === 0) {
-      return this.paginationService.createPaginatedResult([], 0, { page, limit });
-    }
-
-    // Batch load latest records for loans
-    const loanIdsSet = new Set<number>();
-    assignmentHistory.forEach((a: any) => loanIdsSet.add(a.loanId));
-    const loanIds = Array.from(loanIdsSet);
-    const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
-    const loanMap = new Map();
-    assignmentHistory.forEach((a: any) => {
-      if (!loanMap.has(a.loanId)) {
-        loanMap.set(a.loanId, a.Loan);
-      }
-    });
-    attachLatestRecordsToLoans(Array.from(loanMap.values()), latestRecords);
-
-    // Get previous collectors
-    const previousCollectorsMap = await this.getPreviousCollectorForAssignments(
-      assignmentHistory,
-      collectorRole.id
-    );
-
-    // Apply fromAssignedUser filter
-    let filteredHistory = assignmentHistory;
-    if (filterDto.fromAssignedUser?.length) {
-      filteredHistory = assignmentHistory.filter((assignment: any) => {
-        const prevCollector = previousCollectorsMap.get(assignment.id);
-        if (!prevCollector) return filterDto.fromAssignedUser.includes(-1);
-        return filterDto.fromAssignedUser.includes(prevCollector.userId);
-      });
-    }
-
-    // Get status changes
-    const statusChangesMap = await this.getStatusChangesForAssignments(filteredHistory);
-
-    // Get lawyer assignments
-    const lawyerRoleIds = await this.prisma.role.findMany({
-      where: {
-        name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] },
-        deletedAt: null,
-      },
-      select: { id: true },
-    });
-
-    const lawyerAssignments = await this.prisma.loanAssignment.findMany({
-      where: {
-        loanId: { in: loanIds },
-        isActive: true,
-        deletedAt: null,
-        roleId: { in: lawyerRoleIds.map(r => r.id) },
-      },
-      include: {
-        User: { select: { id: true, firstName: true, lastName: true } },
-        Role: { select: { name: true } },
-      },
-    });
-
-    // Apply lawyer filter
-    if (filterDto.assignedLawyer?.length) {
-      const lawyerLoanIds = new Set(
-        lawyerAssignments
-          .filter(la => filterDto.assignedLawyer.includes(la.userId))
-          .map(la => la.loanId)
-      );
-      filteredHistory = filteredHistory.filter((a: any) => lawyerLoanIds.has(a.loanId));
-    }
-
-    const lawyerMap = new Map();
-    lawyerAssignments.forEach(la => lawyerMap.set(la.loanId, la));
-
-    // Enrich data
-    const enrichedData = filteredHistory.map((assignment: any) => {
-      const loan = assignment.Loan;
-      const prevCollector = previousCollectorsMap.get(assignment.id);
-      const statusChange = statusChangesMap.get(assignment.id);
-      const lawyer = lawyerMap.get(loan.id);
-
-      return {
-        ...loan,
-        actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null,
-        assignmentInfo: {
-          fromCollector: prevCollector || null,
-          toCollector: {
-            id: assignment.User_LoanAssignmentHistory_userIdToUser.id,
-            firstName: assignment.User_LoanAssignmentHistory_userIdToUser.firstName,
-            lastName: assignment.User_LoanAssignmentHistory_userIdToUser.lastName,
-          },
-          assignedBy: {
-            id: assignment.User_LoanAssignmentHistory_createdByToUser.id,
-            firstName: assignment.User_LoanAssignmentHistory_createdByToUser.firstName,
-            lastName: assignment.User_LoanAssignmentHistory_createdByToUser.lastName,
-          },
-          assignDate: assignment.actionDate,
-          statusBefore: statusChange?.before || null,
-          statusAfter: statusChange?.after || null,
-          lawyer: lawyer ? {
-            id: lawyer.User.id,
-            firstName: lawyer.User.firstName,
-            lastName: lawyer.User.lastName,
-            role: lawyer.Role.name,
-          } : null,
-        },
-      };
-    });
-
-    if (columns) {
-      return this.paginationService.getAllWithoutPagination(enrichedData, filteredHistory.length);
-    }
-
-    return this.paginationService.createPaginatedResult(enrichedData, filteredHistory.length, { page, limit });
-  }
-
-  private async getPreviousCollectorForAssignments(assignments: any[], collectorRoleId: number): Promise<Map<number, any>> {
-    const map = new Map();
-
-    for (const assignment of assignments) {
-      const prevAssignment = await this.prisma.loanAssignmentHistory.findFirst({
-        where: {
-          loanId: assignment.loanId,
-          actionDate: { lt: assignment.actionDate },
-          action: 'assigned',
-          roleId: collectorRoleId,
-          deletedAt: null,
-        },
-        orderBy: { actionDate: 'desc' },
-        include: {
-          User_LoanAssignmentHistory_userIdToUser: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-        },
-      });
-
-      if (prevAssignment) {
-        map.set(assignment.id, {
-          id: prevAssignment.userId,
-          firstName: prevAssignment.User_LoanAssignmentHistory_userIdToUser.firstName,
-          lastName: prevAssignment.User_LoanAssignmentHistory_userIdToUser.lastName,
-          userId: prevAssignment.userId,
-        });
-      }
-    }
-
-    return map;
-  }
-
-  private async getStatusChangesForAssignments(assignments: any[]): Promise<Map<number, any>> {
-    const map = new Map();
-
-    for (const assignment of assignments) {
-      // Get the first status change that happened after this assignment
-      const statusAfter = await this.prisma.loanStatusHistory.findFirst({
-        where: {
-          loanId: assignment.loanId,
-          createdAt: { gte: assignment.actionDate },
-          deletedAt: null,
-        },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          LoanStatusNewStatus: { select: { id: true, name: true } },
-        },
-      });
-
-      // Get the most recent status before this assignment
-      const statusBefore = await this.prisma.loanStatusHistory.findFirst({
-        where: {
-          loanId: assignment.loanId,
-          createdAt: { lt: assignment.actionDate },
-          deletedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          LoanStatusNewStatus: { select: { id: true, name: true } },
-        },
-      });
-
-      map.set(assignment.id, {
-        before: statusBefore ? {
-          id: statusBefore.LoanStatusNewStatus.id,
-          name: statusBefore.LoanStatusNewStatus.name,
-          changedAt: statusBefore.createdAt,
-        } : null,
-        after: statusAfter ? {
-          id: statusAfter.LoanStatusNewStatus.id,
-          name: statusAfter.LoanStatusNewStatus.name,
-          changedAt: statusAfter.createdAt,
-        } : null,
-      });
-    }
-
-    return map;
   }
 
   async getSummary(filterDto: GetLoansFilterDto, user: any) {
@@ -2141,6 +1854,8 @@ export class LoanService {
       select: {
         id: true,
         statusId: true,
+        groupId: true,
+        portfolioId: true,
         LoanVisit: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -2148,6 +1863,35 @@ export class LoanService {
           select: {
             status: true,
           },
+        },
+        Debtor: {
+          select: {
+            id: true,
+            statusId: true,
+          }
+        },
+        LoanRemaining: {
+          where: { deletedAt: null },
+        },
+        LoanCollateralStatus: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanLegalStage: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanLitigationStage: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanMarks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -2170,11 +1914,6 @@ export class LoanService {
 
     const assignedUser = await this.prisma.user.findUnique({
       where: { id: assignLoanDto.userId, isActive: true, deletedAt: null },
-      // include: {
-      //   TeamMembership: {
-      //     where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
-      //   },
-      // }
     });
     if (!assignedUser) throw new NotFoundException('User not found');
 
@@ -2182,10 +1921,6 @@ export class LoanService {
     if (assignedUser.roleId !== assignLoanDto.roleId) {
       throw new BadRequestException('User role does not match roleId provided');
     }
-
-    // if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
-    //   throw new BadRequestException('User is not a team lead');
-    // }
 
     // Check if any visit is pending
     const hasPendingVisit = loan.LoanVisit.some(visit => visit.status === LoanVisit_status.pending);
@@ -2208,23 +1943,19 @@ export class LoanService {
       });
 
       return await this.assign({
-        loanId: loan.id,
+        loan,
         userId: assignedUser.id,
         roleId: assignLoanDto.roleId,
         assignedBy: user.id,
         comment: assignLoanDto.comment,
-        loanStatusId: loan.statusId,
+        currentAssignment,
         tx
       });
     });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
+  private async assign({ loan: Loan, userId, roleId, assignedBy, comment, currentAssignment, tx = null }) {
     const dbClient = tx || this.prisma;
-    // Find current active assignment for this role
-    const currentAssignment = await dbClient.loanAssignment.findFirst({
-      where: { loanId, roleId, isActive: true },
-    });
 
     // If the same user is already assigned → nothing to do
     if (currentAssignment?.userId === userId) {
@@ -2233,20 +1964,36 @@ export class LoanService {
 
     // If there is a current assignment → unassign old user
     if (currentAssignment) {
-      await this.unassign({ loanId, roleId, assignedBy, comment, userId, tx });
+      await this.unassign({ loanId: Loan.id, roleId, assignedBy, comment, userId, tx });
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, loanStatusId, tx });
+    return this.assignNew({ loan: Loan, userId: userId, roleId, assignedBy, comment, currentAssignment, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
+  private async assignNew({ loan: Loan, userId, roleId, assignedBy, comment, currentAssignment, tx = null }) {
     const dbClient = tx || this.prisma;
-    await dbClient.loanAssignment.create({
-      data: { loanId, userId, roleId, isActive: true },
-    });
 
-    await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
+    const assignmentData = {
+      loanId: Loan.id,
+      userId,
+      oldUserId: currentAssignment?.userId,
+      roleId,
+      isActive: true,
+      assignedBy: assignedBy,
+      groupId: Loan.groupId,
+      portfolioId: Loan.portfolioId,
+      loanRemainingId: Loan.LoanRemaining[0]?.id,
+      collateralStatusId: Loan.LoanCollateralStatus.length ? Loan.LoanCollateralStatus[0]?.collateralStatusId : null,
+      debtorStatusId: Loan.Debtor.statusId,
+      loanStatusId: Loan.statusId,
+      oldLoanStatusId: Loan.statusId,
+      legalStageId: Loan.LoanLegalStage.length ? Loan.LoanLegalStage[0]?.legalStageId : null,
+      litigationStageId: Loan.LoanLitigationStage.length ? Loan.LoanLitigationStage[0]?.litigationStageId : null,
+      markId: Loan.LoanMarks.length ? Loan.LoanMarks[0]?.markId : null,
+    };
+
+    await logAssignmentHistory({ prisma: dbClient, loanId: Loan.id, userId, roleId, action: 'assigned', assignedBy });
 
     // Get assigned user details for comment
     const assignedUser = await dbClient.user.findUnique({
@@ -2259,7 +2006,7 @@ export class LoanService {
       const commentText = `Assign(${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
       await dbClient.comments.create({
         data: {
-          loanId: loanId,
+          loanId: Loan.id,
           userId: assignedBy,
           comment: commentText
         }
@@ -2275,7 +2022,7 @@ export class LoanService {
     if (role && LAWYER_ROLES.includes(role.name as Role)) {
       // Check if there's a PENDING LawyerRequest for this loan
       const pendingRequest = await dbClient.lawyerRequest.findUnique({
-        where: { loanId: loanId }
+        where: { loanId: Loan.id }
       });
 
       if (pendingRequest && pendingRequest.status === 'PENDING') {
@@ -2294,19 +2041,20 @@ export class LoanService {
     if (role && role.name === Role.COLLECTOR) {
       // update loan status to New except if status is Agreement or Agreement Canceled
       const loanStatus = await dbClient.loanStatus.findUnique({
-        where: { id: loanStatusId },
+        where: { id: Loan.statusId },
         select: { id: true, name: true }
       });
 
       if (loanStatus && loanStatus.id !== LoanStatusId.AGREEMENT && loanStatus.id !== LoanStatusId.AGREEMENT_CANCELED) {
+        assignmentData.loanStatusId = LoanStatusId.NEW;
         await dbClient.loan.update({
-          where: { id: loanId },
+          where: { id: Loan.id },
           data: { statusId: LoanStatusId.NEW, lastActivite: new Date() }
         });
         await dbClient.loanStatusHistory.create({
           data: {
-            loanId: loanId,
-            oldStatusId: loanStatusId,
+            loanId: Loan.id,
+            oldStatusId: Loan.statusId,
             newStatusId: LoanStatusId.NEW,
             changedBy: userId,
             notes: 'Status changed to New because of collector assignment'
@@ -2314,8 +2062,11 @@ export class LoanService {
         });
       }
     }
+    await dbClient.loanAssignment.create({
+      data: assignmentData
+    });
 
-    return { loanId, userId, roleId, action: 'assigned' };
+    return { loanId: Loan.id, userId, roleId, action: 'assigned' };
   }
 
   private async unassign({
