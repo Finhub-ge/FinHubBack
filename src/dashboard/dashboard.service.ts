@@ -278,53 +278,138 @@ export class DashboardService {
       if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
       if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
 
-      // Fetch target aggregates and extract IDs
-      const { targetSum, allLoanIds, collectorIds, years, months } = await fetchTargetAggregates(
-        this.prisma,
-        targetWhere
-      );
+      // Fetch collector monthly targets (need createdAt for date filtering)
+      const data = await this.prisma.collectorsMonthlyTarget.findMany({
+        where: targetWhere,
+        select: {
+          id: true,
+          collectorId: true,
+          User: {
+            select: {
+              firstName: true,
+              lastName: true,
+            }
+          },
+          targetAmount: true,
+          year: true,
+          month: true,
+          loanIds: true,
+          createdAt: true,
+        },
+      });
 
-      if (allLoanIds.length === 0) {
+      if (data.length === 0) {
         return getEmptySummary();
       }
-      console.log('here')
-      // Aggregate all data in parallel
-      const [
-        loanStats,
-        collectedAmount,
-        activityCounts,
-        charges,
-        courtAndExecution,
-        paidLoanCount
-      ] = await Promise.all([
-        aggregateLoanStatistics(this.prisma, allLoanIds),
-        aggregateTransactionData(this.prisma, collectorIds, years, months),
-        aggregateActivityCounts(this.prisma, allLoanIds, collectorIds),
-        aggregateCharges(this.prisma, allLoanIds),
-        aggregateCourtAndExecutionCases(this.prisma, allLoanIds),
-        calculateTransactionCountWithTwoDayRule(this.prisma, collectorIds, years, months)
-      ]);
 
-      // Calculate debtor status changes
-      const debtorStatusChangeCount = await calculateDebtorStatusChanges(
+      // Extract all loan IDs and collector IDs
+      const allLoanIds = data
+        .flatMap(t => (Array.isArray(t.loanIds) ? t.loanIds : []))
+        .filter(Boolean) as number[];
+      const collectorIds = data.map(t => t.collectorId);
+
+      // Fetch all collection-related data
+      const collectionData = await fetchCollectionData(
         this.prisma,
-        loanStats.debtorIds
+        allLoanIds,
+        collectorIds
       );
 
-      // Build and return summary
-      return buildSummaryFromAggregates(
-        loanStats.totalPrincipal,
-        targetSum,
-        collectedAmount,
-        loanStats.totalLoanCount,
-        paidLoanCount,
-        loanStats.statusCount,
-        loanStats.over40DaysCount,
-        activityCounts,
-        debtorStatusChangeCount,
-        charges,
-        courtAndExecution
+      // Build maps for efficient lookups
+      const dataMaps = buildDataMaps(collectionData);
+
+      // Fetch and process transactions with 2-day rule
+      const transactionData = await fetchAndProcessTransactions(
+        this.prisma,
+        collectorIds,
+        data.map(d => d.year),
+        data.map(d => d.month)
       );
+
+      // Fetch debtor status history
+      const debtorIds = collectionData.loans.map(l => l.debtorId).filter(Boolean) as number[];
+      const debtorStatusMap = await fetchDebtorStatusHistory(this.prisma, debtorIds);
+
+      // Calculate metrics for each collector target and sum them
+      const results = data.map(item =>
+        calculateCollectorMetrics(item, dataMaps, transactionData, debtorStatusMap, filters)
+      );
+
+      // Aggregate all results
+      const summary = results.reduce((acc, item) => {
+        return {
+          openingPrincipal: acc.openingPrincipal + item.openingPrincipal,
+          monthlyPlan: acc.monthlyPlan + item.monthlyPlan,
+          adjustedPlan: acc.adjustedPlan + item.adjustedPlan,
+          collectedAmount: acc.collectedAmount + item.collectedAmount,
+          paidLoanCount: acc.paidLoanCount + item.paidLoanCount,
+          newLoanCount: acc.newLoanCount + item.newLoanCount,
+          communicatedCount: acc.communicatedCount + item.communicatedCount,
+          unreachableCount: acc.unreachableCount + item.unreachableCount,
+          agreementCount: acc.agreementCount + item.agreementCount,
+          agreementCancelledCount: acc.agreementCancelledCount + item.agreementCancelledCount,
+          refuseToPayCount: acc.refuseToPayCount + item.refuseToPayCount,
+          promiseToPayCount: acc.promiseToPayCount + item.promiseToPayCount,
+          totalLoanCount: acc.totalLoanCount + item.totalLoanCount,
+          callCount: acc.callCount + item.callCount,
+          smsCount: acc.smsCount + item.smsCount,
+          markCount: acc.markCount + item.markCount,
+          commentCount: acc.commentCount + item.commentCount,
+          committeeRequestCount: acc.committeeRequestCount + item.committeeRequestCount,
+          inactiveOver40DaysCount: acc.inactiveOver40DaysCount + item.inactiveOver40DaysCount,
+          debtorStatusCount: acc.debtorStatusCount + item.debtorStatusCount,
+          totalActivities: acc.totalActivities + item.totalActivities,
+          totalLegalCharges: acc.totalLegalCharges + item.totalLegalCharges,
+          totalOtherCharges: acc.totalOtherCharges + item.totalOtherCharges,
+          courtCaseCount: acc.courtCaseCount + item.courtCaseCount,
+          courtPrincipalSum: acc.courtPrincipalSum + item.courtPrincipalSum,
+          executionCaseCount: acc.executionCaseCount + item.executionCaseCount,
+          executionPrincipalSum: acc.executionPrincipalSum + item.executionPrincipalSum,
+        };
+      }, {
+        openingPrincipal: 0,
+        monthlyPlan: 0,
+        adjustedPlan: 0,
+        collectedAmount: 0,
+        paidLoanCount: 0,
+        newLoanCount: 0,
+        communicatedCount: 0,
+        unreachableCount: 0,
+        agreementCount: 0,
+        agreementCancelledCount: 0,
+        refuseToPayCount: 0,
+        promiseToPayCount: 0,
+        totalLoanCount: 0,
+        callCount: 0,
+        smsCount: 0,
+        markCount: 0,
+        commentCount: 0,
+        committeeRequestCount: 0,
+        inactiveOver40DaysCount: 0,
+        debtorStatusCount: 0,
+        totalActivities: 0,
+        totalLegalCharges: 0,
+        totalOtherCharges: 0,
+        courtCaseCount: 0,
+        courtPrincipalSum: 0,
+        executionCaseCount: 0,
+        executionPrincipalSum: 0,
+      });
+
+      // Calculate average rates
+      const collectionRatePercent = summary.monthlyPlan > 0
+        ? (summary.collectedAmount / summary.monthlyPlan) * 100
+        : 0;
+      const paymentSuccessRate = summary.totalLoanCount > 0
+        ? (summary.paidLoanCount / summary.totalLoanCount) * 100
+        : 0;
+
+      return {
+        ...summary,
+        collectionRatePercent,
+        paymentSuccessRate,
+        totalCallDurationSec: "00:00:00",
+      };
     }
   }
 

@@ -637,7 +637,6 @@ export const determinePlanDataSource = (years: number[] | undefined, currentYear
 
   return { oldYears, newYears, defaultIsNew };
 }
-
 export const mapOldPlanReport = (data: any[]) => {
   return data.map(item => {
     return {
