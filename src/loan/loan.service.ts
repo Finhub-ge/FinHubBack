@@ -267,7 +267,7 @@ export class LoanService {
     return await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
   }
 
-  private async getTeamMemberIds(user: any): Promise<number[] | undefined> {
+  async getTeamMemberIds(user: any): Promise<number[] | undefined> {
     // Regional managers get all members from all their managed region teams
     if (isRegionalManager(user)) {
       const regionalTeamIds = getRegionalTeamIds(user);

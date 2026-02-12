@@ -677,3 +677,452 @@ export const mapOldPlanReport = (data: any[]) => {
     };
   });
 };
+
+/**
+ * Fetch target aggregates and extract unique loan IDs, collector IDs, years, and months
+ */
+export const fetchTargetAggregates = async (
+  prisma: PrismaClient,
+  targetWhere: any
+) => {
+  const [targetAggregate, targets] = await Promise.all([
+    prisma.collectorsMonthlyTarget.aggregate({
+      where: targetWhere,
+      _sum: { targetAmount: true },
+    }),
+    prisma.collectorsMonthlyTarget.findMany({
+      where: targetWhere,
+      select: {
+        loanIds: true,
+        collectorId: true,
+        year: true,
+        month: true,
+      },
+    }),
+  ]);
+
+  const allLoanIds = [...new Set(targets.flatMap(t => (Array.isArray(t.loanIds) ? t.loanIds : [])).filter(Boolean))] as number[];
+  const collectorIds = [...new Set(targets.map(t => t.collectorId))];
+  const years = [...new Set(targets.map(t => t.year))];
+  const months = [...new Set(targets.map(t => t.month))];
+
+  return {
+    targetSum: Number(targetAggregate._sum.targetAmount ?? 0),
+    allLoanIds,
+    collectorIds,
+    years,
+    months,
+  };
+};
+
+/**
+ * Aggregate loan statistics (principal, count, status counts, over40Days)
+ */
+export const aggregateLoanStatistics = async (
+  prisma: PrismaClient,
+  loanIds: number[]
+) => {
+  const [loanAggregate, loans] = await Promise.all([
+    prisma.loan.aggregate({
+      where: { id: { in: loanIds }, deletedAt: null, closedAt: null },
+      _sum: { principal: true },
+      _count: { id: true },
+    }),
+    prisma.loan.findMany({
+      where: { id: { in: loanIds }, deletedAt: null, closedAt: null },
+      select: { id: true, statusId: true, actDays: true, debtorId: true, principal: true },
+    }),
+  ]);
+
+  const statusCount: Record<string, number> = {};
+  let over40DaysCount = 0;
+
+  for (const loan of loans) {
+    const statusName = statusNameMap[loan.statusId] || `UNKNOWN_${loan.statusId}`;
+    statusCount[statusName] = (statusCount[statusName] || 0) + 1;
+    if (loan.actDays > 40) over40DaysCount++;
+  }
+
+  const debtorIds = [...new Set(loans.map(l => l.debtorId).filter(Boolean))] as number[];
+
+  return {
+    totalPrincipal: Number(loanAggregate._sum.principal ?? 0),
+    totalLoanCount: loanAggregate._count.id,
+    statusCount,
+    over40DaysCount,
+    debtorIds,
+    loanMap: new Map(loans.map(l => [l.id, l])),
+  };
+};
+
+/**
+ * Aggregate transaction data
+ */
+export const aggregateTransactionData = async (
+  prisma: PrismaClient,
+  collectorIds: number[],
+  years: number[],
+  months: number[]
+) => {
+  const transactionAggregate = await prisma.transactionUserAssignments.aggregate({
+    where: {
+      userId: { in: collectorIds },
+      deletedAt: null,
+      year: { in: years },
+      month: { in: months },
+    },
+    _sum: { amount: true },
+  });
+
+  return Number(transactionAggregate._sum.amount ?? 0);
+};
+
+/**
+ * Aggregate activity counts (SMS, marks, comments, committees)
+ */
+export const aggregateActivityCounts = async (
+  prisma: PrismaClient,
+  loanIds: number[],
+  collectorIds: number[]
+) => {
+  const [smsCount, markCount, commentCount, committeeCount] = await Promise.all([
+    prisma.smsHistory.count({
+      where: { loanId: { in: loanIds }, userId: { in: collectorIds }, deletedAt: null, status: 'success' },
+    }),
+    prisma.loanMarks.count({
+      where: { loanId: { in: loanIds }, userId: { in: collectorIds }, deletedAt: null },
+    }),
+    prisma.comments.count({
+      where: { loanId: { in: loanIds }, userId: { in: collectorIds }, deletedAt: null },
+    }),
+    prisma.committee.count({
+      where: { loanId: { in: loanIds }, requesterId: { in: collectorIds }, deletedAt: null },
+    }),
+  ]);
+
+  return { smsCount, markCount, commentCount, committeeCount };
+};
+
+/**
+ * Aggregate charges (legal and other)
+ */
+export const aggregateCharges = async (
+  prisma: PrismaClient,
+  loanIds: number[]
+) => {
+  const charges = await prisma.charges.findMany({
+    where: { loanId: { in: loanIds }, deletedAt: null },
+    select: { amount: true, chargeTypeId: true },
+  });
+
+  const legalTypes = [1, 2];
+  const otherTypes = [3, 4, 5];
+  let totalLegalCharges = 0;
+  let totalOtherCharges = 0;
+
+  for (const charge of charges) {
+    const amount = Number(charge.amount ?? 0);
+    if (legalTypes.includes(charge.chargeTypeId)) {
+      totalLegalCharges += amount;
+    } else if (otherTypes.includes(charge.chargeTypeId)) {
+      totalOtherCharges += amount;
+    }
+  }
+
+  return { totalLegalCharges, totalOtherCharges };
+};
+
+/**
+ * Aggregate court and execution case statistics
+ */
+export const aggregateCourtAndExecutionCases = async (
+  prisma: PrismaClient,
+  loanIds: number[]
+) => {
+  const [courtCases, executionCases] = await Promise.all([
+    prisma.loanLegalStage.findMany({
+      where: { loanId: { in: loanIds }, deletedAt: null, legalStageId: 61 },
+      select: { Loan: { select: { id: true, principal: true } } },
+    }),
+    prisma.loanLegalStage.findMany({
+      where: { loanId: { in: loanIds }, deletedAt: null, legalStageId: 62 },
+      select: { Loan: { select: { id: true, principal: true } } },
+    }),
+  ]);
+
+  const courtLoanIds = new Set(courtCases.map(c => c.Loan?.id).filter(Boolean));
+  const executionLoanIds = new Set(executionCases.map(e => e.Loan?.id).filter(Boolean));
+
+  const courtPrincipalSum = courtCases.reduce((sum, c) => sum + Number(c.Loan?.principal ?? 0), 0);
+  const executionPrincipalSum = executionCases.reduce((sum, e) => sum + Number(e.Loan?.principal ?? 0), 0);
+
+  return {
+    courtCaseCount: courtLoanIds.size,
+    courtPrincipalSum,
+    executionCaseCount: executionLoanIds.size,
+    executionPrincipalSum,
+  };
+};
+
+/**
+ * Calculate debtor status changes
+ */
+export const calculateDebtorStatusChanges = async (
+  prisma: PrismaClient,
+  debtorIds: number[]
+) => {
+  if (debtorIds.length === 0) return 0;
+
+  const debtorStatusHistory = await prisma.debtorStatusHistory.findMany({
+    where: { debtorId: { in: debtorIds }, deletedAt: null },
+    select: { debtorId: true, newStatusId: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const debtorStatusMap = new Map<number, typeof debtorStatusHistory>();
+  for (const record of debtorStatusHistory) {
+    if (!debtorStatusMap.has(record.debtorId)) debtorStatusMap.set(record.debtorId, []);
+    debtorStatusMap.get(record.debtorId)!.push(record);
+  }
+
+  let debtorStatusChangeCount = 0;
+  for (const [_, history] of debtorStatusMap) {
+    if (history.length === 0) continue;
+    debtorStatusChangeCount += 1;
+    for (let i = 1; i < history.length; i++) {
+      if (history[i].newStatusId !== history[i - 1].newStatusId) {
+        debtorStatusChangeCount++;
+      }
+    }
+  }
+
+  return debtorStatusChangeCount;
+};
+
+/**
+ * Calculate transaction count with 2-day rule
+ */
+export const calculateTransactionCountWithTwoDayRule = async (
+  prisma: PrismaClient,
+  collectorIds: number[],
+  years: number[],
+  months: number[]
+) => {
+  const transactions = await prisma.transactionUserAssignments.findMany({
+    where: {
+      userId: { in: collectorIds },
+      deletedAt: null,
+      year: { in: years },
+      month: { in: months },
+    },
+    select: {
+      userId: true,
+      year: true,
+      month: true,
+      createdAt: true,
+      Transaction: { select: { Loan: { select: { id: true } } } },
+    },
+  });
+
+  const loanTxMap = new Map<string, Date[]>();
+  for (const tx of transactions) {
+    const loanId = tx.Transaction?.Loan?.id;
+    if (!loanId) continue;
+    const key = `${tx.userId}_${tx.year}_${tx.month}_${loanId}`;
+    if (!loanTxMap.has(key)) loanTxMap.set(key, []);
+    loanTxMap.get(key)!.push(tx.createdAt);
+  }
+
+  let paidLoanCount = 0;
+  for (const [_, dates] of loanTxMap) {
+    dates.sort((a, b) => a.getTime() - b.getTime());
+    let count = 0;
+    let lastCounted: Date | null = null;
+    for (const date of dates) {
+      if (!lastCounted || (date.getTime() - lastCounted.getTime()) > 2 * 24 * 60 * 60 * 1000) {
+        count++;
+        lastCounted = date;
+      }
+    }
+    paidLoanCount += count;
+  }
+
+  return paidLoanCount;
+};
+
+/**
+ * Aggregate old plan report data
+ */
+export const aggregateOldPlanReport = async (
+  prisma: PrismaClient,
+  where: any
+) => {
+  const aggregate = await prisma.old_db_plan_collection.aggregate({
+    where,
+    _sum: {
+      Principal: true,
+      PlanSumm: true,
+      PlanCollection: true,
+      PaymentsCount: true,
+      New: true,
+      Communication: true,
+      Unreachable: true,
+      Agreement: true,
+      AgreementCancel: true,
+      RefusedToPay: true,
+      PromisedToPay: true,
+      CaseCount: true,
+      Calls: true,
+      SMS: true,
+      Marks: true,
+      Comment: true,
+      Committee: true,
+      Day40: true,
+      Clients: true,
+      Total: true,
+      LegalCharges: true,
+      CourtCaseCount: true,
+      CourtCaseAmount: true,
+      ExecCaseCount: true,
+      ExecCaseAmount: true,
+    },
+  });
+
+  const openingPrincipal = Number(aggregate._sum.Principal ?? 0);
+  const monthlyPlan = Number(aggregate._sum.PlanSumm ?? 0);
+  const collectedAmount = Number(aggregate._sum.PlanCollection ?? 0);
+  const totalLoanCount = Number(aggregate._sum.CaseCount ?? 0);
+  const paidLoanCount = Number(aggregate._sum.PaymentsCount ?? 0);
+
+  const collectionRatePercent = monthlyPlan > 0 ? (collectedAmount / monthlyPlan) * 100 : 0;
+  const paymentSuccessRate = totalLoanCount > 0 ? (paidLoanCount / totalLoanCount) * 100 : 0;
+
+  return {
+    openingPrincipal,
+    monthlyPlan,
+    adjustedPlan: monthlyPlan,
+    collectedAmount,
+    collectionRatePercent,
+    paidLoanCount,
+    paymentSuccessRate,
+    newLoanCount: Number(aggregate._sum.New ?? 0),
+    communicatedCount: Number(aggregate._sum.Communication ?? 0),
+    unreachableCount: Number(aggregate._sum.Unreachable ?? 0),
+    agreementCount: Number(aggregate._sum.Agreement ?? 0),
+    agreementCancelledCount: Number(aggregate._sum.AgreementCancel ?? 0),
+    refuseToPayCount: Number(aggregate._sum.RefusedToPay ?? 0),
+    promiseToPayCount: Number(aggregate._sum.PromisedToPay ?? 0),
+    totalLoanCount,
+    callCount: Number(aggregate._sum.Calls ?? 0),
+    totalCallDurationSec: "00:00:00",
+    smsCount: Number(aggregate._sum.SMS ?? 0),
+    markCount: Number(aggregate._sum.Marks ?? 0),
+    commentCount: Number(aggregate._sum.Comment ?? 0),
+    committeeRequestCount: Number(aggregate._sum.Committee ?? 0),
+    inactiveOver40DaysCount: Number(aggregate._sum.Day40 ?? 0),
+    debtorStatusCount: Number(aggregate._sum.Clients ?? 0),
+    totalActivities: Number(aggregate._sum.Total ?? 0),
+    totalLegalCharges: Number(aggregate._sum.LegalCharges ?? 0),
+    totalOtherCharges: 0,
+    courtCaseCount: Number(aggregate._sum.CourtCaseCount ?? 0),
+    courtPrincipalSum: Number(aggregate._sum.CourtCaseAmount ?? 0),
+    executionCaseCount: Number(aggregate._sum.ExecCaseCount ?? 0),
+    executionPrincipalSum: Number(aggregate._sum.ExecCaseAmount ?? 0),
+  };
+};
+
+/**
+ * Build summary object from aggregated data
+ */
+export const buildSummaryFromAggregates = (
+  openingPrincipal: number,
+  monthlyPlan: number,
+  collectedAmount: number,
+  totalLoanCount: number,
+  paidLoanCount: number,
+  statusCount: Record<string, number>,
+  over40DaysCount: number,
+  activityCounts: { smsCount: number; markCount: number; commentCount: number; committeeCount: number },
+  debtorStatusChangeCount: number,
+  charges: { totalLegalCharges: number; totalOtherCharges: number },
+  courtAndExecution: { courtCaseCount: number; courtPrincipalSum: number; executionCaseCount: number; executionPrincipalSum: number }
+) => {
+  const { smsCount, markCount, commentCount, committeeCount } = activityCounts;
+  const { totalLegalCharges, totalOtherCharges } = charges;
+  const { courtCaseCount, courtPrincipalSum, executionCaseCount, executionPrincipalSum } = courtAndExecution;
+
+  const totalActivities = smsCount + markCount + commentCount + committeeCount + debtorStatusChangeCount;
+  const collectionRatePercent = monthlyPlan > 0 ? (collectedAmount / monthlyPlan) * 100 : 0;
+  const paymentSuccessRate = totalLoanCount > 0 ? (paidLoanCount / totalLoanCount) * 100 : 0;
+
+  return {
+    openingPrincipal,
+    monthlyPlan,
+    adjustedPlan: monthlyPlan,
+    collectedAmount,
+    collectionRatePercent,
+    paidLoanCount,
+    paymentSuccessRate,
+    newLoanCount: statusCount.NEW || 0,
+    communicatedCount: statusCount.COMMUNICATION || 0,
+    unreachableCount: statusCount.UNREACHABLE || 0,
+    agreementCount: statusCount.AGREEMENT || 0,
+    agreementCancelledCount: statusCount.AGREEMENT_CANCELED || 0,
+    refuseToPayCount: statusCount.REFUSE_TO_PAY || 0,
+    promiseToPayCount: statusCount.PROMISED_TO_PAY || 0,
+    totalLoanCount,
+    callCount: 0,
+    totalCallDurationSec: "00:00:00",
+    smsCount,
+    markCount,
+    commentCount,
+    committeeRequestCount: committeeCount,
+    inactiveOver40DaysCount: over40DaysCount,
+    debtorStatusCount: debtorStatusChangeCount,
+    totalActivities,
+    totalLegalCharges,
+    totalOtherCharges,
+    courtCaseCount,
+    courtPrincipalSum,
+    executionCaseCount,
+    executionPrincipalSum,
+  };
+};
+
+/**
+ * Returns an empty summary structure with all values set to 0
+ */
+export const getEmptySummary = () => {
+  return {
+    openingPrincipal: 0,
+    monthlyPlan: 0,
+    adjustedPlan: 0,
+    collectedAmount: 0,
+    collectionRatePercent: 0,
+    paidLoanCount: 0,
+    paymentSuccessRate: 0,
+    newLoanCount: 0,
+    communicatedCount: 0,
+    unreachableCount: 0,
+    agreementCount: 0,
+    agreementCancelledCount: 0,
+    refuseToPayCount: 0,
+    promiseToPayCount: 0,
+    totalLoanCount: 0,
+    callCount: 0,
+    totalCallDurationSec: "00:00:00",
+    smsCount: 0,
+    markCount: 0,
+    commentCount: 0,
+    committeeRequestCount: 0,
+    inactiveOver40DaysCount: 0,
+    debtorStatusCount: 0,
+    totalActivities: 0,
+    totalLegalCharges: 0,
+    totalOtherCharges: 0,
+    courtCaseCount: 0,
+    courtPrincipalSum: 0,
+    executionCaseCount: 0,
+    executionPrincipalSum: 0,
+  };
+};
