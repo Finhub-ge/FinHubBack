@@ -268,7 +268,7 @@ export class DashboardService {
     }
 
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
-      return this.getOldPlanReportSummer(getPlanReportDto);
+      return this.getOldPlanReportSummer(getPlanReportDto, collectorId);
     }
 
     if (newYears.length > 0 || defaultIsNew) {
@@ -276,7 +276,7 @@ export class DashboardService {
       const targetWhere: any = {};
       if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
       if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
-      if (filters.collectorId && filters.collectorId.length > 0) targetWhere.collectorId = { in: filters.collectorId };
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
 
       // Fetch target aggregates and extract IDs
       const { targetSum, allLoanIds, collectorIds, years, months } = await fetchTargetAggregates(
@@ -328,13 +328,13 @@ export class DashboardService {
     }
   }
 
-  private async getOldPlanReportSummer(getPlanReportDto: GetPlanReportDto) {
+  private async getOldPlanReportSummer(getPlanReportDto: GetPlanReportDto, collectorId: number[]) {
     const filters = getPlanReportDto;
 
     const where: any = {};
     if (filters.year && filters.year.length > 0) where.PlanYear = { in: filters.year };
     if (filters.month && filters.month.length > 0) where.PlanMonth = { in: filters.month };
-    if (filters.collectorId && filters.collectorId.length > 0) where.Collector_ID = { in: filters.collectorId };
+    if (collectorId?.length) where.Collector_ID = { in: collectorId };
 
     return aggregateOldPlanReport(this.prisma, where);
   }
