@@ -63,7 +63,9 @@ export class ClientAuthService {
       data: { isUsed: true }
     });
 
-    const otp = this.generateOtp();
+    // const otp = this.generateOtp();
+    // Temporary otp for testing
+    const otp = '123456';
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + this.OTP_EXPIRY_MINUTES);
 
@@ -93,8 +95,8 @@ export class ClientAuthService {
     return {
       message: `OTP sent successfully to ${this.maskPhone(debtor.mainPhone)}`,
       debtorPublicId: debtor.publicId,
-      otp: otp, // TODO: Remove this on production
-      smsMessage: smsMessage, // TODO: Remove this on production
+      // otp: otp, // TODO: Remove this on production
+      // smsMessage: smsMessage, // TODO: Remove this on production
     };
   }
 
