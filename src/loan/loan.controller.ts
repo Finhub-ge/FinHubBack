@@ -56,6 +56,31 @@ export class LoanController {
   //   });
   // }
 
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @AllRoles()
+  // @Get('exportExcel')
+  // async exportLoans(
+  //   @GetUser() user: User,
+  //   @Query() filterDto: GetLoansFilterDto,
+  //   @Res({ passthrough: true }) res: Response
+  // ) {
+  //   // Set longer timeout for large exports
+  //   res.setTimeout(600000); // 10 minutes
+
+  //   // Disable response buffering for streaming large files
+  //   res.set({
+  //     'Cache-Control': 'no-cache',
+  //     'Connection': 'keep-alive',
+  //     'X-Accel-Buffering': 'no', // Disable nginx buffering if behind nginx
+  //   });
+
+  //   const excelBuffer = await this.loanService.exportLoans(filterDto, user);
+
+  //   return new StreamableFile(Buffer.from(excelBuffer), {
+  //     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  //     disposition: `attachment; filename=Cases_list_${Date.now()}.xlsx`
+  //   });
+  // }
   @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('exportExcel')
@@ -64,8 +89,12 @@ export class LoanController {
     @Query() filterDto: GetLoansFilterDto,
     @Res({ passthrough: true }) res: Response
   ) {
+    const exportStartTime = Date.now();
+    console.log(`[EXPORT] Starting export at ${new Date().toISOString()}`);
+    console.log(`[EXPORT] User: ${user.id}, Filters:`, JSON.stringify(filterDto));
+
     // Set longer timeout for large exports
-    res.setTimeout(600000); // 10 minutes
+    res.setTimeout(300000); // 10 minutes
 
     // Disable response buffering for streaming large files
     res.set({
@@ -75,6 +104,10 @@ export class LoanController {
     });
 
     const excelBuffer = await this.loanService.exportLoans(filterDto, user);
+
+    const totalTime = Date.now() - exportStartTime;
+    console.log(`[EXPORT] ✅ Export completed in ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)`);
+    console.log(`[EXPORT] Buffer size: ${(excelBuffer.length / 1024 / 1024).toFixed(2)}MB`);
 
     return new StreamableFile(Buffer.from(excelBuffer), {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

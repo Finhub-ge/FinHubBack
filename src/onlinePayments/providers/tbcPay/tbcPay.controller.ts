@@ -21,11 +21,11 @@ export class TbcPayController {
     description: `TBC Pay protocol endpoint.
 
     **CHECK Command**:
-    GET /billing/?command=check&caseId=FL-2024-001234
-    GET /billing/?command=check&caseId=FL-2024-001234&personalId=01234567890
+    GET /billing/?command=check&caseId=519712
+    GET /billing/?command=check&caseId=519712&personalId=01234567890
 
     **PAY Command**:
-    GET /billing/?command=pay&caseId=FL-2024-001234&txn_id=1234567890&sum=100.50`
+    GET /billing/?command=pay&caseId=519712&txn_id=1234567890&sum=100.50`
   })
   @ApiQuery({ name: 'command', enum: ['check', 'pay'], description: 'Command type', required: true })
   @ApiQuery({ name: 'caseId', description: 'Case identifier (Loan.caseId)', required: false })

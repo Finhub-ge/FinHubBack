@@ -2487,25 +2487,161 @@ export class LoanService {
     };
   }
 
+  // version till 13.02.2026
+  // async exportLoans(filterDto: GetLoansFilterDto, user: any) {
+  //   // const loans = await this.getAll(filterDto, user);
+
+  //   // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+
+  //   // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+
+  //   const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
+
+  //   // Create async generator for chunked data loading using cursor-based pagination
+  //   const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
+
+  //   // Use streaming Excel generation
+  //   return await generateExcelStream(
+  //     dataGenerator,
+  //     filterDto.columns,
+  //     'Loans Report'
+  //   );
+
+  // }
   async exportLoans(filterDto: GetLoansFilterDto, user: any) {
-    // const loans = await this.getAll(filterDto, user);
+    const serviceStartTime = Date.now();
+    console.log(`[EXPORT-SERVICE] Starting export service at ${new Date().toISOString()}`);
 
-    // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+    // STEP 1: Load ALL loans in a single query
+    const dataLoadStartTime = Date.now();
+    const allLoansData = await this.loadAllLoansForExport(filterDto, user);
+    const dataLoadTime = Date.now() - dataLoadStartTime;
+    console.log(`[EXPORT-SERVICE] ⏱️  Loaded ${allLoansData.length} records in ${dataLoadTime}ms (${(dataLoadTime / 1000).toFixed(2)}s)`);
 
-    // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+    // STEP 2: Create generator that yields data in chunks for Excel streaming
+    const EXCEL_CHUNK_SIZE = 1000; // Chunk size for Excel streaming only
+    const dataGenerator = this.createExcelChunkGenerator(allLoansData, EXCEL_CHUNK_SIZE);
 
-    const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
-
-    // Create async generator for chunked data loading using cursor-based pagination
-    const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
-
-    // Use streaming Excel generation
-    return await generateExcelStream(
+    // STEP 3: Use streaming Excel generation
+    const excelStartTime = Date.now();
+    const buffer = await generateExcelStream(
       dataGenerator,
       filterDto.columns,
       'Loans Report'
     );
 
+    const excelTime = Date.now() - excelStartTime;
+    const totalServiceTime = Date.now() - serviceStartTime;
+    console.log(`[EXPORT-SERVICE] Excel generation took ${excelTime}ms (${(excelTime / 1000).toFixed(2)}s)`);
+    console.log(`[EXPORT-SERVICE] Total service time: ${totalServiceTime}ms (${(totalServiceTime / 1000).toFixed(2)}s)`);
+    console.log(`[EXPORT-SERVICE] Breakdown: Data Load ${dataLoadTime}ms (${((dataLoadTime / totalServiceTime) * 100).toFixed(1)}%) | Excel ${excelTime}ms (${((excelTime / totalServiceTime) * 100).toFixed(1)}%)`);
+
+    return buffer;
+  }
+
+  /**
+ * Load ALL loans for export in a single query (no chunking)
+ * This eliminates the overhead of multiple DB queries
+ */
+  private async loadAllLoansForExport(filterDto: GetLoansFilterDto, user: any) {
+    console.log(`[LOAD-ALL] Starting to load all loans at ${new Date().toISOString()}`);
+
+    // STEP 1: Get team member IDs
+    const teamMemberStartTime = Date.now();
+    const teamMemberIds = await this.getTeamMemberIds(user);
+    console.log(`[LOAD-ALL] ⏱️  Team members fetched in ${Date.now() - teamMemberStartTime}ms`);
+
+    // STEP 2: Build filters
+    const filterBuildStartTime = Date.now();
+    const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+    const where = buildInitialWhereClause();
+
+    if (showOnlyClosedLoans) {
+      applyClosedLoansFilter(where, filters);
+      applyClosedDateRangeFilter(where, filters);
+    } else {
+      applyOpenLoansFilter(where, filters, showClosedLoans);
+    }
+
+    applyCommonFilters(where, filters);
+    applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+
+    // Handle complex filters with intersection
+    const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+    if (shouldProcessIntersection(relatedFilterIds)) {
+      if (hasEmptyFilterResults(relatedFilterIds)) {
+        console.log(`[LOAD-ALL] ⚠️  No data to export (empty filter results)`);
+        return [];
+      }
+
+      const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+      if (intersectedIds.length === 0) {
+        console.log(`[LOAD-ALL] ⚠️  No data to export (no intersected IDs)`);
+        return [];
+      }
+
+      applyIntersectedIds(where, intersectedIds);
+    }
+
+    console.log(`[LOAD-ALL] ⏱️  Filters built in ${Date.now() - filterBuildStartTime}ms`);
+
+    const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
+    const includeConfig = this.getExportIncludeConfig();
+
+    // STEP 3: Load ALL loans in single query
+    const dbQueryStartTime = Date.now();
+    const loans = await this.permissionsHelper.loan.findMany({
+      where,
+      orderBy: { id: 'asc' },
+      include: includeConfig,
+      _skipUserScope: skipUserScope,
+    });
+    const dbQueryTime = Date.now() - dbQueryStartTime;
+    console.log(`[LOAD-ALL] ⏱️  DB query loaded ${loans.length} records in ${dbQueryTime}ms (${(dbQueryTime / 1000).toFixed(2)}s)`);
+
+    if (loans.length === 0) {
+      console.log(`[LOAD-ALL] ⚠️  No loans found`);
+      return [];
+    }
+
+    // STEP 4: Batch load latest records for ALL loans at once
+    const batchLoadStartTime = Date.now();
+    const loanIds = loans.map(loan => loan.id);
+    const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+    attachLatestRecordsToLoans(loans, latestRecords);
+    const batchLoadTime = Date.now() - batchLoadStartTime;
+    console.log(`[LOAD-ALL] ⏱️  Batch loaded latest records in ${batchLoadTime}ms (${(batchLoadTime / 1000).toFixed(2)}s)`);
+
+    // STEP 5: Enrich and transform
+    const transformStartTime = Date.now();
+    const enrichedLoans = loans.map(loan => ({
+      ...loan,
+      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+    }));
+
+    const loanExportData = enrichedLoans.map(loan => prepareLoanExportData(loan));
+    const transformTime = Date.now() - transformStartTime;
+    console.log(`[LOAD-ALL] ⏱️  Transform completed in ${transformTime}ms`);
+
+    return loanExportData;
+  }
+
+  /**
+   * Simple generator that yields already-loaded data in chunks for Excel streaming
+   * This avoids memory issues during Excel generation
+   */
+  private async *createExcelChunkGenerator(data: any[], chunkSize: number): AsyncGenerator<any[], void, unknown> {
+    console.log(`[EXCEL-CHUNK-GEN] Yielding ${data.length} records in chunks of ${chunkSize}`);
+
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.slice(i, i + chunkSize);
+      yield chunk;
+
+      if ((i + chunkSize) % 10000 === 0) {
+        console.log(`[EXCEL-CHUNK-GEN] Yielded ${Math.min(i + chunkSize, data.length)} / ${data.length} records`);
+      }
+    }
   }
 
   async addLoanReminder(publicId: ParseUUIDPipe, data: AddLoanReminderDto, userId: number) {
