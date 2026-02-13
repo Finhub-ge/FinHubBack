@@ -5,12 +5,13 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { LoanModule } from './loan/loan.module';
 import { AppController } from './app.controller';
-import { AminModule } from './admin/admin.module';
+import { AdminModule } from './admin/admin.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CronService } from './cron/cron.service';
 import { CommonModule } from './common/common.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ClientPortalModule } from './clientPortal/clientPortal.module';
+import { OnlinePaymentsModule } from './onlinePayments/onlinePayments.module';
 
 
 @Module({
@@ -25,9 +26,10 @@ import { ClientPortalModule } from './clientPortal/clientPortal.module';
     AuthModule,
     UserModule,
     LoanModule,
-    AminModule,
+    AdminModule,
     DashboardModule,
     ClientPortalModule,
+    OnlinePaymentsModule,
   ],
   controllers: [AppController],
   providers: [CronService],

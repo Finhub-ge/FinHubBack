@@ -15,4 +15,4 @@ import { HttpModule } from "@nestjs/axios";
   providers: [AdminService, JwtStrategy, PaymentsHelper, S3Helper, PermissionsHelper, CurrencyHelper],
   exports: [AdminService]
 })
-export class AminModule { }
+export class AdminModule { }
