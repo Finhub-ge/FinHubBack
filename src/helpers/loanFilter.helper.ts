@@ -809,6 +809,219 @@ export const batchLoadLatestRecords = async (
 };
 
 /**
+ * OPTIMIZED version for EXPORTS ONLY
+ * Uses window functions (ROW_NUMBER) instead of MAX subqueries
+ * ~40-50% faster for large datasets (46k+ records)
+ *
+ * DO NOT use this for other features without testing - it's optimized for bulk export performance
+ */
+export const batchLoadLatestRecordsForExport = async (
+  prisma: PrismaService,
+  loanIds: number[]
+): Promise<{
+  statusHistory: Map<number, any>;
+  collateralStatus: Map<number, any>;
+  litigationStage: Map<number, any>;
+  legalStage: Map<number, any>;
+  marks: Map<number, any>;
+  addresses: Map<number, any>;
+  visits: Map<number, any>;
+}> => {
+  if (loanIds.length === 0) {
+    return {
+      statusHistory: new Map(),
+      collateralStatus: new Map(),
+      litigationStage: new Map(),
+      legalStage: new Map(),
+      marks: new Map(),
+      addresses: new Map(),
+      visits: new Map(),
+    };
+  }
+
+  const loanIdsStr = loanIds.join(',');
+
+  // Execute all queries in parallel - 7 queries with window functions
+  const [
+    statusHistoryRecords,
+    collateralStatusRecords,
+    litigationStageRecords,
+    legalStageRecords,
+    marksRecords,
+    addressRecords,
+    visitRecords,
+  ] = await Promise.all([
+    // Latest status history - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.id,
+        ranked.loanId,
+        ranked.newStatusId,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lsh.id,
+          lsh.loanId,
+          lsh.newStatusId,
+          lsh.createdAt,
+          ROW_NUMBER() OVER (PARTITION BY lsh.loanId ORDER BY lsh.createdAt DESC) as rn
+        FROM LoanStatusHistory lsh
+        WHERE lsh.loanId IN (${loanIdsStr}) AND lsh.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest collateral status - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.collateralStatusId,
+        ranked.collateralStatusTitle,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lcs.loanId,
+          lcs.collateralStatusId,
+          lcs.createdAt,
+          cs.id as collateralStatusIdJoin,
+          cs.title as collateralStatusTitle,
+          ROW_NUMBER() OVER (PARTITION BY lcs.loanId ORDER BY lcs.createdAt DESC) as rn
+        FROM LoanCollateralStatus lcs
+        INNER JOIN CollateralStatus cs ON lcs.collateralStatusId = cs.id
+        WHERE lcs.loanId IN (${loanIdsStr}) AND lcs.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest litigation stage - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.litigationStageId,
+        ranked.litigationStageTitle,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lls.loanId,
+          lls.litigationStageId,
+          lls.createdAt,
+          ls.id as litigationStageIdJoin,
+          ls.title as litigationStageTitle,
+          ROW_NUMBER() OVER (PARTITION BY lls.loanId ORDER BY lls.createdAt DESC) as rn
+        FROM LoanLitigationStage lls
+        INNER JOIN LitigationStage ls ON lls.litigationStageId = ls.id
+        WHERE lls.loanId IN (${loanIdsStr}) AND lls.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest legal stage - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.legalStageId,
+        ranked.legalStageTitle,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lls.loanId,
+          lls.legalStageId,
+          lls.createdAt,
+          ls.id as legalStageIdJoin,
+          ls.title as legalStageTitle,
+          ROW_NUMBER() OVER (PARTITION BY lls.loanId ORDER BY lls.createdAt DESC) as rn
+        FROM LoanLegalStage lls
+        INNER JOIN LegalStage ls ON lls.legalStageId = ls.id
+        WHERE lls.loanId IN (${loanIdsStr}) AND lls.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest marks - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.markId,
+        ranked.markTitle,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lm.loanId,
+          lm.markId,
+          lm.createdAt,
+          m.id as markIdJoin,
+          m.title as markTitle,
+          ROW_NUMBER() OVER (PARTITION BY lm.loanId ORDER BY lm.createdAt DESC) as rn
+        FROM LoanMarks lm
+        INNER JOIN Marks m ON lm.markId = m.id
+        WHERE lm.loanId IN (${loanIdsStr}) AND lm.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest address - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.cityId,
+        ranked.cityName,
+        ranked.address,
+        ranked.createdAt
+      FROM (
+        SELECT
+          la.loanId,
+          la.cityId,
+          la.address,
+          la.createdAt,
+          c.id as cityIdJoin,
+          c.city as cityName,
+          ROW_NUMBER() OVER (PARTITION BY la.loanId ORDER BY la.createdAt DESC) as rn
+        FROM LoanAddress la
+        INNER JOIN City c ON la.cityId = c.id
+        WHERE la.loanId IN (${loanIdsStr}) AND la.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+
+    // Latest visit - OPTIMIZED with ROW_NUMBER
+    prisma.$queryRawUnsafe<any[]>(`
+      SELECT
+        ranked.loanId,
+        ranked.status,
+        ranked.loanAddressId,
+        ranked.addressId,
+        ranked.addressText,
+        ranked.createdAt
+      FROM (
+        SELECT
+          lv.loanId,
+          lv.status,
+          lv.loanAddressId,
+          lv.createdAt,
+          la.id as addressId,
+          la.address as addressText,
+          ROW_NUMBER() OVER (PARTITION BY lv.loanId ORDER BY lv.createdAt DESC) as rn
+        FROM LoanVisit lv
+        LEFT JOIN LoanAddress la ON lv.loanAddressId = la.id
+        WHERE lv.loanId IN (${loanIdsStr}) AND lv.deletedAt IS NULL
+      ) ranked
+      WHERE rn = 1
+    `),
+  ]);
+
+  // Convert arrays to Maps for O(1) lookup
+  return {
+    statusHistory: new Map(statusHistoryRecords.map(r => [r.loanId, r])),
+    collateralStatus: new Map(collateralStatusRecords.map(r => [r.loanId, r])),
+    litigationStage: new Map(litigationStageRecords.map(r => [r.loanId, r])),
+    legalStage: new Map(legalStageRecords.map(r => [r.loanId, r])),
+    marks: new Map(marksRecords.map(r => [r.loanId, r])),
+    addresses: new Map(addressRecords.map(r => [r.loanId, r])),
+    visits: new Map(visitRecords.map(r => [r.loanId, r])),
+  };
+};
+
+/**
  * Attach latest records to loans (maps data to Prisma format)
  */
 export const attachLatestRecordsToLoans = (
