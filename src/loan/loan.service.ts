@@ -30,7 +30,7 @@ import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
 import { generateExcel, generateExcelStream } from 'src/helpers/excel.helper';
 import { LoanStatusGroups, LoanStatusId } from 'src/enums/loanStatus.enum';
-import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, hasLoanAssignmentInWhere, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, batchLoadLatestRecordsForExport, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, hasLoanAssignmentInWhere, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
@@ -2540,9 +2540,9 @@ export class LoanService {
   }
 
   /**
- * Load ALL loans for export in a single query (no chunking)
- * This eliminates the overhead of multiple DB queries
- */
+   * Load ALL loans for export in a single query (no chunking)
+   * This eliminates the overhead of multiple DB queries
+   */
   private async loadAllLoansForExport(filterDto: GetLoansFilterDto, user: any) {
     console.log(`[LOAD-ALL] Starting to load all loans at ${new Date().toISOString()}`);
 
@@ -2605,24 +2605,30 @@ export class LoanService {
       return [];
     }
 
-    // STEP 4: Batch load latest records for ALL loans at once
+    // STEP 4: Batch load latest records for ALL loans at once (OPTIMIZED with window functions)
     const batchLoadStartTime = Date.now();
     const loanIds = loans.map(loan => loan.id);
-    const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+    const latestRecords = await batchLoadLatestRecordsForExport(this.prisma, loanIds);
     attachLatestRecordsToLoans(loans, latestRecords);
     const batchLoadTime = Date.now() - batchLoadStartTime;
-    console.log(`[LOAD-ALL] ⏱️  Batch loaded latest records in ${batchLoadTime}ms (${(batchLoadTime / 1000).toFixed(2)}s)`);
+    console.log(`[LOAD-ALL] ⏱️  Batch loaded latest records (optimized) in ${batchLoadTime}ms (${(batchLoadTime / 1000).toFixed(2)}s)`);
 
-    // STEP 5: Enrich and transform
+    // STEP 5: Enrich and transform (OPTIMIZED: Single pass instead of two maps)
     const transformStartTime = Date.now();
-    const enrichedLoans = loans.map(loan => ({
-      ...loan,
-      actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
-    }));
+    const now = Date.now(); // Cache current timestamp
 
-    const loanExportData = enrichedLoans.map(loan => prepareLoanExportData(loan));
+    const loanExportData = loans.map(loan => {
+      // Inline actDays calculation to avoid function call overhead
+      loan.actDays = loan.lastActivite
+        ? Math.floor((now - loan.lastActivite.getTime()) / 86400000) // 86400000 = 1000*60*60*24
+        : null;
+
+      return prepareLoanExportData(loan);
+    });
+
     const transformTime = Date.now() - transformStartTime;
-    console.log(`[LOAD-ALL] ⏱️  Transform completed in ${transformTime}ms`);
+    const avgTimePerRecord = (transformTime / loans.length).toFixed(3);
+    console.log(`[LOAD-ALL] ⏱️  Transform completed in ${transformTime}ms (${avgTimePerRecord}ms per record)`);
 
     return loanExportData;
   }
