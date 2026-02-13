@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, SetMetadata, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { LoanService } from './loan.service';
 import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
 import { AllRoles, ExceptRoles, Roles } from 'src/auth/decorator/role.decorator';
 import { Role } from 'src/enums/role.enum';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateContactDto } from './dto/createContact.dto';
 import { GetUser } from 'src/auth/decorator/get-user.decorator';
 import { StatusMatrix_entityType, User } from '@prisma/client';
@@ -90,8 +90,6 @@ export class LoanController {
     @Res({ passthrough: true }) res: Response
   ) {
     const exportStartTime = Date.now();
-    console.log(`[EXPORT] Starting export at ${new Date().toISOString()}`);
-    console.log(`[EXPORT] User: ${user.id}, Filters:`, JSON.stringify(filterDto));
 
     // Set longer timeout for large exports
     res.setTimeout(300000); // 10 minutes

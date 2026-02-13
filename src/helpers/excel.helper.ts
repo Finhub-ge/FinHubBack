@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { getLoanExportHeaders } from './loan.helper';
-import { normalizeName } from './accountId.helper';
 import { getPaymentReportExportHeaders } from './reports.helper';
 
 export const generateExcel = async (
@@ -331,5 +330,26 @@ export const generateExcelStream = async (
   // Combine all chunks into a single buffer
   return Buffer.concat(chunks);
 };
+
+/**
+ * Generic data chunk generator for streaming large datasets to Excel
+ * Yields data in chunks to avoid memory issues while maintaining streaming benefits
+ *
+ * @param data Array of data to chunk
+ * @param chunkSize Size of each chunk (default: 1000)
+ * @returns AsyncGenerator that yields chunks of data
+ *
+ * @example
+ * const generator = createDataChunkGenerator(largeArray, 1000);
+ * await generateExcelStream(generator, columns, 'Sheet1');
+ */
+export async function* createDataChunkGenerator<T>(
+  data: T[],
+  chunkSize: number = 1000
+): AsyncGenerator<T[], void, unknown> {
+  for (let i = 0; i < data.length; i += chunkSize) {
+    yield data.slice(i, i + chunkSize);
+  }
+}
 
 
