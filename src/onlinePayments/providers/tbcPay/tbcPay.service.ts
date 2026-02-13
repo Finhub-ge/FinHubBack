@@ -120,7 +120,7 @@ export class TbcPayService {
 
       const response = this.xmlResponseHelper.buildCheckSuccessResponse({
         firstName: loanResult.debtor.firstName,
-        lastName: loanResult.debtor.lastName,
+        lastName: loanResult.debtor?.lastName || '',
         idNumber: loanResult.debtor.idNumber,
         debt: loanResult.debt,
       });

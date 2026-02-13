@@ -12,7 +12,7 @@ import { validate } from 'class-validator';
 export class TbcPayController {
   private readonly logger = new Logger(TbcPayController.name);
 
-  constructor(private readonly tbcPayService: TbcPayService) {}
+  constructor(private readonly tbcPayService: TbcPayService) { }
 
   @Get()
   @Header('Content-Type', 'application/xml; charset=UTF-8')
@@ -20,12 +20,12 @@ export class TbcPayController {
     summary: 'TBC Pay Integration Endpoint',
     description: `TBC Pay protocol endpoint.
 
-**CHECK Command**:
-GET /billing/?command=check&caseId=FL-2024-001234
-GET /billing/?command=check&caseId=FL-2024-001234&personalId=01234567890
+    **CHECK Command**:
+    GET /billing/?command=check&caseId=FL-2024-001234
+    GET /billing/?command=check&caseId=FL-2024-001234&personalId=01234567890
 
-**PAY Command**:
-GET /billing/?command=pay&caseId=FL-2024-001234&txn_id=1234567890&sum=100.50`
+    **PAY Command**:
+    GET /billing/?command=pay&caseId=FL-2024-001234&txn_id=1234567890&sum=100.50`
   })
   @ApiQuery({ name: 'command', enum: ['check', 'pay'], description: 'Command type', required: true })
   @ApiQuery({ name: 'caseId', description: 'Case identifier (Loan.caseId)', required: false })
