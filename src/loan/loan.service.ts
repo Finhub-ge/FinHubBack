@@ -35,6 +35,7 @@ import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
 import { shouldSkipUserScope } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
+import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
 
 @Injectable()
 export class LoanService {
