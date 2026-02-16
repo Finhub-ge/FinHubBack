@@ -248,6 +248,224 @@ export class LoanService {
     return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
   }
 
+  async getAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
+    const { page, limit, search, portfolio, portfolioSeller, fromAssignedUser, toAssignedUser,
+      assignedLawyer, collateralStatus, clientStatus, loanStatus, litigationStage,
+      legalStage, marks, assignedBy, assignedDateStart, assignedDateEnd } = filterDto;
+
+    // Setup pagination
+    const paginationParams = this.paginationService.getPaginationParams({ page, limit });
+
+    // Build where clause for LoanAssignment
+    const where: any = {
+      deletedAt: null,
+      roleId: 4,
+    };
+
+    // Search filter - search by case ID, debtor info, from/to user names
+    if (search) {
+      where.OR = [
+        // Search by case ID
+        {
+          Loan: {
+            caseId: { contains: search },
+          },
+        },
+        // Search by debtor ID number
+        {
+          Loan: {
+            Debtor: {
+              idNumber: { contains: search },
+            },
+          },
+        },
+        // Search by debtor first name
+        {
+          Loan: {
+            Debtor: {
+              firstName: { contains: search },
+            },
+          },
+        },
+        // Search by debtor last name
+        {
+          Loan: {
+            Debtor: {
+              lastName: { contains: search },
+            },
+          },
+        },
+        // Search by current user (to) first name
+        {
+          User: {
+            firstName: { contains: search },
+          },
+        },
+        // Search by current user (to) last name
+        {
+          User: {
+            lastName: { contains: search },
+          },
+        },
+        // Search by old user (from) first name
+        {
+          User_LoanAssignment_oldUserIdToUser: {
+            firstName: { contains: search },
+          },
+        },
+        // Search by old user (from) last name
+        {
+          User_LoanAssignment_oldUserIdToUser: {
+            lastName: { contains: search },
+          },
+        },
+      ];
+    }
+
+    // Portfolio filter
+    if (portfolio?.length) {
+      where.portfolioCaseGroupId = { in: portfolio };
+    }
+
+    // Portfolio seller filter
+    if (portfolioSeller?.length) {
+      where.Portfolio = {
+        id: { in: portfolioSeller },
+      };
+    }
+
+    // From assigned user filter (old user - previous collector)
+    if (fromAssignedUser?.length) {
+      where.oldUserId = { in: fromAssignedUser };
+    }
+
+    // To assigned user filter (current user - current collector)
+    if (toAssignedUser?.length) {
+      where.userId = { in: toAssignedUser };
+    }
+
+    // Assigned lawyer filter (assuming lawyer role)
+    if (assignedLawyer?.length) {
+      where.AND = where.AND || [];
+      where.AND.push({
+        userId: { in: assignedLawyer },
+        Role: {
+          name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] }
+        }
+      });
+    }
+
+    // Collateral status filter
+    if (collateralStatus?.length) {
+      where.collateralStatusId = { in: collateralStatus };
+    }
+
+    // Client status filter (debtor status)
+    if (clientStatus?.length) {
+      where.debtorStatusId = { in: clientStatus };
+    }
+
+    // Loan status filter
+    if (loanStatus?.length) {
+      where.loanStatusId = { in: loanStatus };
+    }
+
+    // Litigation stage filter
+    if (litigationStage?.length) {
+      where.litigationStageId = { in: litigationStage };
+    }
+
+    // Legal stage filter
+    if (legalStage?.length) {
+      where.legalStageId = { in: legalStage };
+    }
+
+    // Marks filter
+    if (marks?.length) {
+      where.markId = { in: marks };
+    }
+
+    // Assigned by filter (user who created the assignment)
+    if (assignedBy?.length) {
+      where.assignedBy = { in: assignedBy };
+    }
+
+    // Assigned date range filter
+    if (assignedDateStart || assignedDateEnd) {
+      where.assignedAt = {};
+      if (assignedDateStart) {
+        where.assignedAt.gte = new Date(assignedDateStart);
+      }
+      if (assignedDateEnd) {
+        where.assignedAt.lte = new Date(assignedDateEnd);
+      }
+    }
+
+    // Get assignments with relations
+    const [assignments, totalCount] = await Promise.all([
+      this.prisma.loanAssignment.findMany({
+        where,
+        ...paginationParams,
+        orderBy: { assignedAt: 'desc' },
+        include: {
+          Loan: {
+            select: {
+              caseId: true,
+              Debtor: true,
+              currency: true,
+              LoanAssignment: {
+                where: { isActive: true, deletedAt: null, roleId: 2 },
+                select: {
+                  id: true,
+                  assignedAt: true,
+                  loanId: true,
+                  User: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                    }
+                  },
+                  Role: {
+                    select: {
+                      id: true,
+                      name: true,
+                    }
+                  }
+                }
+              }
+            }
+          },
+          User: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          Role: {
+            select: { id: true, name: true },
+          },
+          CollateralStatus: true,
+          DebtorStatus: true,
+          PortfolioCaseGroup: true,
+          LegalStage: true,
+          LitigationStage: true,
+          LoanRemaining: true,
+          LoanStatus_LoanAssignment_loanStatusIdToLoanStatus: true,
+          Marks: true,
+          LoanStatus_LoanAssignment_oldLoanStatusIdToLoanStatus: true,
+          User_LoanAssignment_oldUserIdToUser: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          User_LoanAssignment_assignedByToUser: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          Portfolio: true,
+        },
+      }),
+      this.prisma.loanAssignment.count({ where }),
+    ]);
+
+    return this.paginationService.createPaginatedResult(assignments, totalCount, { page, limit });
+  }
+
   async getSummary(filterDto: GetLoansFilterDto, user: any) {
     // Build where clause using same logic as getAll
     const { where, skipUserScope } = await this.buildLoansWhereClause(filterDto, user);
@@ -1634,6 +1852,8 @@ export class LoanService {
       select: {
         id: true,
         statusId: true,
+        groupId: true,
+        portfolioId: true,
         LoanVisit: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -1641,6 +1861,35 @@ export class LoanService {
           select: {
             status: true,
           },
+        },
+        Debtor: {
+          select: {
+            id: true,
+            statusId: true,
+          }
+        },
+        LoanRemaining: {
+          where: { deletedAt: null },
+        },
+        LoanCollateralStatus: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanLegalStage: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanLitigationStage: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        LoanMarks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -1663,11 +1912,6 @@ export class LoanService {
 
     const assignedUser = await this.prisma.user.findUnique({
       where: { id: assignLoanDto.userId, isActive: true, deletedAt: null },
-      // include: {
-      //   TeamMembership: {
-      //     where: { deletedAt: null, teamRole: TeamMembership_teamRole.leader },
-      //   },
-      // }
     });
     if (!assignedUser) throw new NotFoundException('User not found');
 
@@ -1675,10 +1919,6 @@ export class LoanService {
     if (assignedUser.roleId !== assignLoanDto.roleId) {
       throw new BadRequestException('User role does not match roleId provided');
     }
-
-    // if (!user?.team_membership?.some(tm => tm.teamRole === TeamMembership_teamRole.leader)) {
-    //   throw new BadRequestException('User is not a team lead');
-    // }
 
     // Check if any visit is pending
     const hasPendingVisit = loan.LoanVisit.some(visit => visit.status === LoanVisit_status.pending);
@@ -1701,23 +1941,19 @@ export class LoanService {
       });
 
       return await this.assign({
-        loanId: loan.id,
+        loan,
         userId: assignedUser.id,
         roleId: assignLoanDto.roleId,
         assignedBy: user.id,
         comment: assignLoanDto.comment,
-        loanStatusId: loan.statusId,
+        currentAssignment,
         tx
       });
     });
   }
 
-  private async assign({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
+  private async assign({ loan: Loan, userId, roleId, assignedBy, comment, currentAssignment, tx = null }) {
     const dbClient = tx || this.prisma;
-    // Find current active assignment for this role
-    const currentAssignment = await dbClient.loanAssignment.findFirst({
-      where: { loanId, roleId, isActive: true },
-    });
 
     // If the same user is already assigned → nothing to do
     if (currentAssignment?.userId === userId) {
@@ -1726,20 +1962,36 @@ export class LoanService {
 
     // If there is a current assignment → unassign old user
     if (currentAssignment) {
-      await this.unassign({ loanId, roleId, assignedBy, comment, userId, tx });
+      await this.unassign({ loanId: Loan.id, roleId, assignedBy, comment, userId, tx });
     }
 
     // Assign new user
-    return this.assignNew({ loanId, userId: userId, roleId, assignedBy, comment, loanStatusId, tx });
+    return this.assignNew({ loan: Loan, userId: userId, roleId, assignedBy, comment, currentAssignment, tx });
   }
 
-  private async assignNew({ loanId, userId, roleId, assignedBy, comment, loanStatusId, tx = null }) {
+  private async assignNew({ loan: Loan, userId, roleId, assignedBy, comment, currentAssignment, tx = null }) {
     const dbClient = tx || this.prisma;
-    await dbClient.loanAssignment.create({
-      data: { loanId, userId, roleId, isActive: true },
-    });
 
-    await logAssignmentHistory({ prisma: dbClient, loanId, userId, roleId, action: 'assigned', assignedBy });
+    const assignmentData = {
+      loanId: Loan.id,
+      userId,
+      oldUserId: currentAssignment?.userId,
+      roleId,
+      isActive: true,
+      assignedBy: assignedBy,
+      groupId: Loan.groupId,
+      portfolioId: Loan.portfolioId,
+      loanRemainingId: Loan.LoanRemaining[0]?.id,
+      collateralStatusId: Loan.LoanCollateralStatus.length ? Loan.LoanCollateralStatus[0]?.collateralStatusId : null,
+      debtorStatusId: Loan.Debtor.statusId,
+      loanStatusId: Loan.statusId,
+      oldLoanStatusId: Loan.statusId,
+      legalStageId: Loan.LoanLegalStage.length ? Loan.LoanLegalStage[0]?.legalStageId : null,
+      litigationStageId: Loan.LoanLitigationStage.length ? Loan.LoanLitigationStage[0]?.litigationStageId : null,
+      markId: Loan.LoanMarks.length ? Loan.LoanMarks[0]?.markId : null,
+    };
+
+    await logAssignmentHistory({ prisma: dbClient, loanId: Loan.id, userId, roleId, action: 'assigned', assignedBy });
 
     // Get assigned user details for comment
     const assignedUser = await dbClient.user.findUnique({
@@ -1752,7 +2004,7 @@ export class LoanService {
       const commentText = `Assign(${userId}): ${assignedUser.firstName} ${assignedUser.lastName}`;
       await dbClient.comments.create({
         data: {
-          loanId: loanId,
+          loanId: Loan.id,
           userId: assignedBy,
           comment: commentText
         }
@@ -1768,7 +2020,7 @@ export class LoanService {
     if (role && LAWYER_ROLES.includes(role.name as Role)) {
       // Check if there's a PENDING LawyerRequest for this loan
       const pendingRequest = await dbClient.lawyerRequest.findUnique({
-        where: { loanId: loanId }
+        where: { loanId: Loan.id }
       });
 
       if (pendingRequest && pendingRequest.status === 'PENDING') {
@@ -1787,19 +2039,20 @@ export class LoanService {
     if (role && role.name === Role.COLLECTOR) {
       // update loan status to New except if status is Agreement or Agreement Canceled
       const loanStatus = await dbClient.loanStatus.findUnique({
-        where: { id: loanStatusId },
+        where: { id: Loan.statusId },
         select: { id: true, name: true }
       });
 
       if (loanStatus && loanStatus.id !== LoanStatusId.AGREEMENT && loanStatus.id !== LoanStatusId.AGREEMENT_CANCELED) {
+        assignmentData.loanStatusId = LoanStatusId.NEW;
         await dbClient.loan.update({
-          where: { id: loanId },
+          where: { id: Loan.id },
           data: { statusId: LoanStatusId.NEW, lastActivite: new Date() }
         });
         await dbClient.loanStatusHistory.create({
           data: {
-            loanId: loanId,
-            oldStatusId: loanStatusId,
+            loanId: Loan.id,
+            oldStatusId: Loan.statusId,
             newStatusId: LoanStatusId.NEW,
             changedBy: userId,
             notes: 'Status changed to New because of collector assignment'
@@ -1807,8 +2060,11 @@ export class LoanService {
         });
       }
     }
+    await dbClient.loanAssignment.create({
+      data: assignmentData
+    });
 
-    return { loanId, userId, roleId, action: 'assigned' };
+    return { loanId: Loan.id, userId, roleId, action: 'assigned' };
   }
 
   private async unassign({

@@ -29,6 +29,7 @@ import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { UpdateCommentDto } from './dto/updateComment.dto';
 import { Response } from 'express';
+import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -41,6 +42,13 @@ export class LoanController {
   @Get()
   getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
     return this.loanService.getAll(filterDto, user);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('assignedCases')
+  getAssignedCases(@GetUser() user: User, @Query() filterDto: GetAssignedCasesFilterWithPaginationDto) {
+    return this.loanService.getAssignedCases(filterDto, user);
   }
 
   // @UseGuards(JwtGuard, RolesGuard)
