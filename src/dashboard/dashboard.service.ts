@@ -1,21 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { statusNameMap } from 'src/enums/loanStatus.enum';
-import { buildDataMaps, calculateCollectorMetrics, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory, mapOldPlanReport } from 'src/helpers/report.helper';
+import { aggregateActivityCounts, aggregateCharges, aggregateCourtAndExecutionCases, aggregateLoanStatistics, aggregateOldPlanReport, aggregateTransactionData, buildDataMaps, buildSummaryFromAggregates, calculateCollectorMetrics, calculateDebtorStatusChanges, calculateTransactionCountWithTwoDayRule, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory, fetchTargetAggregates, getEmptySummary, mapOldPlanReport } from 'src/helpers/report.helper';
 import { getYear } from 'src/helpers/date.helper';
+import { Role } from 'src/enums/role.enum';
+import { LoanService } from 'src/loan/loan.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private prisma: PrismaService,
     private readonly paginationService: PaginationService,
+    private readonly loanService: LoanService,
   ) { }
-  async getPlanChart(getPlanReportDto: GetPlanReportDto) {
+  async getPlanChart(getPlanReportDto: GetPlanReportDto, user: any) {
     const currentYear = new Date().getFullYear();
-    const { collectorId, year } = getPlanReportDto;
+    let { collectorId, year } = getPlanReportDto;
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(year, currentYear);
 
@@ -31,16 +34,79 @@ export class DashboardService {
     };
 
     // Helper: sum new plan data
-    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[]) => {
-      targets.forEach(t => targetAmounts[t.month - 1] += Number(t.targetAmount));
+    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[], filters: any) => {
+      // Build a map of targets by collectorId_year_month for quick lookup
+      const targetMap = new Map<string, any>();
+      targets.forEach(t => {
+        targetAmounts[t.month - 1] += Number(t.targetAmount);
+        const key = `${t.collectorId}_${t.year}_${t.month}`;
+        targetMap.set(key, t);
+      });
+
+      // Filter collections by date range (same logic as calculateCollectorMetrics)
       collections.forEach(c => {
-        const m = c.Transaction?.paymentDate?.getMonth();
-        if (m !== undefined && m >= 0) collectedAmounts[m] += Number(c.amount);
+        if (c.month >= 1 && c.month <= 12) {
+          const key = `${c.userId}_${c.year}_${c.month}`;
+          const target = targetMap.get(key);
+
+          if (target) {
+            // Apply date filtering
+            const start = target.createdAt;
+            const lastDayOfMonth = new Date(c.year, c.month, 0);
+
+            let end: Date;
+            if (filters.month?.length === 1 && filters.year?.length === 1) {
+              end = lastDayOfMonth;
+            } else if (filters.date) {
+              end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
+            } else {
+              const today = new Date();
+              end = today < lastDayOfMonth ? today : lastDayOfMonth;
+            }
+
+            // Only count if transaction is within date range
+            if (c.createdAt >= start && c.createdAt <= end) {
+              collectedAmounts[c.month - 1] += Number(c.amount);
+            }
+          } else {
+            // No target for this collector/month - still count it (backward compatibility)
+            collectedAmounts[c.month - 1] += Number(c.amount);
+          }
+        }
       });
     };
 
     // Initialize arrays
     const { targetAmounts, collectedAmounts } = initMonthlyArrays();
+
+    if (user.role_name === Role.COLLECTOR) {
+      const isLeader = user.team_membership?.some(
+        tm => tm.teamRole === 'leader',
+      );
+
+      if (isLeader) {
+        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+
+        if (collectorId?.length) {
+          // intersection with team members
+          collectorId = collectorId.filter(id =>
+            teamMemberIds.includes(id),
+          );
+        } else {
+          collectorId = teamMemberIds;
+        }
+
+      } else {
+        // Collector but NOT leader → only himself
+        collectorId = [user.id];
+      }
+
+    } else {
+      // NOT collector
+      if (!collectorId?.length) {
+        collectorId = undefined; // take all
+      }
+    }
 
     // --- OLD DATA ---
     if (oldYears.length > 0 || (!year && currentYear < 2026)) {
@@ -59,7 +125,11 @@ export class DashboardService {
 
     // --- NEW DATA ---
     if (newYears.length > 0 || defaultIsNew) {
-      const where: any = {};
+      const where: any = {
+        User: {
+          isActive: true,
+        },
+      };
       if (year?.length) where.year = { in: year };
 
       const targetWhere: any = { ...where };
@@ -67,42 +137,71 @@ export class DashboardService {
 
       const targets = await this.prisma.collectorsMonthlyTarget.findMany({
         where: targetWhere,
-        select: { targetAmount: true, month: true, year: true, collectorId: true },
+        select: { targetAmount: true, month: true, year: true, collectorId: true, createdAt: true },
       });
 
-      const collectionWhere: any = { ...where, roleId: 4 };
+      const collectionWhere: any = { ...where, roleId: 4, deletedAt: null };
       if (collectorId?.length) collectionWhere.userId = { in: collectorId };
 
       const collections = await this.prisma.transactionUserAssignments.findMany({
         where: collectionWhere,
-        select: { amount: true, year: true, month: true, userId: true, Transaction: { select: { paymentDate: true } } },
+        select: { amount: true, year: true, month: true, userId: true, createdAt: true },
       });
 
-      sumNewData(targets, collections, targetAmounts, collectedAmounts);
+      sumNewData(targets, collections, targetAmounts, collectedAmounts, getPlanReportDto);
     }
 
     return { targetAmounts, collectedAmounts };
   }
 
-  async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto) {
+  async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto, user: any) {
     const currentYear = new Date().getFullYear();
     const { page, limit, skip, ...filters } = getPlanReportDto;
+    let { collectorId } = filters;
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
 
+    if (user.role_name === Role.COLLECTOR) {
+      const isLeader = user.team_membership?.some(
+        tm => tm.teamRole === 'leader',
+      );
+
+      if (isLeader) {
+        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+
+        if (collectorId?.length) {
+          // intersection with team members
+          collectorId = collectorId.filter(id =>
+            teamMemberIds.includes(id),
+          );
+        } else {
+          collectorId = teamMemberIds;
+        }
+
+      } else {
+        // Collector but NOT leader → only himself
+        collectorId = [user.id];
+      }
+
+    } else {
+      // NOT collector
+      if (!collectorId?.length) {
+        collectorId = undefined; // take all
+      }
+    }
+
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
-      return this.getOldPlanReport(getPlanReportDto);
+      return this.getOldPlanReport(getPlanReportDto, collectorId);
     }
 
     if (newYears.length > 0 || defaultIsNew) {
       const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
 
       // Build Prisma where clause for targets
-      const targetWhere: any = {};
+      const targetWhere: any = { User: { isActive: true } };
       if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
       if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
-      if (filters.collectorId && filters.collectorId.length > 0) targetWhere.collectorId = { in: filters.collectorId };
-
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
       // Fetch collector monthly targets
       const data = await this.prisma.collectorsMonthlyTarget.findMany({
         where: targetWhere,
@@ -166,7 +265,200 @@ export class DashboardService {
     }
   }
 
-  private async getOldPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto) {
+  async getPlanReportSummary(getPlanReportDto: GetPlanReportDto, user: any) {
+    const currentYear = new Date().getFullYear();
+    const filters = getPlanReportDto;
+    let { collectorId } = filters;
+
+    const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
+
+    if (user.role_name === Role.COLLECTOR) {
+      const isLeader = user.team_membership?.some(
+        tm => tm.teamRole === 'leader',
+      );
+
+      if (isLeader) {
+        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+
+        if (collectorId?.length) {
+          // intersection with team members
+          collectorId = collectorId.filter(id =>
+            teamMemberIds.includes(id),
+          );
+        } else {
+          collectorId = teamMemberIds;
+        }
+
+      } else {
+        // Collector but NOT leader → only himself
+        collectorId = [user.id];
+      }
+
+    } else {
+      // NOT collector
+      if (!collectorId?.length) {
+        collectorId = undefined; // take all
+      }
+    }
+
+    if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
+      return this.getOldPlanReportSummer(getPlanReportDto, collectorId);
+    }
+
+    if (newYears.length > 0 || defaultIsNew) {
+      // Build Prisma where clause for targets
+      const targetWhere: any = { User: { isActive: true } };
+      if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
+      if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
+
+      // Fetch collector monthly targets (need createdAt for date filtering)
+      const data = await this.prisma.collectorsMonthlyTarget.findMany({
+        where: targetWhere,
+        select: {
+          id: true,
+          collectorId: true,
+          User: {
+            select: {
+              firstName: true,
+              lastName: true,
+            }
+          },
+          targetAmount: true,
+          year: true,
+          month: true,
+          loanIds: true,
+          createdAt: true,
+        },
+      });
+
+      if (data.length === 0) {
+        return getEmptySummary();
+      }
+
+      // Extract all loan IDs and collector IDs
+      const allLoanIds = data
+        .flatMap(t => (Array.isArray(t.loanIds) ? t.loanIds : []))
+        .filter(Boolean) as number[];
+      const collectorIds = data.map(t => t.collectorId);
+
+      // Fetch all collection-related data
+      const collectionData = await fetchCollectionData(
+        this.prisma,
+        allLoanIds,
+        collectorIds
+      );
+
+      // Build maps for efficient lookups
+      const dataMaps = buildDataMaps(collectionData);
+
+      // Fetch and process transactions with 2-day rule
+      const transactionData = await fetchAndProcessTransactions(
+        this.prisma,
+        collectorIds,
+        data.map(d => d.year),
+        data.map(d => d.month)
+      );
+
+      // Fetch debtor status history
+      const debtorIds = collectionData.loans.map(l => l.debtorId).filter(Boolean) as number[];
+      const debtorStatusMap = await fetchDebtorStatusHistory(this.prisma, debtorIds);
+
+      // Calculate metrics for each collector target and sum them
+      const results = data.map(item =>
+        calculateCollectorMetrics(item, dataMaps, transactionData, debtorStatusMap, filters)
+      );
+
+      // Aggregate all results
+      const summary = results.reduce((acc, item) => {
+        return {
+          openingPrincipal: acc.openingPrincipal + item.openingPrincipal,
+          monthlyPlan: acc.monthlyPlan + item.monthlyPlan,
+          adjustedPlan: acc.adjustedPlan + item.adjustedPlan,
+          collectedAmount: acc.collectedAmount + item.collectedAmount,
+          paidLoanCount: acc.paidLoanCount + item.paidLoanCount,
+          newLoanCount: acc.newLoanCount + item.newLoanCount,
+          communicatedCount: acc.communicatedCount + item.communicatedCount,
+          unreachableCount: acc.unreachableCount + item.unreachableCount,
+          agreementCount: acc.agreementCount + item.agreementCount,
+          agreementCancelledCount: acc.agreementCancelledCount + item.agreementCancelledCount,
+          refuseToPayCount: acc.refuseToPayCount + item.refuseToPayCount,
+          promiseToPayCount: acc.promiseToPayCount + item.promiseToPayCount,
+          totalLoanCount: acc.totalLoanCount + item.totalLoanCount,
+          callCount: acc.callCount + item.callCount,
+          smsCount: acc.smsCount + item.smsCount,
+          markCount: acc.markCount + item.markCount,
+          commentCount: acc.commentCount + item.commentCount,
+          committeeRequestCount: acc.committeeRequestCount + item.committeeRequestCount,
+          inactiveOver40DaysCount: acc.inactiveOver40DaysCount + item.inactiveOver40DaysCount,
+          debtorStatusCount: acc.debtorStatusCount + item.debtorStatusCount,
+          totalActivities: acc.totalActivities + item.totalActivities,
+          totalLegalCharges: acc.totalLegalCharges + item.totalLegalCharges,
+          totalOtherCharges: acc.totalOtherCharges + item.totalOtherCharges,
+          courtCaseCount: acc.courtCaseCount + item.courtCaseCount,
+          courtPrincipalSum: acc.courtPrincipalSum + item.courtPrincipalSum,
+          executionCaseCount: acc.executionCaseCount + item.executionCaseCount,
+          executionPrincipalSum: acc.executionPrincipalSum + item.executionPrincipalSum,
+        };
+      }, {
+        openingPrincipal: 0,
+        monthlyPlan: 0,
+        adjustedPlan: 0,
+        collectedAmount: 0,
+        paidLoanCount: 0,
+        newLoanCount: 0,
+        communicatedCount: 0,
+        unreachableCount: 0,
+        agreementCount: 0,
+        agreementCancelledCount: 0,
+        refuseToPayCount: 0,
+        promiseToPayCount: 0,
+        totalLoanCount: 0,
+        callCount: 0,
+        smsCount: 0,
+        markCount: 0,
+        commentCount: 0,
+        committeeRequestCount: 0,
+        inactiveOver40DaysCount: 0,
+        debtorStatusCount: 0,
+        totalActivities: 0,
+        totalLegalCharges: 0,
+        totalOtherCharges: 0,
+        courtCaseCount: 0,
+        courtPrincipalSum: 0,
+        executionCaseCount: 0,
+        executionPrincipalSum: 0,
+      });
+
+      // Calculate average rates
+      const collectionRatePercent = summary.monthlyPlan > 0
+        ? (summary.collectedAmount / summary.monthlyPlan) * 100
+        : 0;
+      const paymentSuccessRate = summary.totalLoanCount > 0
+        ? (summary.paidLoanCount / summary.totalLoanCount) * 100
+        : 0;
+
+      return {
+        ...summary,
+        collectionRatePercent,
+        paymentSuccessRate,
+        totalCallDurationSec: "00:00:00",
+      };
+    }
+  }
+
+  private async getOldPlanReportSummer(getPlanReportDto: GetPlanReportDto, collectorId: number[]) {
+    const filters = getPlanReportDto;
+
+    const where: any = {};
+    if (filters.year && filters.year.length > 0) where.PlanYear = { in: filters.year };
+    if (filters.month && filters.month.length > 0) where.PlanMonth = { in: filters.month };
+    if (collectorId?.length) where.Collector_ID = { in: collectorId };
+
+    return aggregateOldPlanReport(this.prisma, where);
+  }
+
+  private async getOldPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto, collectorId: number[]) {
     const { page, limit, skip, ...filters } = getPlanReportDto;
 
     const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
@@ -175,7 +467,7 @@ export class DashboardService {
 
     if (filters.year && filters.year.length > 0) where.PlanYear = { in: filters.year };
     if (filters.month && filters.month.length > 0) where.PlanMonth = { in: filters.month };
-    if (filters.collectorId && filters.collectorId.length > 0) where.Collector_ID = { in: filters.collectorId };
+    if (collectorId?.length) where.Collector_ID = { in: collectorId };
 
     const data = await this.prisma.old_db_plan_collection.findMany({
       where,

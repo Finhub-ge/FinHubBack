@@ -6,6 +6,8 @@ import { JwtGuard } from 'src/auth/guard/jwt.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 import { Role } from 'src/enums/role.enum';
+import { GetUser } from 'src/auth/decorator/get-user.decorator';
+import { User } from '@prisma/client';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth('access-token')
@@ -14,17 +16,24 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
   @Get('planChart')
-  getPlanChart(@Query() getPlanChartDto: GetPlanReportDto) {
-    return this.dashboardService.getPlanChart(getPlanChartDto);
+  getPlanChart(@Query() getPlanChartDto: GetPlanReportDto, @GetUser() user: User) {
+    return this.dashboardService.getPlanChart(getPlanChartDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
   @Get('planReport')
-  getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
-    return this.dashboardService.getPlanReport(getPlanReportDto);
+  getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto, @GetUser() user: any) {
+    return this.dashboardService.getPlanReport(getPlanReportDto, user);
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
+  @Get('planReportSummary')
+  getPlanReportSummary(@Query() getPlanReportDto: GetPlanReportDto, @GetUser() user: any) {
+    return this.dashboardService.getPlanReportSummary(getPlanReportDto, user);
   }
 
   // TODO: remove this function

@@ -122,7 +122,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.TeamMembership, user.Region);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, user.Region);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -137,6 +137,7 @@ export class AuthService {
           email: true,
           accountId: true,
           hash: true,
+          roleId: true,
           Role: { select: { name: true } },
           TeamMembership: {
             where: { deletedAt: null },
@@ -179,7 +180,7 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.TeamMembership, user.Region);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, user.Region);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -193,6 +194,7 @@ export class AuthService {
           email: true,
           accountId: true,
           hash: true,
+          roleId: true,
           Role: { select: { name: true } },
           TeamMembership: {
             where: { deletedAt: null },
@@ -242,7 +244,7 @@ export class AuthService {
       data: { hash: newHash, mustChangePassword: false }
     })
 
-    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name, userHash.TeamMembership, userHash.Region);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name, userHash.roleId, userHash.TeamMembership, userHash.Region);
   }
 
   async signToken(
@@ -250,6 +252,7 @@ export class AuthService {
     email: string,
     account_id: string,
     role_name: string,
+    roleId: number,
     team_membership: TeamMembership[],
     managed_regions: any[]
   ): Promise<{ access_token: string }> {
@@ -258,6 +261,7 @@ export class AuthService {
       email,
       account_id,
       role_name,
+      roleId,
       team_membership,
       managed_regions
     };

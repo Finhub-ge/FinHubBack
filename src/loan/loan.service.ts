@@ -4,13 +4,13 @@ import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
 import { AddCommentDto } from './dto/addComment.dto';
 import { AddDebtorStatusDto } from './dto/addDebtorStatus.dto';
-import { PaymentScheduleItemDto, UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
+import { UpdateLoanStatusDto } from './dto/updateLoanStatus.dto';
 import { PaymentsHelper } from 'src/helpers/payments.helper';
 import { SendSmsDto } from './dto/sendSms.dto';
 import { UtilsHelper } from 'src/helpers/utils.helper';
 import { Committee_status, Committee_type, Loan, LoanVisit_status, Prisma, PrismaClient, Reminders_type, SmsHistory_status, StatusMatrix_entityType, TeamMembership_teamRole } from '@prisma/client';
 import { AssignLoanDto } from './dto/assignLoan.dto';
-import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew, isRegionalManager, getRegionalTeamIds, buildLoanSearchWhere } from 'src/helpers/loan.helper';
+import { prepareLoanExportData, getCurrentAssignment, getPaymentSchedule, handleCommentsForReassignment, isTeamLead, logAssignmentHistory, saveScheduleReminders, buildCommentsWhereClause, calculateLoanSummaryNew, isRegionalManager, getRegionalTeamIds, enrichAndTransformLoansForExport } from 'src/helpers/loan.helper';
 import { CreateCommitteeDto } from './dto/createCommittee.dto';
 import { AddLoanMarksDto } from './dto/addLoanMarks.dto';
 import { LAWYER_ROLES, Role } from 'src/enums/role.enum';
@@ -28,16 +28,13 @@ import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { statusToId } from 'src/enums/visitStatus.enum';
 import { UpdatePortfolioGroupDto } from './dto/updatePortfolioGroup.dto';
 import { PaginatedResult, PaginationService } from 'src/common';
-import { generateExcel, generateExcelStream } from 'src/helpers/excel.helper';
+import { createDataChunkGenerator, generateExcel, generateExcelStream } from 'src/helpers/excel.helper';
 import { LoanStatusGroups, LoanStatusId } from 'src/enums/loanStatus.enum';
-import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, fetchLatestRecordFilterIds1, getLoanIncludeConfig, getLoanIncludeConfig1, hasEmptyFilterResults, hasLoanAssignmentInWhere, mapClosedLoansDataToPaymentWriteoff, mapClosedLoansDataToPaymentWriteoff1, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
+import { applyClosedDateRangeFilter, applyClosedLoansFilter, applyCommonFilters, applyIntersectedIds, applyOpenLoansFilter, applyUserAssignmentFilter, attachLatestRecordsToLoans, batchCalculateWriteoffs, batchLoadLatestRecords, buildExportWhereClause, buildInitialWhereClause, buildLoanQuery, calculateLoanIdIntersection, fetchLatestRecordFilterIds, getLoanIncludeConfig, hasEmptyFilterResults, hasLoanAssignmentInWhere, shouldProcessIntersection } from 'src/helpers/loanFilter.helper';
 import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
-import { DefaultArgs } from '@prisma/client/runtime/library';
 import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
-import { shouldSkipUserScope, calculateLoanSummary } from 'src/helpers/loan.helper';
+import { shouldSkipUserScope } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
-import * as ExcelJS from 'exceljs';
-import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
 
 @Injectable()
 export class LoanService {
@@ -486,7 +483,7 @@ export class LoanService {
     return await calculateLoanSummaryNew(this.permissionsHelper, where, skipUserScope);
   }
 
-  private async getTeamMemberIds(user: any): Promise<number[] | undefined> {
+  async getTeamMemberIds(user: any): Promise<number[] | undefined> {
     // Regional managers get all members from all their managed region teams
     if (isRegionalManager(user)) {
       const regionalTeamIds = getRegionalTeamIds(user);
@@ -2744,25 +2741,80 @@ export class LoanService {
     };
   }
 
+  // version till 13.02.2026
+  // async exportLoans(filterDto: GetLoansFilterDto, user: any) {
+  //   // const loans = await this.getAll(filterDto, user);
+
+  //   // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+
+  //   // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
+
+  //   const CHUNK_SIZE = 1000; // Reduced from 5000 to 1000 for better memory management
+
+  //   // Create async generator for chunked data loading using cursor-based pagination
+  //   const dataGenerator = this.createLoanDataGeneratorOptimized(filterDto, user, CHUNK_SIZE);
+
+  //   // Use streaming Excel generation
+  //   return await generateExcelStream(
+  //     dataGenerator,
+  //     filterDto.columns,
+  //     'Loans Report'
+  //   );
+
+  // }
   async exportLoans(filterDto: GetLoansFilterDto, user: any) {
-    // const loans = await this.getAll(filterDto, user);
+    // Load all loans data
+    const allLoansData = await this.loadAllLoansForExport(filterDto, user);
 
-    // const loanExportData = loans.data.map(loan => prepareLoanExportData(loan));
+    // Create generator for Excel streaming
+    const dataGenerator = createDataChunkGenerator(allLoansData, 1000);
 
-    // return await generateExcel(loanExportData, filterDto.columns, 'Loans Report');
-
-    const CHUNK_SIZE = 5000;
-
-    // Create async generator for chunked data loading
-    const dataGenerator = this.createLoanDataGenerator(filterDto, user, CHUNK_SIZE);
-
-    // Use streaming Excel generation
-    return await generateExcelStream(
+    // Generate Excel buffer
+    const buffer = await generateExcelStream(
       dataGenerator,
       filterDto.columns,
       'Loans Report'
     );
 
+    return buffer;
+  }
+
+  /**
+   * Load ALL loans for export in a single query (no chunking)
+   * This eliminates the overhead of multiple DB queries
+   */
+  private async loadAllLoansForExport(filterDto: GetLoansFilterDto, user: any) {
+    // Get team member IDs for filtering
+    const teamMemberIds = await this.getTeamMemberIds(user);
+
+    // Build WHERE clause with all filters
+    const filterResult = await buildExportWhereClause(filterDto, user, teamMemberIds, this.prisma);
+
+    if (!filterResult.where) {
+      return [];
+    }
+
+    // Load ALL loans in single query
+    const loans = await this.permissionsHelper.loan.findMany({
+      where: filterResult.where,
+      orderBy: { id: 'asc' },
+      include: this.getExportIncludeConfig(),
+      _skipUserScope: filterResult.skipUserScope,
+    });
+
+    if (loans.length === 0) {
+      return [];
+    }
+
+    // Batch load latest records for ALL loans at once
+    const loanIds = loans.map(loan => loan.id);
+    const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+    attachLatestRecordsToLoans(loans, latestRecords);
+
+    // Enrich and transform to export format
+    const loanExportData = enrichAndTransformLoansForExport(loans);
+
+    return loanExportData;
   }
 
   async addLoanReminder(publicId: ParseUUIDPipe, data: AddLoanReminderDto, userId: number) {
@@ -2815,7 +2867,6 @@ export class LoanService {
       orderBy: { deadline: 'desc' }
     });
   }
-
 
   async getAvailableLitigationStatuses(publicId: ParseUUIDPipe) {
     const loan = await this.prisma.loan.findUnique({
@@ -3070,46 +3121,208 @@ export class LoanService {
     return await generateExcel(data, columns, 'Previous Payments');
   }
 
-  private async * createLoanDataGenerator(
-    filterDto: GetLoansFilterDto,
-    user: any,
-    chunkSize: number
-  ): AsyncGenerator<any[], void, unknown> {
-    let currentPage = 1;
-    let hasMore = true;
+  // TODO: remove this function
+  // private async * createLoanDataGenerator(
+  //   filterDto: GetLoansFilterDto,
+  //   user: any,
+  //   chunkSize: number
+  // ): AsyncGenerator<any[], void, unknown> {
+  //   let currentPage = 1;
+  //   let hasMore = true;
 
-    while (hasMore) {
-      try {
-        // Fetch chunk with pagination
-        const chunk = await this.getAll(
-          {
-            ...filterDto,
-            page: currentPage,
-            limit: chunkSize,
-          },
-          user
-        );
+  //   while (hasMore) {
+  //     try {
+  //       // Fetch chunk with pagination
+  //       const chunk = await this.getAll(
+  //         {
+  //           ...filterDto,
+  //           page: currentPage,
+  //           limit: chunkSize,
+  //         },
+  //         user
+  //       );
 
-        if (chunk.data.length === 0) {
-          hasMore = false;
-          break;
-        }
+  //       if (chunk.data.length === 0) {
+  //         hasMore = false;
+  //         break;
+  //       }
 
-        // Transform loans to export format
-        const loanExportData = chunk.data.map(loan => prepareLoanExportData(loan));
+  //       // Transform loans to export format
+  //       const loanExportData = chunk.data.map(loan => prepareLoanExportData(loan));
 
-        yield loanExportData;
+  //       yield loanExportData;
 
-        // Check if we have more data
-        hasMore = chunk.data.length === chunkSize;
-        currentPage++;
+  //       // Check if we have more data
+  //       hasMore = chunk.data.length === chunkSize;
+  //       currentPage++;
 
-      } catch (error) {
-        console.error(`Error fetching chunk at page ${currentPage}:`, error);
-        throw new Error(`Export failed at page ${currentPage}: ${error.message}`);
-      }
-    }
+  //     } catch (error) {
+  //       console.error(`Error fetching chunk at page ${currentPage}:`, error);
+  //       throw new Error(`Export failed at page ${currentPage}: ${error.message}`);
+  //     }
+  //   }
+  // }
+
+  /**
+ * Returns a minimal include configuration optimized for exports
+ * Only loads relations that are actually used in prepareLoanExportData
+ */
+  private getExportIncludeConfig() {
+    return {
+      Portfolio: {
+        select: {
+          id: true,
+          name: true,
+          portfolioSeller: { select: { id: true, name: true } },
+        },
+      },
+      PortfolioCaseGroup: {
+        select: { id: true, groupName: true },
+      },
+      Debtor: {
+        select: {
+          firstName: true,
+          lastName: true,
+          idNumber: true,
+          DebtorStatus: { select: { id: true, name: true } },
+        },
+      },
+      LoanStatus: {
+        select: { id: true, name: true },
+      },
+      LoanAssignment: {
+        where: { isActive: true },
+        select: {
+          createdAt: true,
+          User: { select: { id: true, firstName: true, lastName: true } },
+          Role: { select: { name: true } },
+        },
+      },
+      Transaction: {
+        where: { deleted: 0 },
+        select: {
+          paymentDate: true,
+        },
+        orderBy: { paymentDate: 'desc' },
+        take: 1,
+      },
+      // Note: LoanStatusHistory, LoanCollateralStatus, LoanLegalStage,
+      // LoanLitigationStage, LoanMarks, LoanAddress, LoanVisit
+      // are loaded separately via batchLoadLatestRecords() for better performance
+    };
   }
+
+  /**
+ * Optimized data generator using cursor-based pagination for large exports
+ * This avoids the performance issues with OFFSET pagination on large datasets
+ */
+  // TODO: remove this function
+  // private async *createLoanDataGeneratorOptimized(
+  //   filterDto: GetLoansFilterDto,
+  //   user: any,
+  //   chunkSize: number
+  // ): AsyncGenerator<any[], void, unknown> {
+  //   let cursor: number | undefined = undefined;
+  //   let hasMore = true;
+  //   let processedCount = 0;
+
+  //   // Get team member IDs for filtering
+  //   const teamMemberIds = await this.getTeamMemberIds(user);
+
+  //   // Build filter configuration (same as getAll but without pagination)
+  //   const { showClosedLoans, showOnlyClosedLoans, ...filters } = filterDto;
+  //   const where = buildInitialWhereClause();
+
+  //   if (showOnlyClosedLoans) {
+  //     applyClosedLoansFilter(where, filters);
+  //     applyClosedDateRangeFilter(where, filters);
+  //   } else {
+  //     applyOpenLoansFilter(where, filters, showClosedLoans);
+  //   }
+
+  //   applyCommonFilters(where, filters);
+  //   applyUserAssignmentFilter(where, filters, user, teamMemberIds);
+
+  //   // Handle complex filters with intersection
+  //   const relatedFilterIds = await fetchLatestRecordFilterIds(this.prisma, filters);
+
+  //   if (shouldProcessIntersection(relatedFilterIds)) {
+  //     if (hasEmptyFilterResults(relatedFilterIds)) {
+  //       return; // No data to export
+  //     }
+
+  //     const intersectedIds = calculateLoanIdIntersection(relatedFilterIds);
+  //     if (intersectedIds.length === 0) {
+  //       return; // No data to export
+  //     }
+
+  //     applyIntersectedIds(where, intersectedIds);
+  //   }
+
+  //   const skipUserScope = shouldSkipUserScope(user, filters) || hasLoanAssignmentInWhere(where);
+  //   // Use optimized include config for exports (lighter than full config)
+  //   const includeConfig = this.getExportIncludeConfig();
+
+  //   while (hasMore) {
+  //     try {
+  //       // Build cursor-based query
+  //       const query: any = {
+  //         where,
+  //         take: chunkSize,
+  //         orderBy: { id: 'asc' }, // Important: consistent ordering for cursor
+  //         include: includeConfig,
+  //         _skipUserScope: skipUserScope,
+  //       };
+
+  //       if (cursor) {
+  //         query.cursor = { id: cursor };
+  //         query.skip = 1; // Skip the cursor itself
+  //       }
+
+  //       // Fetch chunk using cursor
+  //       const loans = await this.permissionsHelper.loan.findMany(query);
+
+  //       if (loans.length === 0) {
+  //         hasMore = false;
+  //         break;
+  //       }
+
+  //       // Batch load latest records (same as getAll)
+  //       const loanIds = loans.map(loan => loan.id);
+  //       const latestRecords = await batchLoadLatestRecords(this.prisma, loanIds);
+  //       attachLatestRecordsToLoans(loans, latestRecords);
+
+  //       // Enrich loans with actDays
+  //       const enrichedLoans = loans.map(loan => ({
+  //         ...loan,
+  //         actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
+  //       }));
+
+  //       // Transform loans to export format
+  //       const loanExportData = enrichedLoans.map(loan => prepareLoanExportData(loan));
+
+  //       yield loanExportData;
+
+  //       // Update cursor to last loan's ID
+  //       cursor = loans[loans.length - 1].id;
+  //       processedCount += loans.length;
+
+  //       // Check if we have more data
+  //       hasMore = loans.length === chunkSize;
+
+  //       // Log progress for monitoring
+  //       if (processedCount % 5000 === 0) {
+  //         console.log(`Export progress: ${processedCount} records processed`);
+  //       }
+
+  //     } catch (error) {
+  //       console.error(`Error fetching chunk at cursor ${cursor}:`, error);
+  //       throw new Error(`Export failed at record ${processedCount}: ${error.message}`);
+  //     }
+  //   }
+
+  //   console.log(`Export completed: ${processedCount} total records`);
+  // }
 
   async getAdditionalInfo(userId: number) {
     // Step 1: Fetch guarantors
