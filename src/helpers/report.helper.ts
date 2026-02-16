@@ -294,6 +294,7 @@ export const fetchAndProcessTransactions = async (
     where: {
       userId: { in: collectorIds },
       deletedAt: null,
+      roleId: 4,
       year: { in: years },
       month: { in: months },
     },

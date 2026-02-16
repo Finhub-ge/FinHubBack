@@ -34,11 +34,45 @@ export class DashboardService {
     };
 
     // Helper: sum new plan data
-    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[]) => {
-      targets.forEach(t => targetAmounts[t.month - 1] += Number(t.targetAmount));
+    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[], filters: any) => {
+      // Build a map of targets by collectorId_year_month for quick lookup
+      const targetMap = new Map<string, any>();
+      targets.forEach(t => {
+        targetAmounts[t.month - 1] += Number(t.targetAmount);
+        const key = `${t.collectorId}_${t.year}_${t.month}`;
+        targetMap.set(key, t);
+      });
+
+      // Filter collections by date range (same logic as calculateCollectorMetrics)
       collections.forEach(c => {
-        const m = c.Transaction?.paymentDate?.getMonth();
-        if (m !== undefined && m >= 0) collectedAmounts[m] += Number(c.amount);
+        if (c.month >= 1 && c.month <= 12) {
+          const key = `${c.userId}_${c.year}_${c.month}`;
+          const target = targetMap.get(key);
+
+          if (target) {
+            // Apply date filtering
+            const start = target.createdAt;
+            const lastDayOfMonth = new Date(c.year, c.month, 0);
+
+            let end: Date;
+            if (filters.month?.length === 1 && filters.year?.length === 1) {
+              end = lastDayOfMonth;
+            } else if (filters.date) {
+              end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
+            } else {
+              const today = new Date();
+              end = today < lastDayOfMonth ? today : lastDayOfMonth;
+            }
+
+            // Only count if transaction is within date range
+            if (c.createdAt >= start && c.createdAt <= end) {
+              collectedAmounts[c.month - 1] += Number(c.amount);
+            }
+          } else {
+            // No target for this collector/month - still count it (backward compatibility)
+            collectedAmounts[c.month - 1] += Number(c.amount);
+          }
+        }
       });
     };
 
@@ -103,18 +137,18 @@ export class DashboardService {
 
       const targets = await this.prisma.collectorsMonthlyTarget.findMany({
         where: targetWhere,
-        select: { targetAmount: true, month: true, year: true, collectorId: true },
+        select: { targetAmount: true, month: true, year: true, collectorId: true, createdAt: true },
       });
 
-      const collectionWhere: any = { ...where, roleId: 4 };
+      const collectionWhere: any = { ...where, roleId: 4, deletedAt: null };
       if (collectorId?.length) collectionWhere.userId = { in: collectorId };
 
       const collections = await this.prisma.transactionUserAssignments.findMany({
         where: collectionWhere,
-        select: { amount: true, year: true, month: true, userId: true, Transaction: { select: { paymentDate: true } } },
+        select: { amount: true, year: true, month: true, userId: true, createdAt: true },
       });
 
-      sumNewData(targets, collections, targetAmounts, collectedAmounts);
+      sumNewData(targets, collections, targetAmounts, collectedAmounts, getPlanReportDto);
     }
 
     return { targetAmounts, collectedAmounts };
@@ -273,7 +307,7 @@ export class DashboardService {
 
     if (newYears.length > 0 || defaultIsNew) {
       // Build Prisma where clause for targets
-      const targetWhere: any = {};
+      const targetWhere: any = { User: { isActive: true } };
       if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
       if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
       if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
