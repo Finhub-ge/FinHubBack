@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma, User } from '@prisma/client';
+import { CurrencyExchange_currency, Prisma, User } from '@prisma/client';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { statusNameMap } from 'src/enums/loanStatus.enum';
 import { aggregateActivityCounts, aggregateCharges, aggregateCourtAndExecutionCases, aggregateLoanStatistics, aggregateOldPlanReport, aggregateTransactionData, buildDataMaps, buildSummaryFromAggregates, calculateCollectorMetrics, calculateDebtorStatusChanges, calculateTransactionCountWithTwoDayRule, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory, fetchTargetAggregates, getEmptySummary, mapOldPlanReport } from 'src/helpers/report.helper';
 import { getYear } from 'src/helpers/date.helper';
 import { Role } from 'src/enums/role.enum';
 import { LoanService } from 'src/loan/loan.service';
+import { CurrencyHelper } from 'src/helpers/currency.helper';
 
 @Injectable()
 export class DashboardService {
@@ -15,10 +16,11 @@ export class DashboardService {
     private prisma: PrismaService,
     private readonly paginationService: PaginationService,
     private readonly loanService: LoanService,
+    private readonly currencyHelper: CurrencyHelper,
   ) { }
   async getPlanChart(getPlanReportDto: GetPlanReportDto, user: any) {
     const currentYear = new Date().getFullYear();
-    let { collectorId, year } = getPlanReportDto;
+    let { collectorId, year, month } = getPlanReportDto;
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(year, currentYear);
 
@@ -49,28 +51,34 @@ export class DashboardService {
           const key = `${c.userId}_${c.year}_${c.month}`;
           const target = targetMap.get(key);
 
+          const amount = Number(c.amount);
+          const rate = c?.Transaction?.rate ? Number(c.Transaction.rate) : 1;
+
           if (target) {
             // Apply date filtering
-            const start = target.createdAt;
-            const lastDayOfMonth = new Date(c.year, c.month, 0);
+            // const start = target.createdAt;
+            // const lastDayOfMonth = new Date(c.year, c.month, 0);
 
-            let end: Date;
-            if (filters.month?.length === 1 && filters.year?.length === 1) {
-              end = lastDayOfMonth;
-            } else if (filters.date) {
-              end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
-            } else {
-              const today = new Date();
-              end = today < lastDayOfMonth ? today : lastDayOfMonth;
-            }
+            const firstDayOfMonth = new Date(Date.UTC(c.year, (c.month - 1), 1));
+            const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 0));
+
+            // let end: Date;
+            // if (filters.month?.length === 1 && filters.year?.length === 1) {
+            //   end = lastDayOfMonth;
+            // } else if (filters.date) {
+            //   end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
+            // } else {
+            //   const today = new Date();
+            //   end = today < lastDayOfMonth ? today : lastDayOfMonth;
+            // }
 
             // Only count if transaction is within date range
-            if (c.createdAt >= start && c.createdAt <= end) {
-              collectedAmounts[c.month - 1] += Number(c.amount);
+            if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
+              collectedAmounts[c.month - 1] += amount * rate;
             }
           } else {
             // No target for this collector/month - still count it (backward compatibility)
-            collectedAmounts[c.month - 1] += Number(c.amount);
+            collectedAmounts[c.month - 1] += amount * rate;
           }
         }
       });
@@ -128,7 +136,7 @@ export class DashboardService {
       const where: any = {
         User: {
           isActive: true,
-        },
+        }
       };
       if (year?.length) where.year = { in: year };
 
@@ -140,12 +148,31 @@ export class DashboardService {
         select: { targetAmount: true, month: true, year: true, collectorId: true, createdAt: true },
       });
 
-      const collectionWhere: any = { ...where, roleId: 4, deletedAt: null };
+      const collectionWhere: any = { ...where, roleId: 4, deletedAt: null, Transaction: { deleted: 0 } };
       if (collectorId?.length) collectionWhere.userId = { in: collectorId };
 
       const collections = await this.prisma.transactionUserAssignments.findMany({
         where: collectionWhere,
-        select: { amount: true, year: true, month: true, userId: true, createdAt: true },
+        select: {
+          userId: true,
+          year: true,
+          month: true,
+          amount: true,
+          createdAt: true,
+          Transaction: {
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              rate: true,
+              Loan: {
+                select: {
+                  id: true,
+                }
+              }
+            }
+          }
+        },
       });
 
       sumNewData(targets, collections, targetAmounts, collectedAmounts, getPlanReportDto);
@@ -156,6 +183,7 @@ export class DashboardService {
 
   async getPlanReport(getPlanReportDto: GetPlanReportWithPaginationDto, user: any) {
     const currentYear = new Date().getFullYear();
+
     const { page, limit, skip, ...filters } = getPlanReportDto;
     let { collectorId } = filters;
 
@@ -222,6 +250,12 @@ export class DashboardService {
         },
         ...paginationParams,
       });
+      const firstDayOfMonth = new Date(Date.UTC(data[0].year, (data[0].month - 1), 1));
+
+      const rates = await this.currencyHelper.getExchangeRates(firstDayOfMonth, [
+        CurrencyExchange_currency.USD,
+        CurrencyExchange_currency.EUR,
+      ]);
 
       // Extract all loan IDs and collector IDs
       const allLoanIds = data
@@ -233,11 +267,21 @@ export class DashboardService {
       const collectionData = await fetchCollectionData(
         this.prisma,
         allLoanIds,
-        collectorIds
+        collectorIds,
+      );
+
+      // Convert LoanRemaining to base currency
+      const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
+        collectionData.loans,
+        rates
       );
 
       // Build maps for efficient lookups
-      const dataMaps = buildDataMaps(collectionData);
+      // Build maps using normalized loans
+      const dataMaps = buildDataMaps({
+        ...collectionData,
+        loans: normalizedLoans,
+      });
 
       // Fetch and process transactions with 2-day rule
       const transactionData = await fetchAndProcessTransactions(
@@ -336,6 +380,13 @@ export class DashboardService {
         return getEmptySummary();
       }
 
+      const firstDayOfMonth = new Date(Date.UTC(data[0].year, (data[0].month - 1), 1));
+
+      const rates = await this.currencyHelper.getExchangeRates(firstDayOfMonth, [
+        CurrencyExchange_currency.USD,
+        CurrencyExchange_currency.EUR,
+      ]);
+
       // Extract all loan IDs and collector IDs
       const allLoanIds = data
         .flatMap(t => (Array.isArray(t.loanIds) ? t.loanIds : []))
@@ -349,8 +400,18 @@ export class DashboardService {
         collectorIds
       );
 
+      // Convert LoanRemaining to base currency
+      const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
+        collectionData.loans,
+        rates
+      );
+
       // Build maps for efficient lookups
-      const dataMaps = buildDataMaps(collectionData);
+      // Build maps using normalized loans
+      const dataMaps = buildDataMaps({
+        ...collectionData,
+        loans: normalizedLoans,
+      });
 
       // Fetch and process transactions with 2-day rule
       const transactionData = await fetchAndProcessTransactions(

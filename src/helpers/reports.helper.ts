@@ -1,4 +1,5 @@
 import { CollectorMonthlyReport, PrismaClient, Transaction } from "@prisma/client";
+import { LoanStatusGroups } from "src/enums/loanStatus.enum";
 const prisma = new PrismaClient();
 
 export const prepareDataForInsert = (parsedData: any[]) => {
@@ -37,7 +38,10 @@ export const loanAssignments = async (collectorIds: number[]) => {
         { unassignedAt: null },
         { unassignedAt: { gte: uploadDate } },
       ],
-      Loan: { closedAt: null },
+      Loan: {
+        deletedAt: null,
+        statusId: { notIn: LoanStatusGroups.CLOSED as unknown as number[] }
+      },
     },
     select: { userId: true, loanId: true },
   });
@@ -65,7 +69,8 @@ export const calculateCollectorLoanStats = async (collectorIds: number[]) => {
       assignedAt: { lte: uploadDate },
       OR: [{ unassignedAt: null }, { unassignedAt: { gte: uploadDate } }],
       Loan: {
-        closedAt: null
+        deletedAt: null,
+        statusId: { notIn: LoanStatusGroups.CLOSED as unknown as number[] }
       }
     },
     select: { userId: true, loanId: true },
@@ -422,6 +427,7 @@ export const createOrUpdatePlanReport = async (data: any[]) => {
         },
         data: {
           targetAmount: item.targetAmount,
+          loanIds: item.loanIds,
         },
       })
     ),

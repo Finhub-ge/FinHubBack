@@ -432,13 +432,13 @@ export class AdminService {
 
         if (summary[currency]) {
           summary[currency].totalCases += 1;
-          summary[currency].totalAmount += Number(transaction.amount || 0);
+          summary[currency].totalAmount += (Number(transaction.amount || 0) - Number(transaction.legal || 0));
           summary[currency].totalPrincipal += Number(transaction.principal || 0);
           summary[currency].totalInterest += Number(transaction.interest || 0);
           summary[currency].totalPenalty += Number(transaction.penalty || 0);
           summary[currency].totalOtherFees += Number(transaction.fees || 0);
           summary[currency].totalLegalCharges += Number(transaction.legal || 0);
-          summary[currency].totalCollection += Number(transaction.amount || 0) + Number(transaction.legal || 0);
+          summary[currency].totalCollection += Number(transaction.amount || 0);
         }
       });
 
