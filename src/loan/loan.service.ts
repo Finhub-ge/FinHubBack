@@ -2869,6 +2869,27 @@ export class LoanService {
     });
   }
 
+  async getLoanTasks(publicId: ParseUUIDPipe, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    return await this.prisma.tasks.findMany({
+      where: { loanId: loan.id, deletedAt: null, taskStatusId: 1 },
+      include: {
+        User_Tasks_fromUserToUser: { select: { id: true, firstName: true, lastName: true } },
+        User_Tasks_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
+        TaskStatus: { select: { id: true, title: true } },
+        Loan: { select: { id: true, caseId: true, publicId: true } },
+      },
+      orderBy: { deadline: 'desc' }
+    });
+  }
+
   async getAvailableLitigationStatuses(publicId: ParseUUIDPipe) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },

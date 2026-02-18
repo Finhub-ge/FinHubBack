@@ -41,6 +41,8 @@ import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
 import { UpdateRegionDto } from "./dto/updateRegion.dto";
 import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
+import { LoanService } from "src/loan/loan.service";
+import { ScopeService } from "src/helpers/scope.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -54,6 +56,8 @@ export class AdminService {
     private readonly paginationService: PaginationService,
     private readonly permissionsHelper: PermissionsHelper,
     private readonly currencyHelper: CurrencyHelper,
+    private readonly loanService: LoanService,
+    private readonly scopeService: ScopeService,
   ) { }
 
   async getDebtorContactTypes() {
@@ -81,11 +85,21 @@ export class AdminService {
     })
   }
 
-  async getTasks(user: User, getTasksFilterDto: GetTasksWithPaginationDto) {
+  async getTasks(user: any, getTasksFilterDto: GetTasksWithPaginationDto) {
     const { page, limit, ...filters } = getTasksFilterDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
+    let collectorId: number[] | undefined = undefined;
+
     const conditions = [];
+
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
+    if (collectorId && collectorId?.length > 0) {
+      conditions.push({ OR: [{ toUserId: { in: collectorId } }, { fromUser: { in: collectorId } }] });
+    }
 
     if (filters.caseId) {
       conditions.push({ Loan: { caseId: filters.caseId } });
@@ -100,11 +114,11 @@ export class AdminService {
     }
 
     if (filters.employeeId) {
-      conditions.push({ toUserId: Number(filters.employeeId) });
+      conditions.push({ toUserId: { in: filters.employeeId } });
     }
 
     if (filters.statusId) {
-      conditions.push({ taskStatusId: filters.statusId });
+      conditions.push({ taskStatusId: { in: filters.statusId } });
     }
     // Created date range
     if (filters.createdDateStart || filters.createdDateEnd) {
@@ -173,7 +187,11 @@ export class AdminService {
             publicId: true,
           }
         }
-      }
+      },
+      orderBy: [
+        { deadline: 'desc' },
+        { taskStatusId: 'asc' }
+      ]
     })
     const total = await this.prisma.tasks.count({
       where: whereClause,
