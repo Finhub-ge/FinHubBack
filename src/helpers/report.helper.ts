@@ -168,6 +168,7 @@ export const fetchCollectionData = async (
           amount: true,
           createdAt: true,
           chargeTypeId: true,
+          currency: true,
         }
       }),
 
@@ -322,6 +323,8 @@ export const fetchAndProcessTransactions = async (
         select: {
           id: true,
           amount: true,
+          fees: true,
+          legal: true,
           currency: true,
           rate: true,
           Loan: {
@@ -352,6 +355,8 @@ export const fetchAndProcessTransactions = async (
       month: tx.month,
       loanId,
       amount: Number(tx.amount || 0),
+      fees: Number(tx.Transaction?.fees || 0),
+      legal: Number(tx.Transaction?.legal || 0),
       createdAt: tx.createdAt
     };
   });
@@ -462,19 +467,24 @@ export const calculateCollectorMetrics = (
 
   const filteredTxs = txs.filter((tx: any) => tx.createdAt >= firstDayOfMonth && tx.createdAt <= lastDayOfMonth);
 
-  const totalTransactionAmount = filteredTxs.reduce(
-    (sum: number, tx: any) => {
-      if (!tx?.amount) return sum;
+  const totals = filteredTxs.reduce(
+    (acc, { amount = 0, fees = 0, legal = 0, Transaction }) => {
+      const rate = Number(Transaction?.rate || 1);
 
-      const amount = Number(tx.amount);
-      const rate = tx?.Transaction?.rate ? Number(tx.Transaction.rate) : 1;
+      acc.totalTransactionAmount += Number(amount) * rate;
+      acc.totalFees += Number(Transaction?.fees) * rate;
+      acc.totalLegal += Number(Transaction?.legal) * rate;
 
-      return sum + amount * rate;
+      return acc;
     },
-    0
+    {
+      totalTransactionAmount: 0,
+      totalFees: 0,
+      totalLegal: 0,
+    }
   );
 
-  const collectionRate = (totalTransactionAmount / Number(item.targetAmount)) * 100;
+  const collectionRate = (totals.totalTransactionAmount / Number(item.targetAmount)) * 100;
 
   const transactionCount = dailyCountResult.get(key) || 0;
   const paymentSuccessRate = relatedLoans.length > 0 ? (transactionCount / relatedLoans.length) * 100 : 0;
@@ -527,26 +537,27 @@ export const calculateCollectorMetrics = (
     ).length;
   }
 
+  // TODO: Remove this after testing
   // Calculate charges
-  const relatedCharges = ids
-    .flatMap((id: number) => chargeMap.get(id) || [])
-    .filter(ch => ch.createdAt >= firstDayOfMonth && ch.createdAt <= lastDayOfMonth);
+  // const relatedCharges = ids
+  //   .flatMap((id: number) => chargeMap.get(id) || [])
+  //   .filter(ch => ch.createdAt >= firstDayOfMonth && ch.createdAt <= lastDayOfMonth);
 
-  const legalTypes = [1, 2];
-  const otherTypes = [3, 4, 5];
+  // const legalTypes = [1, 2];
+  // const otherTypes = [3, 4, 5];
 
-  const { totalLegalCharges, totalOtherCharges } = relatedCharges.reduce(
-    (acc, ch) => {
-      const amount = Number(ch.amount ?? 0);
-      if (legalTypes.includes(ch.chargeTypeId)) {
-        acc.totalLegalCharges += amount;
-      } else if (otherTypes.includes(ch.chargeTypeId)) {
-        acc.totalOtherCharges += amount;
-      }
-      return acc;
-    },
-    { totalLegalCharges: 0, totalOtherCharges: 0 }
-  );
+  // const { totalLegalCharges, totalOtherCharges } = relatedCharges.reduce(
+  //   (acc, ch) => {
+  //     const amount = Number(ch.amount ?? 0);
+  //     if (legalTypes.includes(ch.chargeTypeId)) {
+  //       acc.totalLegalCharges += amount;
+  //     } else if (otherTypes.includes(ch.chargeTypeId)) {
+  //       acc.totalOtherCharges += amount;
+  //     }
+  //     return acc;
+  //   },
+  //   { totalLegalCharges: 0, totalOtherCharges: 0 }
+  // );
 
   // Calculate court and execution case metrics
   let courtCaseCount = 0;
@@ -606,7 +617,7 @@ export const calculateCollectorMetrics = (
     openingPrincipal: totalPrincipal,
     monthlyPlan: Number(item.targetAmount),
     adjustedPlan: Number(item.targetAmount),
-    collectedAmount: totalTransactionAmount,
+    collectedAmount: totals.totalTransactionAmount,
     collectionRatePercent: collectionRate,
     paidLoanCount: transactionCount,
     paymentSuccessRate: paymentSuccessRate,
@@ -627,8 +638,8 @@ export const calculateCollectorMetrics = (
     inactiveOver40DaysCount: over40DaysCount || 0,
     debtorStatusCount: debtorStatusChangeCount || 0,
     totalActivities: totalActivities,
-    totalLegalCharges: totalLegalCharges || 0,
-    totalOtherCharges: totalOtherCharges || 0,
+    totalLegalCharges: totals.totalLegal || 0,
+    totalOtherCharges: totals.totalFees || 0,
     courtCaseCount: courtCaseCount || 0,
     courtPrincipalSum: courtPrincipalSum || 0,
     executionCaseCount: executionCaseCount || 0,
