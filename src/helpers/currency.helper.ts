@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
+import { CurrencyExchange_currency } from '@prisma/client';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -83,5 +84,45 @@ export class CurrencyHelper {
     });
 
     return parseFloat(currencies.rate);
+  }
+
+  async getExchangeRates(
+    date: Date,
+    currencies: CurrencyExchange_currency[],
+  ): Promise<Record<string, number>> {
+    const results = await Promise.all(
+      currencies.map((currency) =>
+        this.getExchangeRate(date, currency)
+      )
+    );
+
+    return Object.fromEntries(
+      currencies.map((currency, index) => [
+        currency,
+        results[index],
+      ])
+    );
+  }
+
+  convertLoanRemainingToBaseCurrency<
+    T extends { currency: string; LoanRemaining?: any[] }
+  >(
+    loans: T[],
+    rates: Record<string, number>
+  ): T[] {
+    return loans.map((loan) => {
+      if (!loan.LoanRemaining?.length) return loan;
+
+      const rate = rates[loan.currency];
+      if (!rate) return loan;
+
+      return {
+        ...loan,
+        LoanRemaining: loan.LoanRemaining.map((lr) => ({
+          ...lr,
+          principal: Math.round(Number(lr.principal) * rate),
+        })),
+      };
+    });
   }
 }
