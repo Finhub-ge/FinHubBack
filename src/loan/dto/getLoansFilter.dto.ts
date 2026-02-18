@@ -139,13 +139,12 @@ export class GetLoansFilterDto {
   @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
   visitStatus?: number[];
 
-  @ApiProperty({
-    description: 'Search by act days',
-    required: false,
-    type: Number
-  })
   @IsOptional()
-  @Transform(({ value }) => value ? Number(value) : undefined)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  })
   actDays?: number;
 
   @ApiProperty({
