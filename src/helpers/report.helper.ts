@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { statusNameMap } from "src/enums/loanStatus.enum";
+import { getDateOnlyString } from "./date.helper";
 
 interface FetchedCollectionData {
   loans: any[];
@@ -74,13 +75,23 @@ export const fetchCollectionData = async (
     await Promise.all([
       // Fetch loans
       prisma.loan.findMany({
-        where: { id: { in: loanIds }, deletedAt: null, closedAt: null },
+        where: { id: { in: loanIds } },
         select: {
           id: true,
           principal: true,
           statusId: true,
           actDays: true,
           debtorId: true,
+          currency: true,
+          LoanRemaining: {
+            where: { deletedAt: null },
+            select: {
+              principal: true,
+              currentDebt: true,
+              createdAt: true,
+            },
+            take: 1,
+          }
         }
       }),
 
@@ -157,6 +168,7 @@ export const fetchCollectionData = async (
           amount: true,
           createdAt: true,
           chargeTypeId: true,
+          currency: true,
         }
       }),
 
@@ -297,6 +309,9 @@ export const fetchAndProcessTransactions = async (
       roleId: 4,
       year: { in: years },
       month: { in: months },
+      Transaction: {
+        deleted: 0,
+      },
     },
     select: {
       userId: true,
@@ -306,6 +321,12 @@ export const fetchAndProcessTransactions = async (
       createdAt: true,
       Transaction: {
         select: {
+          id: true,
+          amount: true,
+          fees: true,
+          legal: true,
+          currency: true,
+          rate: true,
           Loan: {
             select: {
               id: true,
@@ -334,6 +355,8 @@ export const fetchAndProcessTransactions = async (
       month: tx.month,
       loanId,
       amount: Number(tx.amount || 0),
+      fees: Number(tx.Transaction?.fees || 0),
+      legal: Number(tx.Transaction?.legal || 0),
       createdAt: tx.createdAt
     };
   });
@@ -355,10 +378,10 @@ export const fetchAndProcessTransactions = async (
     let lastCounted: Date | null = null;
 
     for (const date of dates) {
-      if (!lastCounted || (date.getTime() - lastCounted.getTime()) > 2 * 24 * 60 * 60 * 1000) {
-        count++;
-        lastCounted = date;
-      }
+      // if (!lastCounted || (date.getTime() - lastCounted.getTime()) > 2 * 24 * 60 * 60 * 1000) {
+      count++;
+      lastCounted = date;
+      // }
     }
 
     const [userId, year, month] = key.split('_');
@@ -422,7 +445,7 @@ export const calculateCollectorMetrics = (
   const relatedLoans = ids.map((id: number) => loanMap.get(id)).filter(Boolean);
 
   // Calculate total principal
-  const totalPrincipal = relatedLoans.reduce((sum, loan) => sum + Number(loan.principal), 0);
+  const totalPrincipal = relatedLoans.reduce((sum, loan) => sum + Number(loan.LoanRemaining[0].principal), 0);
 
   // Calculate over 40 days count
   const over40DaysCount = relatedLoans.filter(loan => loan.actDays > 40).length;
@@ -435,25 +458,33 @@ export const calculateCollectorMetrics = (
   }
 
   // Determine date range for filtering
-  const start = item.createdAt;
-  const lastDayOfMonth = new Date(item.year, item.month, 0);
+  // const start = getDateOnlyString(item.createdAt);
+  const firstDayOfMonth = new Date(Date.UTC(item.year, (item.month - 1), 1));
+  const lastDayOfMonth = new Date(Date.UTC(item.year, item.month, 0));
 
-  let end: Date;
-  if (filters.month?.length === 1 && filters.year?.length === 1) {
-    end = lastDayOfMonth;
-  } else if (filters.date) {
-    end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
-  } else {
-    const today = new Date();
-    end = today < lastDayOfMonth ? today : lastDayOfMonth;
-  }
-
-  // Calculate transaction metrics
   const key = `${item.collectorId}_${item.year}_${item.month}`;
   const txs = txMap.get(key) ?? [];
-  const filteredTxs = txs.filter((tx: any) => tx.createdAt >= start && tx.createdAt <= end);
-  const totalTransactionAmount = filteredTxs.reduce((sum: number, tx: any) => sum + Number(tx.amount || 0), 0);
-  const collectionRate = (totalTransactionAmount / Number(item.targetAmount)) * 100;
+
+  const filteredTxs = txs.filter((tx: any) => tx.createdAt >= firstDayOfMonth && tx.createdAt <= lastDayOfMonth);
+
+  const totals = filteredTxs.reduce(
+    (acc, { amount = 0, fees = 0, legal = 0, Transaction }) => {
+      const rate = Number(Transaction?.rate || 1);
+
+      acc.totalTransactionAmount += Number(amount) * rate;
+      acc.totalFees += Number(Transaction?.fees) * rate;
+      acc.totalLegal += Number(Transaction?.legal) * rate;
+
+      return acc;
+    },
+    {
+      totalTransactionAmount: 0,
+      totalFees: 0,
+      totalLegal: 0,
+    }
+  );
+
+  const collectionRate = (totals.totalTransactionAmount / Number(item.targetAmount)) * 100;
 
   const transactionCount = dailyCountResult.get(key) || 0;
   const paymentSuccessRate = relatedLoans.length > 0 ? (transactionCount / relatedLoans.length) * 100 : 0;
@@ -469,8 +500,8 @@ export const calculateCollectorMetrics = (
     const smsArr = smsMap.get(loanId as number) || [];
     smsCount += smsArr.filter(s =>
       s.userId === item.collectorId &&
-      s.createdAt >= start &&
-      s.createdAt <= end &&
+      s.createdAt >= firstDayOfMonth &&
+      s.createdAt <= lastDayOfMonth &&
       s.createdAt.getFullYear() === item.year &&
       (s.createdAt.getMonth() + 1) === item.month
     ).length;
@@ -479,8 +510,8 @@ export const calculateCollectorMetrics = (
     const markArr = markMap.get(loanId as number) || [];
     markCount += markArr.filter(m =>
       m.userId === item.collectorId &&
-      m.createdAt >= start &&
-      m.createdAt <= end &&
+      m.createdAt >= firstDayOfMonth &&
+      m.createdAt <= lastDayOfMonth &&
       m.createdAt.getFullYear() === item.year &&
       (m.createdAt.getMonth() + 1) === item.month
     ).length;
@@ -489,8 +520,8 @@ export const calculateCollectorMetrics = (
     const commentArr = commentMap.get(loanId as number) || [];
     commentCount += commentArr.filter(c =>
       c.userId === item.collectorId &&
-      c.createdAt >= start &&
-      c.createdAt <= end &&
+      c.createdAt >= firstDayOfMonth &&
+      c.createdAt <= lastDayOfMonth &&
       c.createdAt.getFullYear() === item.year &&
       (c.createdAt.getMonth() + 1) === item.month
     ).length;
@@ -499,33 +530,34 @@ export const calculateCollectorMetrics = (
     const committeeArr = committeeRequestMap.get(loanId as number) || [];
     committeeRequestCount += committeeArr.filter(c =>
       c.requesterId === item.collectorId &&
-      c.createdAt >= start &&
-      c.createdAt <= end &&
+      c.createdAt >= firstDayOfMonth &&
+      c.createdAt <= lastDayOfMonth &&
       c.createdAt.getFullYear() === item.year &&
       (c.createdAt.getMonth() + 1) === item.month
     ).length;
   }
 
+  // TODO: Remove this after testing
   // Calculate charges
-  const relatedCharges = ids
-    .flatMap((id: number) => chargeMap.get(id) || [])
-    .filter(ch => ch.createdAt >= start && ch.createdAt <= end);
+  // const relatedCharges = ids
+  //   .flatMap((id: number) => chargeMap.get(id) || [])
+  //   .filter(ch => ch.createdAt >= firstDayOfMonth && ch.createdAt <= lastDayOfMonth);
 
-  const legalTypes = [1, 2];
-  const otherTypes = [3, 4, 5];
+  // const legalTypes = [1, 2];
+  // const otherTypes = [3, 4, 5];
 
-  const { totalLegalCharges, totalOtherCharges } = relatedCharges.reduce(
-    (acc, ch) => {
-      const amount = Number(ch.amount ?? 0);
-      if (legalTypes.includes(ch.chargeTypeId)) {
-        acc.totalLegalCharges += amount;
-      } else if (otherTypes.includes(ch.chargeTypeId)) {
-        acc.totalOtherCharges += amount;
-      }
-      return acc;
-    },
-    { totalLegalCharges: 0, totalOtherCharges: 0 }
-  );
+  // const { totalLegalCharges, totalOtherCharges } = relatedCharges.reduce(
+  //   (acc, ch) => {
+  //     const amount = Number(ch.amount ?? 0);
+  //     if (legalTypes.includes(ch.chargeTypeId)) {
+  //       acc.totalLegalCharges += amount;
+  //     } else if (otherTypes.includes(ch.chargeTypeId)) {
+  //       acc.totalOtherCharges += amount;
+  //     }
+  //     return acc;
+  //   },
+  //   { totalLegalCharges: 0, totalOtherCharges: 0 }
+  // );
 
   // Calculate court and execution case metrics
   let courtCaseCount = 0;
@@ -535,12 +567,12 @@ export const calculateCollectorMetrics = (
 
   for (const loanId of ids) {
     const cArr = courtCaseMap.get(loanId as number) ?? [];
-    const matchedCourt = cArr.filter(cc => cc.createdAt >= start && cc.createdAt <= end);
+    const matchedCourt = cArr.filter(cc => cc.createdAt >= firstDayOfMonth && cc.createdAt <= lastDayOfMonth);
     courtCaseCount += matchedCourt.length;
     if (matchedCourt.length > 0) courtLoanIds.add(loanId as number);
 
     const eArr = executionCaseMap.get(loanId as number) ?? [];
-    const matchedExec = eArr.filter(ec => ec.createdAt >= start && ec.createdAt <= end);
+    const matchedExec = eArr.filter(ec => ec.createdAt >= firstDayOfMonth && ec.createdAt <= lastDayOfMonth);
     executionCaseCount += matchedExec.length;
     if (matchedExec.length > 0) executionLoanIds.add(loanId as number);
   }
@@ -562,7 +594,7 @@ export const calculateCollectorMetrics = (
     const history = debtorStatusMap.get(debtorId) || [];
     const filtered = history
       .map((h: any) => ({ ...h, createdAt: new Date(h.createdAt) }))
-      .filter(h => h.createdAt >= start && h.createdAt <= end)
+      .filter(h => h.createdAt >= firstDayOfMonth && h.createdAt <= lastDayOfMonth)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
     if (filtered.length === 0) continue;
@@ -585,7 +617,7 @@ export const calculateCollectorMetrics = (
     openingPrincipal: totalPrincipal,
     monthlyPlan: Number(item.targetAmount),
     adjustedPlan: Number(item.targetAmount),
-    collectedAmount: totalTransactionAmount,
+    collectedAmount: totals.totalTransactionAmount,
     collectionRatePercent: collectionRate,
     paidLoanCount: transactionCount,
     paymentSuccessRate: paymentSuccessRate,
@@ -606,8 +638,8 @@ export const calculateCollectorMetrics = (
     inactiveOver40DaysCount: over40DaysCount || 0,
     debtorStatusCount: debtorStatusChangeCount || 0,
     totalActivities: totalActivities,
-    totalLegalCharges: totalLegalCharges || 0,
-    totalOtherCharges: totalOtherCharges || 0,
+    totalLegalCharges: totals.totalLegal || 0,
+    totalOtherCharges: totals.totalFees || 0,
     courtCaseCount: courtCaseCount || 0,
     courtPrincipalSum: courtPrincipalSum || 0,
     executionCaseCount: executionCaseCount || 0,
