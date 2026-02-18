@@ -11,7 +11,7 @@ export class TbcPayWhitelistGuard implements CanActivate {
 
     // Your internet IP (if testing from external network)
     '109.172.176.130',
-    // '85.114.241.98', // claret Tbilisi IP
+    '85.114.241.98', // claret Tbilisi IP
 
     // Without VPN
     '92.241.77.174',
