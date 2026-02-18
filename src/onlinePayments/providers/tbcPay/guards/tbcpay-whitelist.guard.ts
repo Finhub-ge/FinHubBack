@@ -5,9 +5,9 @@ export class TbcPayWhitelistGuard implements CanActivate {
   private readonly logger = new Logger(TbcPayWhitelistGuard.name);
   private readonly allowedIps: string[] = [
     // Localhost (for testing)
-    // '127.0.0.1',
-    // '::1',
-    // '::ffff:127.0.0.1',
+    '127.0.0.1',
+    '::1',
+    '::ffff:127.0.0.1',
 
     // Your internet IP (if testing from external network)
     '109.172.176.130',
