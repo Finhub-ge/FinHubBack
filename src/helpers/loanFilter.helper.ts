@@ -95,7 +95,7 @@ export const applyClientStatusFilter = (where: any, clientStatuses?: number[]): 
 };
 
 export const applyActDaysFilter = (where: any, actDays?: number): void => {
-  if (typeof actDays === 'number') {
+  if (typeof actDays === 'number' && !isNaN(actDays)) {
     const targetDate = subtractDays(new Date(), actDays);
     const nextDay = subtractDays(new Date(), actDays - 1);
 

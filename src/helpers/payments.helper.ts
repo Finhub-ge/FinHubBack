@@ -452,7 +452,8 @@ export class PaymentsHelper {
       }
     });
 
-    // Apply payment to schedules
+    // First pass: calculate all updates in JS (no DB calls)
+    const scheduleUpdates: Array<{ id: number; paidAmount: number; paidDate: any; status: string }> = [];
     let paymentToApply = paymentAmount;
 
     for (const schedule of unpaidSchedules) {
@@ -471,17 +472,32 @@ export class PaymentsHelper {
       const newStatus = newPaidAmount >= totalScheduled ? 'PAID' : 'PARTIAL';
 
       // Update schedule
-      await prisma.paymentSchedule.update({
-        where: { id: schedule.id },
-        data: {
-          paidAmount: newPaidAmount,
-          paidDate: newStatus === 'PAID' ? paidDate : schedule.paidDate,
-          status: newStatus
-        }
+      // await prisma.paymentSchedule.update({
+      //   where: { id: schedule.id },
+      //   data: {
+      //     paidAmount: newPaidAmount,
+      //     paidDate: newStatus === 'PAID' ? paidDate : schedule.paidDate,
+      //     status: newStatus
+      //   }
+      // });
+      scheduleUpdates.push({
+        id: schedule.id,
+        paidAmount: newPaidAmount,
+        paidDate: newStatus === 'PAID' ? paidDate : schedule.paidDate,
+        status: newStatus,
       });
 
       paymentToApply -= amountForSchedule;
     }
+    // Second pass: run all DB updates concurrently instead of sequentially
+    await Promise.all(
+      scheduleUpdates.map((u) =>
+        prisma.paymentSchedule.update({
+          where: { id: u.id },
+          data: { paidAmount: u.paidAmount, paidDate: u.paidDate, status: u.status },
+        })
+      )
+    );
   }
 
   async applyPaymentToCharges(data: any) {

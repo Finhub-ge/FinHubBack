@@ -1367,9 +1367,9 @@ export class LoanService {
           comment: addCommentDto.comment,
           uploadId: upload?.id,
         },
-        include: {
-          User: { select: { id: true, firstName: true, lastName: true } }
-        }
+        // include: {
+        //   User: { select: { id: true, firstName: true, lastName: true } }
+        // }
       });
 
       // Create comments for all related loans with prefix
