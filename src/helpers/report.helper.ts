@@ -628,6 +628,7 @@ export const calculateCollectorMetrics = (
     agreementCancelledCount: statusCount.AGREEMENT_CANCELED || 0,
     refuseToPayCount: statusCount.REFUSE_TO_PAY || 0,
     promiseToPayCount: statusCount.PROMISED_TO_PAY || 0,
+    failedPromiseCount: statusCount.FAILED_PROMISE || 0,
     totalLoanCount: relatedLoans.length,
     callCount: 0,
     totalCallDurationSec: "00:00:00",
