@@ -9,6 +9,7 @@ import { getYear } from 'src/helpers/date.helper';
 import { Role } from 'src/enums/role.enum';
 import { LoanService } from 'src/loan/loan.service';
 import { CurrencyHelper } from 'src/helpers/currency.helper';
+import { ScopeService } from 'src/helpers/scope.helper';
 
 @Injectable()
 export class DashboardService {
@@ -17,6 +18,7 @@ export class DashboardService {
     private readonly paginationService: PaginationService,
     private readonly loanService: LoanService,
     private readonly currencyHelper: CurrencyHelper,
+    private readonly scopeService: ScopeService,
   ) { }
   async getPlanChart(getPlanReportDto: GetPlanReportDto, user: any) {
     const currentYear = new Date().getFullYear();
@@ -87,34 +89,38 @@ export class DashboardService {
     // Initialize arrays
     const { targetAmounts, collectedAmounts } = initMonthlyArrays();
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     // --- OLD DATA ---
     if (oldYears.length > 0 || (!year && currentYear < 2026)) {
@@ -189,34 +195,38 @@ export class DashboardService {
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
       return this.getOldPlanReport(getPlanReportDto, collectorId);
@@ -269,7 +279,7 @@ export class DashboardService {
         allLoanIds,
         collectorIds,
       );
-
+      // console.log(collectionData.courtCases, 'collectionData');
       // Convert LoanRemaining to base currency
       const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
         collectionData.loans,
@@ -316,34 +326,38 @@ export class DashboardService {
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
       return this.getOldPlanReportSummer(getPlanReportDto, collectorId);

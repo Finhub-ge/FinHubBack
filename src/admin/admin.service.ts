@@ -189,8 +189,7 @@ export class AdminService {
         }
       },
       orderBy: [
-        { deadline: 'desc' },
-        { taskStatusId: 'asc' }
+        { deadline: 'desc' }
       ]
     })
     const total = await this.prisma.tasks.count({
@@ -955,8 +954,21 @@ export class AdminService {
       where: { id: data.taskStatusId }
     });
 
-    if (taskStatus.title === 'Postpone' && data.deadline && dayjs(data.deadline).isAfter(fiveDaysLater)) {
-      throw new BadRequestException('Deadline is too far in the future, it must be within 5 days');
+    if (!taskStatus) {
+      throw new BadRequestException('Invalid task status');
+    }
+
+    if (taskStatus.title === 'Postpone') {
+
+      if (task.postponeCount >= 5) {
+        throw new BadRequestException('Task cannot be postponed more than 5 times');
+      }
+
+      if (data.deadline && dayjs(data.deadline).isAfter(fiveDaysLater)) {
+        throw new BadRequestException(
+          'Deadline is too far in the future, it must be within 5 days'
+        );
+      }
     }
 
     const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
@@ -977,11 +989,44 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        taskStatusId: data.taskStatusId
-      }
-    })
+        taskStatusId: data.taskStatusId,
+        deadline: data.deadline ?? task.deadline,
 
-    throw new HttpException('Task completed successfully', 200);
+        //increment only if postponed
+        ...(taskStatus.title === 'Postpone' && {
+          postponeCount: {
+            increment: 1
+          }
+        })
+      }
+    });
+
+    return { message: 'Task response submitted successfully' };
+  }
+
+  async updateTasksViewed(ids: number[], userId: number) {
+    if (!ids?.length) {
+      throw new BadRequestException('At least one task id is required');
+    }
+    const where = {
+      id: { in: ids },
+      toUserId: userId,
+      viewedAt: null,
+      deletedAt: null,
+    };
+    const tasks = await this.prisma.tasks.findMany({
+      where,
+      select: { id: true },
+    });
+    if (!tasks.length) {
+      throw new BadRequestException('No matching tasks found');
+    }
+    const now = new Date();
+    const { count } = await this.prisma.tasks.updateMany({
+      where,
+      data: { viewedAt: now },
+    });
+    return { message: 'Tasks marked as viewed', updatedCount: count };
   }
 
   async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {
