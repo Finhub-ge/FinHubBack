@@ -652,6 +652,13 @@ export class UserService {
             firstName: true,
             lastName: true
           }
+        },
+        User_Tasks_toUserIdToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
         }
       },
       orderBy: {
