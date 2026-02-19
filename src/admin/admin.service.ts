@@ -1005,18 +1005,18 @@ export class AdminService {
   }
 
   async updateTasksViewed(ids: number[], userId: number) {
-    if (!ids?.length) {
-      throw new BadRequestException('At least one task id is required');
-    }
     const where = {
       id: { in: ids },
       toUserId: userId,
       viewedAt: null,
       deletedAt: null,
+      taskStatusId: {
+        in: [2, 4, 6]
+      }
     };
     const tasks = await this.prisma.tasks.findMany({
       where,
-      select: { id: true },
+      select: { id: true, taskStatusId: true },
     });
     if (!tasks.length) {
       throw new BadRequestException('No matching tasks found');
