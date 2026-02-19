@@ -118,6 +118,13 @@ export class UserController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/committees')
+  getCommittees(@GetUser() user: User) {
+    return this.userService.getCommittees(user)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
   @ApiParam({ name: 'userId', type: 'number' })
   @Patch(':userId')
