@@ -38,50 +38,41 @@ export class DashboardService {
     };
 
     // Helper: sum new plan data
-    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[], filters: any) => {
-      // Build a map of targets by collectorId_year_month for quick lookup
+    const sumNewData = (
+      targets: any[],
+      collections: any[],
+      targetAmounts: number[],
+      collectedAmounts: number[],
+      filters: any
+    ) => {
+
       const targetMap = new Map<string, any>();
+
+      // Build target map
       targets.forEach(t => {
         targetAmounts[t.month - 1] += Number(t.targetAmount);
         const key = `${t.collectorId}_${t.year}_${t.month}`;
         targetMap.set(key, t);
       });
 
-      // Filter collections by date range (same logic as calculateCollectorMetrics)
+      // Process collections
       collections.forEach(c => {
-        if (c.month >= 1 && c.month <= 12) {
-          const key = `${c.userId}_${c.year}_${c.month}`;
-          const target = targetMap.get(key);
+        if (c.month < 1 || c.month > 12) return;
 
-          const amount = Number(c.amount);
-          const rate = c?.Transaction?.rate ? Number(c.Transaction.rate) : 1;
+        const key = `${c.userId}_${c.year}_${c.month}`;
+        const target = targetMap.get(key);
 
-          if (target) {
-            // Apply date filtering
-            // const start = target.createdAt;
-            // const lastDayOfMonth = new Date(c.year, c.month, 0);
+        // ✅ If no target → ignore collection
+        if (!target) return;
 
-            const firstDayOfMonth = new Date(Date.UTC(c.year, (c.month - 1), 1));
-            const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 0));
+        const amount = Number(c.amount);
+        const rate = c?.Transaction?.rate ? Number(c.Transaction.rate) : 1;
 
-            // let end: Date;
-            // if (filters.month?.length === 1 && filters.year?.length === 1) {
-            //   end = lastDayOfMonth;
-            // } else if (filters.date) {
-            //   end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
-            // } else {
-            //   const today = new Date();
-            //   end = today < lastDayOfMonth ? today : lastDayOfMonth;
-            // }
+        const firstDayOfMonth = new Date(Date.UTC(c.year, c.month - 1, 1));
+        const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 0));
 
-            // Only count if transaction is within date range
-            if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
-              collectedAmounts[c.month - 1] += amount * rate;
-            }
-          } else {
-            // No target for this collector/month - still count it (backward compatibility)
-            collectedAmounts[c.month - 1] += amount * rate;
-          }
+        if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
+          collectedAmounts[c.month - 1] += amount * rate;
         }
       });
     };
@@ -260,7 +251,7 @@ export class DashboardService {
         },
         ...paginationParams,
       });
-      const firstDayOfMonth = new Date(Date.UTC(data[0].year, (data[0].month - 1), 1));
+      const firstDayOfMonth = data.length > 0 ? new Date(Date.UTC(data[0]?.year, (data[0]?.month - 1), 1)) : new Date();
 
       const rates = await this.currencyHelper.getExchangeRates(firstDayOfMonth, [
         CurrencyExchange_currency.USD,
@@ -279,7 +270,7 @@ export class DashboardService {
         allLoanIds,
         collectorIds,
       );
-      // console.log(collectionData.courtCases, 'collectionData');
+
       // Convert LoanRemaining to base currency
       const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
         collectionData.loans,
