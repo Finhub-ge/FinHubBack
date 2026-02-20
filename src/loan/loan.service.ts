@@ -2876,6 +2876,82 @@ export class LoanService {
     });
   }
 
+  async getLoanTasks(publicId: ParseUUIDPipe, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    return await this.prisma.tasks.findMany({
+      where: { loanId: loan.id, deletedAt: null, toUserId: userId, viewedAt: null },
+      include: {
+        User_Tasks_fromUserToUser: { select: { id: true, firstName: true, lastName: true } },
+        User_Tasks_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
+        TaskStatus: { select: { id: true, title: true } },
+        Loan: { select: { id: true, caseId: true, publicId: true } },
+      },
+      orderBy: { deadline: 'desc' }
+    });
+  }
+
+  async getLoanCommittees(publicId: ParseUUIDPipe, userId: number) {
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    return await this.prisma.committee.findMany({
+      where: {
+        deletedAt: null,
+        loanId: loan.id,
+        status: Committee_status.pending,
+      },
+      select: {
+        id: true,
+        status: true,
+        agreementMinAmount: true,
+        type: true,
+        Loan: {
+          select: {
+            id: true,
+            caseId: true,
+            publicId: true,
+            Debtor: { select: { firstName: true, lastName: true } },
+            LoanAssignment: {
+              where: {
+                isActive: true,
+              },
+              select: {
+                createdAt: true,
+                User: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+                Role: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          }
+        }
+      },
+      orderBy: {
+        requestDate: 'desc'
+      }
+    });
+  }
+
   async getAvailableLitigationStatuses(publicId: ParseUUIDPipe) {
     const loan = await this.prisma.loan.findUnique({
       where: { publicId: String(publicId), deletedAt: null },

@@ -8,7 +8,7 @@ import { generateAccountId } from "src/helpers/accountId.helper";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { GetUsersFilterDto, GetUsersWithPaginationDto } from "./dto/getUsersFilter.dto";
 import { PaginationService } from "src/common/services/pagination.service";
-import { Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
+import { Committee_status, Reminders_type, TeamMembership_teamRole, User } from "@prisma/client";
 import { getUserExport } from "src/helpers/excel.helper";
 import { Role } from "src/enums/role.enum";
 import { addDays, subtractDays } from "src/helpers/date.helper";
@@ -629,7 +629,8 @@ export class UserService {
     return await this.prisma.tasks.findMany({
       where: {
         toUserId: user.id,
-        deletedAt: null
+        deletedAt: null,
+        viewedAt: null
       },
       include: {
         Loan: {
@@ -646,6 +647,13 @@ export class UserService {
           }
         },
         User_Tasks_fromUserToUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true
+          }
+        },
+        User_Tasks_toUserIdToUser: {
           select: {
             id: true,
             firstName: true,
@@ -776,6 +784,53 @@ export class UserService {
     } catch (error) {
       throw new ForbiddenException('Failed to update reminder');
     }
+  }
+
+  async getCommittees(user: User) {
+    return await this.prisma.committee.findMany({
+      where: {
+        deletedAt: null,
+        requesterId: user.id,
+        status: Committee_status.pending,
+      },
+      select: {
+        id: true,
+        status: true,
+        agreementMinAmount: true,
+        type: true,
+        Loan: {
+          select: {
+            id: true,
+            caseId: true,
+            publicId: true,
+            Debtor: { select: { firstName: true, lastName: true } },
+            LoanAssignment: {
+              where: {
+                isActive: true,
+              },
+              select: {
+                createdAt: true,
+                User: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                  },
+                },
+                Role: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          }
+        }
+      },
+      orderBy: {
+        requestDate: 'desc'
+      }
+    });
   }
 
   async exportUsers(filters: GetUsersFilterDto) {

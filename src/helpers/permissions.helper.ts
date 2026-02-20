@@ -4,6 +4,7 @@ import { TeamMembership, TeamMembership_teamRole, User } from "@prisma/client";
 import { Role } from "src/enums/role.enum";
 import { PrismaService } from "src/prisma/prisma.service";
 import { getActiveTeamMembership, isTeamLead, getCollectorLoansWithHighActDays } from "./loan.helper";
+import { LoanService } from "src/loan/loan.service";
 
 interface AuthenticatedRequest extends Request {
   user: {

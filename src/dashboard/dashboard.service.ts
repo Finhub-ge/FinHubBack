@@ -9,6 +9,7 @@ import { getYear } from 'src/helpers/date.helper';
 import { Role } from 'src/enums/role.enum';
 import { LoanService } from 'src/loan/loan.service';
 import { CurrencyHelper } from 'src/helpers/currency.helper';
+import { ScopeService } from 'src/helpers/scope.helper';
 
 @Injectable()
 export class DashboardService {
@@ -17,6 +18,7 @@ export class DashboardService {
     private readonly paginationService: PaginationService,
     private readonly loanService: LoanService,
     private readonly currencyHelper: CurrencyHelper,
+    private readonly scopeService: ScopeService,
   ) { }
   async getPlanChart(getPlanReportDto: GetPlanReportDto, user: any) {
     const currentYear = new Date().getFullYear();
@@ -36,50 +38,41 @@ export class DashboardService {
     };
 
     // Helper: sum new plan data
-    const sumNewData = (targets: any[], collections: any[], targetAmounts: number[], collectedAmounts: number[], filters: any) => {
-      // Build a map of targets by collectorId_year_month for quick lookup
+    const sumNewData = (
+      targets: any[],
+      collections: any[],
+      targetAmounts: number[],
+      collectedAmounts: number[],
+      filters: any
+    ) => {
+
       const targetMap = new Map<string, any>();
+
+      // Build target map
       targets.forEach(t => {
         targetAmounts[t.month - 1] += Number(t.targetAmount);
         const key = `${t.collectorId}_${t.year}_${t.month}`;
         targetMap.set(key, t);
       });
 
-      // Filter collections by date range (same logic as calculateCollectorMetrics)
+      // Process collections
       collections.forEach(c => {
-        if (c.month >= 1 && c.month <= 12) {
-          const key = `${c.userId}_${c.year}_${c.month}`;
-          const target = targetMap.get(key);
+        if (c.month < 1 || c.month > 12) return;
 
-          const amount = Number(c.amount);
-          const rate = c?.Transaction?.rate ? Number(c.Transaction.rate) : 1;
+        const key = `${c.userId}_${c.year}_${c.month}`;
+        const target = targetMap.get(key);
 
-          if (target) {
-            // Apply date filtering
-            // const start = target.createdAt;
-            // const lastDayOfMonth = new Date(c.year, c.month, 0);
+        // ✅ If no target → ignore collection
+        if (!target) return;
 
-            const firstDayOfMonth = new Date(Date.UTC(c.year, (c.month - 1), 1));
-            const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 0));
+        const amount = Number(c.amount);
+        const rate = c?.Transaction?.rate ? Number(c.Transaction.rate) : 1;
 
-            // let end: Date;
-            // if (filters.month?.length === 1 && filters.year?.length === 1) {
-            //   end = lastDayOfMonth;
-            // } else if (filters.date) {
-            //   end = filters.date < lastDayOfMonth ? filters.date : lastDayOfMonth;
-            // } else {
-            //   const today = new Date();
-            //   end = today < lastDayOfMonth ? today : lastDayOfMonth;
-            // }
+        const firstDayOfMonth = new Date(Date.UTC(c.year, c.month - 1, 1));
+        const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 0));
 
-            // Only count if transaction is within date range
-            if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
-              collectedAmounts[c.month - 1] += amount * rate;
-            }
-          } else {
-            // No target for this collector/month - still count it (backward compatibility)
-            collectedAmounts[c.month - 1] += amount * rate;
-          }
+        if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
+          collectedAmounts[c.month - 1] += amount * rate;
         }
       });
     };
@@ -87,34 +80,38 @@ export class DashboardService {
     // Initialize arrays
     const { targetAmounts, collectedAmounts } = initMonthlyArrays();
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     // --- OLD DATA ---
     if (oldYears.length > 0 || (!year && currentYear < 2026)) {
@@ -189,34 +186,38 @@ export class DashboardService {
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
       return this.getOldPlanReport(getPlanReportDto, collectorId);
@@ -250,7 +251,7 @@ export class DashboardService {
         },
         ...paginationParams,
       });
-      const firstDayOfMonth = new Date(Date.UTC(data[0].year, (data[0].month - 1), 1));
+      const firstDayOfMonth = data.length > 0 ? new Date(Date.UTC(data[0]?.year, (data[0]?.month - 1), 1)) : new Date();
 
       const rates = await this.currencyHelper.getExchangeRates(firstDayOfMonth, [
         CurrencyExchange_currency.USD,
@@ -316,34 +317,38 @@ export class DashboardService {
 
     const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
 
-    if (user.role_name === Role.COLLECTOR) {
-      const isLeader = user.team_membership?.some(
-        tm => tm.teamRole === 'leader',
-      );
+    // if (user.role_name === Role.COLLECTOR) {
+    //   const isLeader = user.team_membership?.some(
+    //     tm => tm.teamRole === 'leader',
+    //   );
 
-      if (isLeader) {
-        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+    //   if (isLeader) {
+    //     const teamMemberIds = await this.loanService.getTeamMemberIds(user);
 
-        if (collectorId?.length) {
-          // intersection with team members
-          collectorId = collectorId.filter(id =>
-            teamMemberIds.includes(id),
-          );
-        } else {
-          collectorId = teamMemberIds;
-        }
+    //     if (collectorId?.length) {
+    //       // intersection with team members
+    //       collectorId = collectorId.filter(id =>
+    //         teamMemberIds.includes(id),
+    //       );
+    //     } else {
+    //       collectorId = teamMemberIds;
+    //     }
 
-      } else {
-        // Collector but NOT leader → only himself
-        collectorId = [user.id];
-      }
+    //   } else {
+    //     // Collector but NOT leader → only himself
+    //     collectorId = [user.id];
+    //   }
 
-    } else {
-      // NOT collector
-      if (!collectorId?.length) {
-        collectorId = undefined; // take all
-      }
-    }
+    // } else {
+    //   // NOT collector
+    //   if (!collectorId?.length) {
+    //     collectorId = undefined; // take all
+    //   }
+    // }
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
 
     if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
       return this.getOldPlanReportSummer(getPlanReportDto, collectorId);
@@ -445,6 +450,7 @@ export class DashboardService {
           agreementCancelledCount: acc.agreementCancelledCount + item.agreementCancelledCount,
           refuseToPayCount: acc.refuseToPayCount + item.refuseToPayCount,
           promiseToPayCount: acc.promiseToPayCount + item.promiseToPayCount,
+          failedPromiseCount: acc.failedPromiseCount + item.failedPromiseCount,
           totalLoanCount: acc.totalLoanCount + item.totalLoanCount,
           callCount: acc.callCount + item.callCount,
           smsCount: acc.smsCount + item.smsCount,
@@ -474,6 +480,7 @@ export class DashboardService {
         agreementCancelledCount: 0,
         refuseToPayCount: 0,
         promiseToPayCount: 0,
+        failedPromiseCount: 0,
         totalLoanCount: 0,
         callCount: 0,
         smsCount: 0,

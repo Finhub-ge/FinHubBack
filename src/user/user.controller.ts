@@ -75,21 +75,6 @@ export class UserController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
-  @Get(':roleId')
-  getUsersByRoleId(@Param('roleId') roleId: string) {
-    return this.userService.getUsersByRoleId(roleId)
-  }
-
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
-  @ApiParam({ name: 'userId', type: 'number' })
-  @Patch(':userId')
-  editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
-    return this.userService.editUser(userId, data)
-  }
-
-  @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get('groupedBy/teamLeader')
   getUsersGroupedByTeamLeader(@Query() getUsersFilterDto: GetUsersFilterDto, @GetUser() user: User) {
@@ -130,6 +115,28 @@ export class UserController {
   @Patch('update/reminder/:reminderId')
   updateReminder(@Param('reminderId', ParseIntPipe) reminderId: number) {
     return this.userService.updateReminder(reminderId)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @AllRoles()
+  @Get('reminder/committees')
+  getCommittees(@GetUser() user: User) {
+    return this.userService.getCommittees(user)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @ApiParam({ name: 'userId', type: 'number' })
+  @Patch(':userId')
+  editUser(@Param('userId', ParseIntPipe) userId: number, @Body() data: EditUserDto) {
+    return this.userService.editUser(userId, data)
+  }
+
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATIONAL_MANAGER)
+  @Get(':roleId')
+  getUsersByRoleId(@Param('roleId') roleId: string) {
+    return this.userService.getUsersByRoleId(roleId)
   }
 
   // @UseGuards(JwtGuard, RolesGuard)

@@ -24,15 +24,15 @@ export class GetTasksFilterDto {
   @IsOptional()
   type?: TaskType;
 
-  @ApiProperty({ description: 'Status of the task', required: false })
-  @Transform(({ value }) => value ? Number(value) : undefined)
+  @ApiProperty({ description: 'Status of the task', required: false, type: String })
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
   @IsOptional()
-  statusId?: number;
+  statusId?: number[];
 
-  @ApiProperty({ description: 'Employee user ID', required: false })
-  @IsString()
+  @ApiProperty({ description: 'Employee user ID', required: false, type: String })
   @IsOptional()
-  employeeId?: number;
+  @Transform(({ value }) => value ? value.split(',').map(Number) : undefined)
+  employeeId?: number[];
 
   @ApiProperty({ description: 'Start date for created date range', required: false })
   @IsDateString()
