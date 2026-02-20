@@ -181,6 +181,7 @@ export const fetchCollectionData = async (
           Loan: {
             select: {
               id: true,
+              publicId: true,
               caseId: true,
               principal: true,
               Debtor: {
@@ -224,6 +225,7 @@ export const fetchCollectionData = async (
           Loan: {
             select: {
               id: true,
+              publicId: true,
               caseId: true,
               principal: true,
               Debtor: {
