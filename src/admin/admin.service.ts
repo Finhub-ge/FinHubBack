@@ -41,6 +41,8 @@ import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
 import { UpdateRegionDto } from "./dto/updateRegion.dto";
 import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
+import { LoanService } from "src/loan/loan.service";
+import { ScopeService } from "src/helpers/scope.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -54,6 +56,8 @@ export class AdminService {
     private readonly paginationService: PaginationService,
     private readonly permissionsHelper: PermissionsHelper,
     private readonly currencyHelper: CurrencyHelper,
+    private readonly loanService: LoanService,
+    private readonly scopeService: ScopeService,
   ) { }
 
   async getDebtorContactTypes() {
@@ -81,11 +85,21 @@ export class AdminService {
     })
   }
 
-  async getTasks(user: User, getTasksFilterDto: GetTasksWithPaginationDto) {
+  async getTasks(user: any, getTasksFilterDto: GetTasksWithPaginationDto) {
     const { page, limit, ...filters } = getTasksFilterDto;
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
+    let collectorId: number[] | undefined = undefined;
+
     const conditions = [];
+
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
+    if (collectorId && collectorId?.length > 0) {
+      conditions.push({ OR: [{ toUserId: { in: collectorId } }, { fromUser: { in: collectorId } }] });
+    }
 
     if (filters.caseId) {
       conditions.push({ Loan: { caseId: filters.caseId } });
@@ -100,11 +114,11 @@ export class AdminService {
     }
 
     if (filters.employeeId) {
-      conditions.push({ toUserId: Number(filters.employeeId) });
+      conditions.push({ toUserId: { in: filters.employeeId } });
     }
 
     if (filters.statusId) {
-      conditions.push({ taskStatusId: filters.statusId });
+      conditions.push({ taskStatusId: { in: filters.statusId } });
     }
     // Created date range
     if (filters.createdDateStart || filters.createdDateEnd) {
@@ -173,7 +187,10 @@ export class AdminService {
             publicId: true,
           }
         }
-      }
+      },
+      orderBy: [
+        { deadline: 'desc' }
+      ]
     })
     const total = await this.prisma.tasks.count({
       where: whereClause,
@@ -937,8 +954,21 @@ export class AdminService {
       where: { id: data.taskStatusId }
     });
 
-    if (taskStatus.title === 'Postpone' && data.deadline && dayjs(data.deadline).isAfter(fiveDaysLater)) {
-      throw new BadRequestException('Deadline is too far in the future, it must be within 5 days');
+    if (!taskStatus) {
+      throw new BadRequestException('Invalid task status');
+    }
+
+    if (taskStatus.title === 'Postpone') {
+
+      if (task.postponeCount >= 5) {
+        throw new BadRequestException('Task cannot be postponed more than 5 times');
+      }
+
+      if (data.deadline && dayjs(data.deadline).isAfter(fiveDaysLater)) {
+        throw new BadRequestException(
+          'Deadline is too far in the future, it must be within 5 days'
+        );
+      }
     }
 
     const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
@@ -959,11 +989,44 @@ export class AdminService {
       where: { id: taskId },
       data: {
         response: data.response,
-        taskStatusId: data.taskStatusId
-      }
-    })
+        taskStatusId: data.taskStatusId,
+        deadline: data.deadline ?? task.deadline,
 
-    throw new HttpException('Task completed successfully', 200);
+        //increment only if postponed
+        ...(taskStatus.title === 'Postpone' && {
+          postponeCount: {
+            increment: 1
+          }
+        })
+      }
+    });
+
+    return { message: 'Task response submitted successfully' };
+  }
+
+  async updateTasksViewed(ids: number[], userId: number) {
+    const where = {
+      id: { in: ids },
+      toUserId: userId,
+      viewedAt: null,
+      deletedAt: null,
+      taskStatusId: {
+        in: [2, 4, 6]
+      }
+    };
+    const tasks = await this.prisma.tasks.findMany({
+      where,
+      select: { id: true, taskStatusId: true },
+    });
+    if (!tasks.length) {
+      throw new BadRequestException('No matching tasks found');
+    }
+    const now = new Date();
+    const { count } = await this.prisma.tasks.updateMany({
+      where,
+      data: { viewedAt: now },
+    });
+    return { message: 'Tasks marked as viewed', updatedCount: count };
   }
 
   async responseCommittee(committeeId: number, data: ResponseCommitteeDto, userId: number) {

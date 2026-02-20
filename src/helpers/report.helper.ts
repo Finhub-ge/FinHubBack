@@ -181,7 +181,36 @@ export const fetchCollectionData = async (
           Loan: {
             select: {
               id: true,
+              publicId: true,
+              caseId: true,
               principal: true,
+              Debtor: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                }
+              },
+              LoanAssignment: {
+                where: {
+                  isActive: true,
+                },
+                select: {
+                  createdAt: true,
+                  User: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                  Role: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
             }
           }
         }
@@ -196,7 +225,36 @@ export const fetchCollectionData = async (
           Loan: {
             select: {
               id: true,
+              publicId: true,
+              caseId: true,
               principal: true,
+              Debtor: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                }
+              },
+              LoanAssignment: {
+                where: {
+                  isActive: true,
+                },
+                select: {
+                  createdAt: true,
+                  User: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                    },
+                  },
+                  Role: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
             }
           }
         }
@@ -560,8 +618,11 @@ export const calculateCollectorMetrics = (
   // );
 
   // Calculate court and execution case metrics
+
   let courtCaseCount = 0;
+  const courtCaseData = [];
   let executionCaseCount = 0;
+  const executionCaseData = [];
   const courtLoanIds = new Set<number>();
   const executionLoanIds = new Set<number>();
 
@@ -569,11 +630,13 @@ export const calculateCollectorMetrics = (
     const cArr = courtCaseMap.get(loanId as number) ?? [];
     const matchedCourt = cArr.filter(cc => cc.createdAt >= firstDayOfMonth && cc.createdAt <= lastDayOfMonth);
     courtCaseCount += matchedCourt.length;
+    courtCaseData.push(...matchedCourt);
     if (matchedCourt.length > 0) courtLoanIds.add(loanId as number);
 
     const eArr = executionCaseMap.get(loanId as number) ?? [];
     const matchedExec = eArr.filter(ec => ec.createdAt >= firstDayOfMonth && ec.createdAt <= lastDayOfMonth);
     executionCaseCount += matchedExec.length;
+    executionCaseData.push(...matchedExec);
     if (matchedExec.length > 0) executionLoanIds.add(loanId as number);
   }
 
@@ -628,6 +691,7 @@ export const calculateCollectorMetrics = (
     agreementCancelledCount: statusCount.AGREEMENT_CANCELED || 0,
     refuseToPayCount: statusCount.REFUSE_TO_PAY || 0,
     promiseToPayCount: statusCount.PROMISED_TO_PAY || 0,
+    failedPromiseCount: statusCount.FAILED_PROMISE || 0,
     totalLoanCount: relatedLoans.length,
     callCount: 0,
     totalCallDurationSec: "00:00:00",
@@ -641,8 +705,10 @@ export const calculateCollectorMetrics = (
     totalLegalCharges: totals.totalLegal || 0,
     totalOtherCharges: totals.totalFees || 0,
     courtCaseCount: courtCaseCount || 0,
+    courtCaseData: courtCaseData || [],
     courtPrincipalSum: courtPrincipalSum || 0,
     executionCaseCount: executionCaseCount || 0,
+    executionCaseData: executionCaseData || [],
     executionPrincipalSum: executionPrincipalSum || 0,
   };
 };

@@ -511,6 +511,28 @@ export class LoanController {
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
   @UseGuards(JwtGuard, RolesGuard)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @Get(':publicId/loanTasks')
+  getLoanTasks(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+  ) {
+    return this.loanService.getLoanTasks(publicId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
+  @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
+  @Get(':publicId/loanCommittees')
+  getLoanCommittees(
+    @GetUser() user: User,
+    @Param('publicId') publicId: ParseUUIDPipe,
+  ) {
+    return this.loanService.getLoanCommittees(publicId, user.id);
+  }
+
+  @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
+  @UseGuards(JwtGuard, RolesGuard)
   @AllRoles()
   @Get(':publicId/availableLitigationStatuses')
   async getAvailableLitigationStatuses(@Param('publicId') publicId: ParseUUIDPipe) {

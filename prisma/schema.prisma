@@ -87,6 +87,7 @@ model Debtor {
   deletedAt                DateTime?                  @db.DateTime(0)
   idNumber                 String?                    @unique(map: "idNumber_UNIQUE") @db.VarChar(45)
   ClientOtp                ClientOtp[]
+  CreditInfoContract       CreditInfoContract[]
   DebtorStatus             DebtorStatus               @relation(fields: [statusId], references: [id])
   DebtorContact            DebtorContact[]
   DebtorEnforcementRecords DebtorEnforcementRecords[]
@@ -198,6 +199,7 @@ model Loan {
   Charges                 Charges[]
   Comments                Comments[]
   Committee               Committee[]
+  CreditInfoContract      CreditInfoContract[]
   LawyerRequest           LawyerRequest?
   Debtor                  Debtor                    @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   Portfolio               Portfolio                 @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
@@ -333,19 +335,20 @@ model PaymentSchedule {
 }
 
 model Portfolio {
-  id              Int              @id @default(autoincrement())
-  name            String
-  purchasePrice   Decimal          @db.Decimal(12, 2)
-  purchaseDate    DateTime         @db.Date
-  bankName        String
-  sellerId        Int?
-  notes           String?
-  createdAt       DateTime         @default(now()) @db.DateTime(0)
-  updatedAt       DateTime         @default(now()) @db.DateTime(0)
-  deletedAt       DateTime?        @db.DateTime(0)
-  Loan            Loan[]
-  LoanAssignment  LoanAssignment[]
-  portfolioSeller portfolioSeller? @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
+  id                 Int                  @id @default(autoincrement())
+  name               String
+  purchasePrice      Decimal              @db.Decimal(12, 2)
+  purchaseDate       DateTime             @db.Date
+  bankName           String
+  sellerId           Int?
+  notes              String?
+  createdAt          DateTime             @default(now()) @db.DateTime(0)
+  updatedAt          DateTime             @default(now()) @db.DateTime(0)
+  deletedAt          DateTime?            @db.DateTime(0)
+  CreditInfoContract CreditInfoContract[]
+  Loan               Loan[]
+  LoanAssignment     LoanAssignment[]
+  portfolioSeller    portfolioSeller?     @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
 
   @@index([deletedAt])
   @@index([name])
@@ -464,6 +467,7 @@ model User {
   Comments_Comments_archivedByToUser                              Comments[]                   @relation("Comments_archivedByToUser")
   Committee_Committee_requesterIdToUser                           Committee[]                  @relation("Committee_requesterIdToUser")
   Committee_Committee_responderIdToUser                           Committee[]                  @relation("Committee_responderIdToUser")
+  CreditInfoBatch                                                 CreditInfoBatch[]
   DebtorContact                                                   DebtorContact[]
   DebtorStatusHistory                                             DebtorStatusHistory[]
   LawyerRequest_LawyerRequest_assignedByToUser                    LawyerRequest[]              @relation("LawyerRequest_assignedByToUser")
@@ -519,6 +523,8 @@ model Tasks {
   toUserId                  Int
   deadline                  DateTime   @db.Date
   taskStatusId              Int
+  postponeCount             Int        @default(0)
+  viewedAt                  DateTime?  @db.DateTime(0)
   createdAt                 DateTime   @default(now()) @db.DateTime(0)
   updatedAt                 DateTime   @default(now()) @db.DateTime(0)
   deletedAt                 DateTime?  @db.DateTime(0)
@@ -534,6 +540,7 @@ model Tasks {
   @@index([deadline], map: "idx_deadline")
   @@index([deletedAt], map: "idx_deletedAt")
   @@index([toUserId, taskStatusId, deletedAt], map: "idx_user_status_deleted")
+  @@index([viewedAt], map: "idx_viewedAt")
 }
 
 model SmsHistory {
@@ -1011,7 +1018,7 @@ model LoanAddress {
   @@index([cityId], map: "fk_LoanAddress_2")
   @@index([userId], map: "fk_LoanAddress_3")
   @@index([deletedAt], map: "idx_deletedAt")
-  @@index([loanId, deletedAt], map: "idx_loan_deleted")
+  @@index([loanId, deletedAt, createdAt], map: "idx_loan_deleted")
 }
 
 model LoanVisit {
@@ -2325,6 +2332,178 @@ model Old_db_loans_assigned {
   @@index([Case], map: "Case")
   @@index([LoanID], map: "LoanID")
   @@index([mtest], map: "mtest")
+}
+
+model CreditInfoBatch {
+  id                 Int                  @id @default(autoincrement())
+  bankName           String               @db.VarChar(255)
+  periodStart        DateTime             @db.Date
+  periodEnd          DateTime             @db.Date
+  asOfDate           DateTime             @db.DateTime(0)
+  batchIdentifier    String               @unique(map: "CreditInfoBatch_batchIdentifier") @db.VarChar(255)
+  contractsTotal     Int                  @default(0)
+  contractsOpen      Int                  @default(0)
+  contractsClosed    Int                  @default(0)
+  contractsInvalid   Int                  @default(0)
+  createdBy          Int?
+  createdAt          DateTime             @default(now()) @db.DateTime(0)
+  updatedAt          DateTime             @default(now()) @db.DateTime(0)
+  deletedAt          DateTime?            @db.DateTime(0)
+  User               User?                @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CreditInfoBatch_1")
+  CreditInfoContract CreditInfoContract[]
+
+  @@index([createdBy], map: "fk_CreditInfoBatch_1_idx")
+  @@index([bankName], map: "idx_creditinfo_batch_bankName")
+  @@index([createdAt], map: "idx_creditinfo_batch_createdAt")
+  @@index([deletedAt], map: "idx_creditinfo_batch_deletedAt")
+}
+
+model CreditInfoContract {
+  id                                     Int             @id @default(autoincrement())
+  batchId                                Int
+  loanId                                 Int
+  debtorId                               Int
+  portfolioId                            Int
+  contractCode                           String?         @db.VarChar(255)
+  phaseOfContract                        String          @db.VarChar(50)
+  contractStatus                         String          @db.VarChar(100)
+  creditCurrency                         String?         @db.VarChar(20)
+  totalAmount                            Decimal?        @db.Decimal(15, 2)
+  totalTakenAmount                       Decimal?        @db.Decimal(15, 2)
+  installmentType                        String?         @db.VarChar(50)
+  standardInstallmentAmount              Decimal?        @db.Decimal(15, 2)
+  standardInstallmentCount               Int?
+  outstandingInstallmentsCount           Int?
+  outstandingAmount                      Decimal?        @db.Decimal(15, 2)
+  currentOutstandingPrincipalAmount      Decimal?        @db.Decimal(15, 2)
+  overdueAmount                          Decimal?        @db.Decimal(15, 2)
+  currentOverdueInterestAndCommission    Decimal?        @db.Decimal(15, 2)
+  currentOverduePrincipalAmount          Decimal?        @db.Decimal(15, 2)
+  overdueInstallmentsCount               Int?
+  penaltySum                             Decimal?        @db.Decimal(15, 2)
+  penaltyPaid                            Decimal?        @db.Decimal(15, 2)
+  periodicityOfPayments                  String?         @db.VarChar(50)
+  startDate                              DateTime?       @db.Date
+  expectedEndDate                        DateTime?       @db.Date
+  lastPaymentDate                        DateTime?       @db.Date
+  overdueDate                            DateTime?       @db.Date
+  realEndDate                            DateTime?       @db.Date
+  repaymentDate                          DateTime?       @db.Date
+  partiallySecuredByDeposit              String?         @db.VarChar(50)
+  contractTerm                           Int?
+  repaymentType                          String?         @db.VarChar(100)
+  maximumAmountOfInstallmentBySchedule   Decimal?        @db.Decimal(15, 2)
+  totalNumberOfDelinquencyDays           Int?
+  totalNumberOfDelinquencyDaysInLastYear Int?
+  totalNumberOfOverdueInstallments       Int?
+  maximumNumberOfDelinquencyDays         Int?
+  loanSegment                            String?         @db.VarChar(50)
+  penaltyPardoned                        Decimal?        @db.Decimal(15, 2)
+  customerCode                           String?         @db.VarChar(50)
+  surname                                String?         @db.VarChar(255)
+  firstname                              String?         @db.VarChar(255)
+  birthDate                              DateTime?       @db.Date
+  borrowerClassification                 String?         @db.VarChar(50)
+  gender                                 String?         @db.VarChar(50)
+  georgianCitizen                        String?         @db.VarChar(10)
+  nationalId                             String?         @db.VarChar(50)
+  addressValue                           String?         @db.VarChar(1024)
+  roleOfCustomer                         String?         @db.VarChar(50)
+  badPid                                 Boolean         @default(false)
+  badGender                              Boolean         @default(false)
+  badAmount                              Boolean         @default(false)
+  badStartDate                           Boolean         @default(false)
+  badBirthdate                           Boolean         @default(false)
+  badClose                               Boolean         @default(false)
+  createdAt                              DateTime        @default(now()) @db.DateTime(0)
+  updatedAt                              DateTime        @default(now()) @db.DateTime(0)
+  deletedAt                              DateTime?       @db.DateTime(0)
+  Debtor                                 Debtor          @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CreditInfoContract_11")
+  Loan                                   Loan            @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CreditInfoContract_222")
+  Portfolio                              Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CreditInfoContract_333")
+  CreditInfoBatch                        CreditInfoBatch @relation(fields: [batchId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_CreditInfoContract_batchId")
+
+  @@index([debtorId], map: "fk_CreditInfoContract_11")
+  @@index([loanId], map: "fk_CreditInfoContract_222")
+  @@index([portfolioId], map: "fk_CreditInfoContract_3_idx")
+  @@index([batchId], map: "idx_creditinfo_contract_batchId")
+  @@index([deletedAt], map: "idx_creditinfo_contract_deletedAt")
+}
+
+model Old_db_ci_upload {
+  ID                                     Int       @id @default(autoincrement())
+  loanid                                 BigInt    @default(0) @db.UnsignedBigInt
+  case                                   String?   @db.VarChar(100)
+  portfolio_id                           Int?      @default(0)
+  portfolio                              String?   @default("0") @db.VarChar(100)
+  ContractCode                           String?   @db.VarChar(100)
+  PhaseOfContract                        String?   @db.VarChar(100)
+  ContractStatus                         String?   @db.VarChar(100)
+  ContractType                           String?   @default("Installment") @db.VarChar(100)
+  LoanType                               String?   @default("ConsumerLoan") @db.VarChar(100)
+  CreditPurpose                          String?   @default("Other") @db.VarChar(100)
+  CreditCurrency                         String?   @db.VarChar(100)
+  Currency                               String?   @db.VarChar(100)
+  TotalAmount                            Decimal?  @default(0.00) @db.Decimal(15, 2)
+  TotalTakenAmount                       Decimal   @default(0.00) @db.Decimal(15, 2)
+  InstallmentType                        String?   @default("Fixed") @db.VarChar(100)
+  StandardInstallmentAmount              Decimal?  @default(0.00) @db.Decimal(15, 2)
+  StandardInstallmentCount               Int?      @default(12)
+  OutstandingInstallmentsCount           Int?      @default(0)
+  OutstandingAmount                      Decimal?  @default(0.00) @db.Decimal(15, 2)
+  CurrentOutstandingPrincipalAmount      Decimal?  @default(0.00) @db.Decimal(15, 2)
+  OverdueAmount                          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  TotalPayment                           Decimal   @default(0.00) @db.Decimal(15, 2)
+  PrincipalPaid                          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  InterestPaid                           Decimal   @default(0.00) @db.Decimal(15, 2)
+  StartPrincipalAmount                   Decimal   @default(0.00) @db.Decimal(15, 2)
+  StartInterestAndCommission             Decimal   @default(0.00) @db.Decimal(15, 2)
+  CurrentOverdueInterestAndCommission    Decimal?  @default(0.00) @db.Decimal(15, 2)
+  CurrentOverduePrincipalAmount          Decimal?  @default(0.00) @db.Decimal(15, 2)
+  OverdueInstallmentsCount               Int?      @default(0)
+  PenaltySum                             Decimal?  @default(0.00) @db.Decimal(15, 2)
+  PenaltyPaid                            Decimal?  @default(0.00) @db.Decimal(15, 2)
+  PeriodicityOfPayments                  String?   @db.VarChar(100)
+  StartDate                              DateTime? @db.Date
+  ExpectedEndDate                        DateTime? @db.Date
+  LastPaymentDate                        DateTime? @db.Date
+  OverdueDate                            DateTime? @db.Date
+  RealEndDate                            DateTime? @db.Date
+  RepaymentDate                          DateTime? @db.Date
+  PartiallySecuredByDeposit              String?   @default("Unsecured") @db.VarChar(50)
+  ContractTerm                           Int?      @default(12)
+  RepaymentType                          String?   @default("InstallmentLoan") @db.VarChar(100)
+  MaximumAmountOfInstallmentBySchedule   Int?      @default(0)
+  TotalNumberOfDelinquencyDays           Int?      @default(0)
+  TotalNumberOfDelinquencyDaysInLastYear Int?      @default(0)
+  TotalNumberOfOverdueInstallments       Int?      @default(0)
+  MaximumNumberOfDelinquencyDays         Int?      @default(0)
+  LoanSegment                            String?   @default("Retail") @db.VarChar(50)
+  PenaltyPardoned                        Decimal?  @default(0.00) @db.Decimal(15, 2)
+  CustomerCode                           String?   @db.VarChar(50)
+  Surname                                String?   @db.VarChar(100)
+  Firstname                              String?   @db.VarChar(100)
+  BirthDate                              String?   @db.VarChar(20)
+  BorrowerClassification                 String?   @db.VarChar(100)
+  Gender                                 String?   @db.VarChar(100)
+  GeorgianCitizen                        String?   @default("Yes") @db.VarChar(100)
+  NationalID                             String?   @db.VarChar(50)
+  AddressValue                           String?   @db.VarChar(1024)
+  RoleOfCustomer                         String?   @default("MainDebtor") @db.VarChar(50)
+  InstalmentCount                        Int       @default(1)
+  UpLoaded                               Int       @default(0)
+  UploadDate                             DateTime? @db.Date
+  BadPID                                 Int       @default(0)
+  BadGender                              Int       @default(0)
+  badamount                              Int       @default(0)
+  ClosedInCI                             Int       @default(0)
+  Full_Name                              String?   @db.VarChar(200)
+  BadBirthdate                           Int?      @default(0)
+  BadStartDate                           Int       @default(0)
+  badclose                               Int       @default(0)
+
+  @@index([Firstname], map: "Firstname")
+  @@index([loanid], map: "loanid")
 }
 
 enum PaymentCommitment_type {

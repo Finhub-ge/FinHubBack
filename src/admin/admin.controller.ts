@@ -31,6 +31,7 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { UpdateRegionDto } from "./dto/updateRegion.dto";
 import { AssignTeamsToRegionDto } from "./dto/assignTeamsToRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
+import { UpdateTasksViewedDto } from "./dto/updateTasksViewed.dto";
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -125,6 +126,12 @@ export class AdminController {
     @Param('id') id: number
   ) {
     return await this.adminService.createTaskResponse(id, data, user.id);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('tasks/updateViewed')
+  async updateTasksViewed(@GetUser() user: User, @Body() body: UpdateTasksViewedDto) {
+    return await this.adminService.updateTasksViewed(body.ids, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
