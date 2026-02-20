@@ -2854,7 +2854,14 @@ export class LoanService {
     }
 
     return await this.prisma.reminders.findMany({
-      where: { loanId: loan.id, deletedAt: null, status: true },
+      where: {
+        loanId: loan.id,
+        deletedAt: null,
+        status: true,
+        type: {
+          in: [Reminders_type.Callback]
+        },
+      },
       select: {
         id: true,
         type: true,
