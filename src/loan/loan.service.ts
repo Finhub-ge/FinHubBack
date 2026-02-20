@@ -1618,9 +1618,9 @@ export class LoanService {
       const latestCommittee = await this.prisma.committee.findFirst({
         where: {
           loanId: loan.id,
-          type: {
-            in: [Committee_type.discount, Committee_type.correction],
-          },
+          // type: {
+          //   in: [Committee_type.discount, Committee_type.correction],
+          // },
           status: Committee_status.complete,
           deletedAt: null,
         },
