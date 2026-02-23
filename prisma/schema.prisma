@@ -211,6 +211,7 @@ model Loan {
   LoanAttribute           LoanAttribute[]
   LoanBalanceHistory      LoanBalanceHistory[]
   LoanCollateralStatus    LoanCollateralStatus[]
+  LoanInitialSnapshot     LoanInitialSnapshot?
   LoanLegalStage          LoanLegalStage[]
   LoanLitigationStage     LoanLitigationStage[]
   LoanMarks               LoanMarks[]
@@ -236,6 +237,8 @@ model Loan {
   @@index([closedAt], map: "idx_closedAt")
   @@index([lastActivite], map: "idx_lastActivite")
   @@index([statusId, deletedAt], map: "idx_status_deleted")
+  @@index([debtorId, deletedAt], map: "idx_debtor_active")
+  @@index([debtorId, deletedAt, id], map: "idx_debtor_active_id")
 }
 
 model LoanAttribute {
@@ -335,20 +338,21 @@ model PaymentSchedule {
 }
 
 model Portfolio {
-  id                 Int                  @id @default(autoincrement())
-  name               String
-  purchasePrice      Decimal              @db.Decimal(12, 2)
-  purchaseDate       DateTime             @db.Date
-  bankName           String
-  sellerId           Int?
-  notes              String?
-  createdAt          DateTime             @default(now()) @db.DateTime(0)
-  updatedAt          DateTime             @default(now()) @db.DateTime(0)
-  deletedAt          DateTime?            @db.DateTime(0)
-  CreditInfoContract CreditInfoContract[]
-  Loan               Loan[]
-  LoanAssignment     LoanAssignment[]
-  portfolioSeller    portfolioSeller?     @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  purchasePrice       Decimal               @db.Decimal(12, 2)
+  purchaseDate        DateTime              @db.Date
+  bankName            String
+  sellerId            Int?
+  notes               String?
+  createdAt           DateTime              @default(now()) @db.DateTime(0)
+  updatedAt           DateTime              @default(now()) @db.DateTime(0)
+  deletedAt           DateTime?             @db.DateTime(0)
+  CreditInfoContract  CreditInfoContract[]
+  Loan                Loan[]
+  LoanAssignment      LoanAssignment[]
+  LoanInitialSnapshot LoanInitialSnapshot[]
+  portfolioSeller     portfolioSeller?      @relation(fields: [sellerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_Portfolio_portfolioSeller_1")
 
   @@index([deletedAt])
   @@index([name])
@@ -2504,6 +2508,28 @@ model Old_db_ci_upload {
 
   @@index([Firstname], map: "Firstname")
   @@index([loanid], map: "loanid")
+}
+
+model LoanInitialSnapshot {
+  id           Int       @id @default(autoincrement())
+  loanId       Int       @unique(map: "uq_loan_initial_snapshot_loanId")
+  portfolioId  Int
+  purchaseDate DateTime  @db.Date
+  currency     String?   @db.VarChar(45)
+  principal    Decimal   @default(0.00) @db.Decimal(12, 2)
+  interest     Decimal   @default(0.00) @db.Decimal(12, 2)
+  penalty      Decimal   @default(0.00) @db.Decimal(12, 2)
+  otherFee     Decimal   @default(0.00) @db.Decimal(12, 2)
+  legalCharges Decimal   @default(0.00) @db.Decimal(12, 2)
+  totalDebt    Decimal   @default(0.00) @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now()) @db.DateTime(0)
+  updatedAt    DateTime  @default(now()) @db.DateTime(0)
+  deletedAt    DateTime? @db.DateTime(0)
+  Loan         Loan      @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_initial_snapshot_loan")
+  Portfolio    Portfolio @relation(fields: [portfolioId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_initial_snapshot_portfolio")
+
+  @@index([portfolioId], map: "idx_loan_initial_snapshot_portfolioId")
+  @@index([purchaseDate], map: "idx_loan_initial_snapshot_purchaseDate")
 }
 
 enum PaymentCommitment_type {
