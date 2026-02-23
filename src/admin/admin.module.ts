@@ -10,11 +10,10 @@ import { CurrencyHelper } from "src/helpers/currency.helper";
 import { HttpModule } from "@nestjs/axios";
 import { LoanModule } from "src/loan/loan.module";
 import { ScopeService } from "src/helpers/scope.helper";
-import { PaymentBackgroundListener } from "src/listeners/payment-background.listener";
-import { PaymentMonitoringListener } from "src/listeners/payment-monitoring.listener";
-import { TransactionDeleteBackgroundListener } from "src/listeners/transaction-delete-background.listener";
-import { ChargeBackgroundListener } from "src/listeners/charge-background.listener";
-import { CommitteeBackgroundListener } from "src/listeners/committee-background.listener";
+import { PaymentEventListener } from "src/listeners/payment.listener";
+import { ErrorMonitoringEventListener } from "src/listeners/errorMonitoring.listener";
+import { ChargeEventListener } from "src/listeners/charge.listener";
+import { CommitteeEventListener } from "src/listeners/committee.listener";
 
 @Module({
   imports: [JwtModule.register({}), HttpModule, LoanModule],
@@ -27,11 +26,10 @@ import { CommitteeBackgroundListener } from "src/listeners/committee-background.
     PermissionsHelper,
     CurrencyHelper,
     ScopeService,
-    PaymentBackgroundListener,
-    PaymentMonitoringListener,
-    TransactionDeleteBackgroundListener,
-    ChargeBackgroundListener,
-    CommitteeBackgroundListener
+    PaymentEventListener,
+    ErrorMonitoringEventListener,
+    ChargeEventListener,
+    CommitteeEventListener
   ],
   exports: [AdminService]
 })

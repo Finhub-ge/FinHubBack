@@ -4,13 +4,13 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ChargeCreatedEvent,
   ChargeDeletedEvent,
-  PaymentProcessingFailedEvent,
-} from '../events/payment.events';
+  ErrorProcessingFailedEvent,
+} from 'src/events/events.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class ChargeBackgroundListener {
-  private readonly logger = new Logger(ChargeBackgroundListener.name);
+export class ChargeEventListener {
+  private readonly logger = new Logger(ChargeEventListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -77,13 +77,19 @@ export class ChargeBackgroundListener {
       );
 
       // Emit failure event for monitoring
-      const failureEvent: PaymentProcessingFailedEvent = {
-        transactionId: event.chargeId,
-        step: 'charge_creation_background_processing',
+      const failureEvent: ErrorProcessingFailedEvent = {
         error: error.message,
         timestamp: new Date(),
+        source: 'charge_creation_background_processing',
+        context: `Charge ${event.chargeId} creation failed`,
+        additionalInfo: {
+          chargeId: event.chargeId,
+          loanId: event.loanId,
+          sourceType: event.sourceType,
+          componentType: event.componentType,
+        },
       };
-      this.eventEmitter.emit('payment.processing.failed', failureEvent);
+      this.eventEmitter.emit('error.processing.failed', failureEvent);
     }
   }
 
@@ -171,13 +177,19 @@ export class ChargeBackgroundListener {
       );
 
       // Emit failure event for monitoring
-      const failureEvent: PaymentProcessingFailedEvent = {
-        transactionId: event.chargeId,
-        step: 'charge_deletion_background_processing',
+      const failureEvent: ErrorProcessingFailedEvent = {
         error: error.message,
         timestamp: new Date(),
+        source: 'charge_deletion_background_processing',
+        context: `Charge ${event.chargeId} deletion failed`,
+        additionalInfo: {
+          chargeId: event.chargeId,
+          loanId: event.loanId,
+          sourceType: event.deletionSourceType,
+          componentType: event.componentType,
+        },
       };
-      this.eventEmitter.emit('payment.processing.failed', failureEvent);
+      this.eventEmitter.emit('error.processing.failed', failureEvent);
     }
   }
 }

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CommentCreatedEvent, PaymentProcessingFailedEvent } from '../events/payment.events';
+import { CommentCreatedEvent, ErrorProcessingFailedEvent } from 'src/events/events.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class CommentBackgroundListener {
-  private readonly logger = new Logger(CommentBackgroundListener.name);
+export class CommentEventListener {
+  private readonly logger = new Logger(CommentEventListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,13 +100,18 @@ export class CommentBackgroundListener {
       );
 
       // Emit failure event for monitoring
-      const failureEvent: PaymentProcessingFailedEvent = {
-        transactionId: event.commentId,
-        step: 'comment_background_processing',
+      const failureEvent: ErrorProcessingFailedEvent = {
         error: error.message,
         timestamp: new Date(),
+        source: 'comment_background_processing',
+        context: `Comment ${event.commentId} creation failed`,
+        additionalInfo: {
+          commentId: event.commentId,
+          loanId: event.loanId,
+          loanCaseId: event.loanCaseId,
+        },
       };
-      this.eventEmitter.emit('payment.processing.failed', failureEvent);
+      this.eventEmitter.emit('error.processing.failed', failureEvent);
     }
   }
 }

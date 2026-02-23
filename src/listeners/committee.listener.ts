@@ -3,20 +3,20 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   CommitteeRespondedEvent,
-  PaymentProcessingFailedEvent,
-} from '../events/payment.events';
+  ErrorProcessingFailedEvent,
+} from 'src/events/events.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { Committee_type } from '@prisma/client';
 import { logAssignmentHistory, updateLoanRemaining } from 'src/helpers/loan.helper';
 
 @Injectable()
-export class CommitteeBackgroundListener {
-  private readonly logger = new Logger(CommitteeBackgroundListener.name);
+export class CommitteeEventListener {
+  private readonly logger = new Logger(CommitteeEventListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   @OnEvent('committee.responded', { async: true })
   async handleCommitteeResponded(event: CommitteeRespondedEvent) {
@@ -224,13 +224,18 @@ export class CommitteeBackgroundListener {
       );
 
       // Emit failure event for monitoring
-      const failureEvent: PaymentProcessingFailedEvent = {
-        transactionId: event.committeeId,
-        step: 'committee_response_background_processing',
+      const failureEvent: ErrorProcessingFailedEvent = {
         error: error.message,
         timestamp: new Date(),
+        source: 'committee_response_background_processing',
+        context: `Committee ${event.committeeId} response failed`,
+        additionalInfo: {
+          committeeId: event.committeeId,
+          loanId: event.loanId,
+          committeeType: event.committeeType,
+        },
       };
-      this.eventEmitter.emit('payment.processing.failed', failureEvent);
+      this.eventEmitter.emit('error.processing.failed', failureEvent);
     }
   }
 }

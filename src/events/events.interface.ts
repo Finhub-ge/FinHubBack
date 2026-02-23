@@ -1,4 +1,4 @@
-export class PaymentTransactionCreatedEvent {
+export interface PaymentTransactionCreatedEvent {
   transactionId: number;
   loanId: number;
   amount: number;
@@ -27,7 +27,7 @@ export class PaymentTransactionCreatedEvent {
   agreementMin: number;
 }
 
-export class TransactionDeletedEvent {
+export interface TransactionDeletedEvent {
   transactionId: number;
   loanId: number;
   amount: number;
@@ -48,13 +48,16 @@ export class TransactionDeletedEvent {
   closingStatusHistoryId: number | null;
   oldLoanStatusId: number | null;
 }
-export class PaymentProcessingFailedEvent {
-  transactionId: number;
-  step: string;
+
+export interface ErrorProcessingFailedEvent {
   error: string;
   timestamp: Date;
+  source: string;
+  context: string;
+  additionalInfo: Record<string, any>;
 }
-export class CommentCreatedEvent {
+
+export interface CommentCreatedEvent {
   commentId: number;
   loanId: number;
   loanCaseId: string;
@@ -67,7 +70,7 @@ export class CommentCreatedEvent {
   userRoleName: string;
 }
 
-export class LoanStatusUpdatedEvent {
+export interface LoanStatusUpdatedEvent {
   loanId: number;
   loanCaseId: string;
   debtorId: number;
@@ -82,7 +85,7 @@ export class LoanStatusUpdatedEvent {
   debtorLoans: Array<{ id: number; statusId: number; publicId: string }>;
 }
 
-export class ChargeCreatedEvent {
+export interface ChargeCreatedEvent {
   chargeId: number;
   loanId: number;
   chargeTypeTitle: string;
@@ -109,7 +112,7 @@ export class ChargeCreatedEvent {
   newLoanRemainingId: number;
 }
 
-export class ChargeDeletedEvent {
+export interface ChargeDeletedEvent {
   chargeId: number;
   loanId: number;
   chargeTypeTitle: string;
@@ -139,7 +142,7 @@ export class ChargeDeletedEvent {
   oldBalanceHistoryId: number | null;
 }
 
-export class CommitteeRespondedEvent {
+export interface CommitteeRespondedEvent {
   committeeId: number;
   loanId: number;
   oldLoanStatusId: number;
@@ -152,3 +155,4 @@ export class CommitteeRespondedEvent {
   currentAssignmentUserId: number | null;
   currentLoanRemainingId: number;
 }
+

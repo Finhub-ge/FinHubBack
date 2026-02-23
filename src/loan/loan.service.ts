@@ -37,7 +37,7 @@ import { shouldSkipUserScope } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
 import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CommentCreatedEvent, LoanStatusUpdatedEvent } from 'src/events/payment.events';
+import { CommentCreatedEvent, LoanStatusUpdatedEvent } from 'src/events/events.interface';
 
 @Injectable()
 export class LoanService {

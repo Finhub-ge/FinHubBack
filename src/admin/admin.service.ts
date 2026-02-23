@@ -43,7 +43,7 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 import { LoanService } from "src/loan/loan.service";
 import { ScopeService } from "src/helpers/scope.helper";
-import { ChargeCreatedEvent, ChargeDeletedEvent, CommitteeRespondedEvent, PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
+import { ChargeCreatedEvent, ChargeDeletedEvent, CommitteeRespondedEvent, PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/events.interface";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 
 dayjs.extend(utc);
@@ -3803,7 +3803,6 @@ export class AdminService {
     // ========== STEP 9: RETURN TO CLIENT ==========
     return {
       message: 'Transaction deleted and all changes reverted successfully',
-      transactionId: transaction.id,
     };
   }
 }

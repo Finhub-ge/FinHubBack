@@ -1,14 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { LoanStatusUpdatedEvent, PaymentProcessingFailedEvent } from '../events/payment.events';
+import { LoanStatusUpdatedEvent, ErrorProcessingFailedEvent } from 'src/events/events.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { Reminders_type } from '@prisma/client';
 import { saveScheduleReminders } from 'src/helpers/loan.helper';
 
 @Injectable()
-export class LoanStatusBackgroundListener {
-  private readonly logger = new Logger(LoanStatusBackgroundListener.name);
+export class LoanStatusEventListener {
+  private readonly logger = new Logger(LoanStatusEventListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -135,13 +135,19 @@ export class LoanStatusBackgroundListener {
       );
 
       // Emit failure event for monitoring
-      const failureEvent: PaymentProcessingFailedEvent = {
-        transactionId: event.loanId,
-        step: 'loan_status_background_processing',
+      const failureEvent: ErrorProcessingFailedEvent = {
         error: error.message,
         timestamp: new Date(),
+        source: 'loan_status_background_processing',
+        context: `Loan status ${event.newStatusName} update failed`,
+        additionalInfo: {
+          loanId: event.loanId,
+          newStatusName: event.newStatusName,
+          shouldUpdateAllLoans: event.shouldUpdateAllLoans,
+          debtorLoans: event.debtorLoans.map((l) => l.id),
+        },
       };
-      this.eventEmitter.emit('payment.processing.failed', failureEvent);
+      this.eventEmitter.emit('error.processing.failed', failureEvent);
     }
   }
 }
