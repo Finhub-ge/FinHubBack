@@ -54,3 +54,30 @@ export class PaymentProcessingFailedEvent {
   error: string;
   timestamp: Date;
 }
+export class CommentCreatedEvent {
+  commentId: number;
+  loanId: number;
+  loanCaseId: string;
+  debtorId: number;
+  userId: number;
+  comment: string;
+  uploadId: number | null;
+  loanStatusId: number;
+  shouldUpdateLastActivity: boolean;
+  userRoleName: string;
+}
+
+export class LoanStatusUpdatedEvent {
+  loanId: number;
+  loanCaseId: string;
+  debtorId: number;
+  oldStatusId: number;
+  newStatusId: number;
+  newStatusName: string;
+  userId: number;
+  comment: string | null;
+  shouldUpdateAllLoans: boolean;
+  shouldUpdateLastActivity: boolean;
+  commitmentId: number | null;
+  debtorLoans: Array<{ id: number; statusId: number; publicId: string }>;
+}

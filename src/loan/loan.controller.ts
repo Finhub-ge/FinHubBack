@@ -227,7 +227,8 @@ export class LoanController {
     @Body() addCommentDto: AddCommentDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.loanService.addComment(publicId, addCommentDto, user, file);
+    // return this.loanService.addComment(publicId, addCommentDto, user, file);
+    return this.loanService.addCommentNew(publicId, addCommentDto, user, file);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -275,7 +276,8 @@ export class LoanController {
     @Param('publicId') publicId: ParseUUIDPipe,
     @Body() updateLoanStatusDto: UpdateLoanStatusDto
   ) {
-    return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user);
+    // return this.loanService.updateLoanStatus(publicId, updateLoanStatusDto, user);
+    return this.loanService.updateLoanStatusNew(publicId, updateLoanStatusDto, user);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
