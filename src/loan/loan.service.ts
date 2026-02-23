@@ -1358,6 +1358,13 @@ export class LoanService {
       user.role_name === Role.COLLECTOR &&
       isUserAssigned;
 
+    const relatedComments = debtorLoans.map(relatedLoan => ({
+      loanId: relatedLoan.id,
+      userId: user.id,
+      comment: `From case: ${loan.caseId} ${addCommentDto.comment}`,
+      uploadId: upload?.id,
+    }));
+
     await this.prisma.$transaction(async (tx) => {
       // Create the comment for the main loan
       await tx.comments.create({
@@ -1367,24 +1374,25 @@ export class LoanService {
           comment: addCommentDto.comment,
           uploadId: upload?.id,
         },
-        // include: {
-        //   User: { select: { id: true, firstName: true, lastName: true } }
-        // }
       });
 
-      // Create comments for all related loans with prefix
-      if (debtorLoans.length > 0) {
-        const relatedComments = debtorLoans.map(relatedLoan => ({
-          loanId: relatedLoan.id,
-          userId: user.id,
-          comment: `From case: ${loan.caseId} ${addCommentDto.comment}`,
-          uploadId: upload?.id,
-        }));
-
-        await tx.comments.createMany({
-          data: relatedComments,
-        });
+      if (relatedComments.length) {
+        await tx.comments.createMany({ data: relatedComments });
       }
+
+      // Create comments for all related loans with prefix
+      // if (debtorLoans.length > 0) {
+      //   const relatedComments = debtorLoans.map(relatedLoan => ({
+      //     loanId: relatedLoan.id,
+      //     userId: user.id,
+      //     comment: `From case: ${loan.caseId} ${addCommentDto.comment}`,
+      //     uploadId: upload?.id,
+      //   }));
+
+      //   await tx.comments.createMany({
+      //     data: relatedComments,
+      //   });
+      // }
 
       // Update lastActivite for the main loan
       if (shouldUpdateLastActivity) {
@@ -3410,15 +3418,16 @@ export class LoanService {
 
   async getAdditionalInfo(userId: number) {
     // Step 1: Fetch guarantors
-    const guarantors = await this.prisma.old_db_additional_data.findMany({
-      where: {
-        // title: { contains: 'guaran' },
-      },
-      select: {
-        case_id: true,
-        value: true,
-      },
-    });
+    // const guarantors = await this.prisma.old_db_additional_data.findMany({
+    //   where: {
+    //     title: { contains: 'guaran' },
+    //   },
+    //   select: {
+    //     id: true,
+    //     case_id: true,
+    //     value: true,
+    //   },
+    // });
 
     // const missingCaseIds: number[] = [];
 
@@ -3438,19 +3447,19 @@ export class LoanService {
     // console.log('Missing case_number / LoanNumber:', missingCaseIds);
 
     // Step 3: Collect caseIds for querying loans
-    const caseIds = guarantors
-      .map(g => {
-        try {
-          const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
-          return value;
-          // const id = value.case_number ?? value.LoanNumber ?? null;
-          // return id !== null ? String(id) : null;
-        } catch {
-          return null;
-        }
-      })
+    // const caseIds = guarantors
+    //   .map(g => {
+    //     try {
+    //       const value = typeof g.value === 'string' ? JSON.parse(g.value) : g.value;
+    //       return value;
+    //       // const id = value.case_number ?? value.LoanNumber ?? null;
+    //       // return id !== null ? String(id) : null;
+    //     } catch {
+    //       return null;
+    //     }
+    //   })
     // .filter((v): v is string => v != null);
-    return caseIds;
+    // return caseIds;
     // console.log('Total case numbers:', caseIds.length);
 
     // Step 4: Fetch loans that match these caseIds
