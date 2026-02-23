@@ -1347,7 +1347,7 @@ export class LoanService {
         caseId: true
       }
     });
-
+    console.log(debtorLoans.length)
     const isUserAssigned =
       loan.LoanAssignment?.some(
         assignment => assignment.userId === user.id,
@@ -1418,8 +1418,11 @@ export class LoanService {
           });
         }
       }
-    });
-
+    },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      });
     return {
       message: 'Comment added successfully',
     };
