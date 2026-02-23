@@ -43,7 +43,7 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 import { LoanService } from "src/loan/loan.service";
 import { ScopeService } from "src/helpers/scope.helper";
-import { ChargeCreatedEvent, ChargeDeletedEvent, PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
+import { ChargeCreatedEvent, ChargeDeletedEvent, CommitteeRespondedEvent, PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 
 dayjs.extend(utc);
@@ -1198,6 +1198,122 @@ export class AdminService {
       maxWait: 10000,
       timeout: 20000,
     });
+  }
+
+  async responseCommitteeNew(
+    committeeId: number,
+    data: ResponseCommitteeDto,
+    userId: number,
+  ) {
+    const startTime = Date.now();
+    this.logger.log(
+      `[ResponseCommittee] Starting committee response for committee ${committeeId}`,
+    );
+
+    // ========== STEP 1: FETCH TARGET USER (for hopeless cases) ==========
+    const validationStart = Date.now();
+
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: 79 },
+      select: { id: true, roleId: true, firstName: true, lastName: true },
+    });
+
+    if (!targetUser) {
+      throw new BadRequestException('Target user (ID: 79) not found');
+    }
+
+    // ========== STEP 2: VALIDATE COMMITTEE ==========
+    const committee = await this.prisma.committee.findUnique({
+      where: {
+        id: committeeId,
+        status: Committee_status.pending,
+      },
+      include: {
+        Loan: true,
+      },
+    });
+
+    if (!committee) {
+      throw new BadRequestException(
+        'Committee request not found or already processed',
+      );
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 3: GET CURRENT LOAN REMAINING ==========
+    const currentRemaining = await this.prisma.loanRemaining.findFirst({
+      where: {
+        loanId: committee.loanId,
+        deletedAt: null,
+      },
+    });
+
+    if (!currentRemaining) {
+      throw new NotFoundException('Loan remaining balance not found');
+    }
+
+    // ========== STEP 4: GET CURRENT ASSIGNMENT (for hopeless cases) ==========
+    const finalType = data.type || committee.type;
+    let currentAssignmentUserId: number | null = null;
+
+    if (finalType === Committee_type.hopeless) {
+      const currentAssignment = await this.prisma.loanAssignment.findFirst({
+        where: {
+          loanId: committee.loanId,
+          roleId: targetUser.roleId,
+          isActive: true,
+        },
+      });
+
+      currentAssignmentUserId = currentAssignment?.userId || null;
+    }
+
+    // ========== STEP 5: UPDATE COMMITTEE RESPONSE ==========
+    const updateStart = Date.now();
+
+    await this.prisma.committee.update({
+      where: { id: committeeId },
+      data: {
+        responseText: data.responseText,
+        status: Committee_status.complete,
+        type: finalType,
+        responderId: userId,
+        responseDate: new Date(),
+        agreementMinAmount: data.agreementMinAmount,
+      },
+    });
+
+    this.logger.debug(`Committee updated in ${Date.now() - updateStart}ms`);
+
+    // ========== STEP 6: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const event: CommitteeRespondedEvent = {
+      committeeId: committee.id,
+      loanId: committee.loanId,
+      oldLoanStatusId: committee.Loan.statusId,
+      committeeType: finalType,
+      userId: userId,
+      agreementMinAmount: data.agreementMinAmount,
+      targetUserId: targetUser.id,
+      targetUserRoleId: targetUser.roleId,
+      targetUserName: `${targetUser.firstName} ${targetUser.lastName}`,
+      currentAssignmentUserId: currentAssignmentUserId,
+      currentLoanRemainingId: currentRemaining.id,
+    };
+
+    this.eventEmitter.emit('committee.responded', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `Committee response submitted successfully in ${totalTime}ms (synchronous part)`,
+    );
+
+    // ========== STEP 7: RETURN TO CLIENT ==========
+    return {
+      message: 'Committee response submitted successfully',
+    };
   }
 
   async getAllCommittees(getCommiteesDto: GetCommiteesWithPaginationDto, user: any) {

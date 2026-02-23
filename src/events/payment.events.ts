@@ -138,3 +138,17 @@ export class ChargeDeletedEvent {
   oldAllocationDetailId: number | null;
   oldBalanceHistoryId: number | null;
 }
+
+export class CommitteeRespondedEvent {
+  committeeId: number;
+  loanId: number;
+  oldLoanStatusId: number;
+  committeeType: string;
+  userId: number;
+  agreementMinAmount: number | null;
+  targetUserId: number;
+  targetUserRoleId: number;
+  targetUserName: string;
+  currentAssignmentUserId: number | null;
+  currentLoanRemainingId: number;
+}

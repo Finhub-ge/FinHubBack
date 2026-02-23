@@ -144,7 +144,8 @@ export class AdminController {
     @Body() data: ResponseCommitteeDto,
     @Param('id') id: number
   ) {
-    return await this.adminService.responseCommittee(id, data, user.id);
+    // return await this.adminService.responseCommittee(id, data, user.id);
+    return await this.adminService.responseCommitteeNew(id, data, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

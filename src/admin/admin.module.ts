@@ -14,6 +14,7 @@ import { PaymentBackgroundListener } from "src/listeners/payment-background.list
 import { PaymentMonitoringListener } from "src/listeners/payment-monitoring.listener";
 import { TransactionDeleteBackgroundListener } from "src/listeners/transaction-delete-background.listener";
 import { ChargeBackgroundListener } from "src/listeners/charge-background.listener";
+import { CommitteeBackgroundListener } from "src/listeners/committee-background.listener";
 
 @Module({
   imports: [JwtModule.register({}), HttpModule, LoanModule],
@@ -29,7 +30,8 @@ import { ChargeBackgroundListener } from "src/listeners/charge-background.listen
     PaymentBackgroundListener,
     PaymentMonitoringListener,
     TransactionDeleteBackgroundListener,
-    ChargeBackgroundListener
+    ChargeBackgroundListener,
+    CommitteeBackgroundListener
   ],
   exports: [AdminService]
 })
