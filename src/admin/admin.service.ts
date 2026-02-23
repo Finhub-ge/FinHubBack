@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from "@nestjs/common";
+import { BadRequestException, HttpException, Injectable, Logger, NotFoundException, ParseUUIDPipe } from "@nestjs/common";
 import { PaymentsHelper } from "src/helpers/payments.helper";
 import { PrismaService } from "src/prisma/prisma.service";
 import { UpdatePaymentDto } from "./dto/update-payment.dto";
@@ -43,12 +43,16 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 import { LoanService } from "src/loan/loan.service";
 import { ScopeService } from "src/helpers/scope.helper";
+import { PaymentTransactionCreatedEvent } from "src/events/payment.events";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private prisma: PrismaService,
     private paymentHelper: PaymentsHelper,
@@ -58,6 +62,7 @@ export class AdminService {
     private readonly currencyHelper: CurrencyHelper,
     private readonly loanService: LoanService,
     private readonly scopeService: ScopeService,
+    private readonly eventEmitter: EventEmitter2,
   ) { }
 
   async getDebtorContactTypes() {
@@ -2977,5 +2982,150 @@ export class AdminService {
     ];
 
     return await paymentReportExport(exportData, columns, 'Payment Report');
+  }
+
+  async createPaymentNew(data: CreatePaymentDto, userId: number) {
+    const startTime = Date.now();
+    this.logger.log(`Creating new payment for case ${data.caseId}`);
+
+    // ========== STEP 1: VALIDATION ==========
+    const loan = await this.prisma.loan.findFirst({
+      where: { caseId: String(data.caseId) },
+      include: {
+        LoanStatus: {
+          select: { name: true },
+        }
+      },
+    });
+
+    if (!loan) {
+      throw new HttpException('Loan not found', 404);
+    }
+
+    let loanRemaining = await this.prisma.loanRemaining.findFirst({
+      where: { loanId: loan.id, deletedAt: null },
+    });
+
+    if (!loanRemaining) {
+      throw new HttpException('Loan remaining balance not found', 404);
+    }
+
+    // Get currency rate (same logic as existing addPayment)
+    const currencyRate = loan.currency !== CurrencyExchange_currency.GEL
+      ? await this.currencyHelper.getExchangeRate(data.paymentDate, loan.currency)
+      : 1;
+    const amount = (Number(data.amount) / currencyRate).toFixed(2).toString();
+
+    this.logger.debug(`Validation completed in ${Date.now() - startTime}ms`);
+
+    // ========== STEP 2: HANDLE OVERPAYMENT (if needed) ==========
+    if (Number(amount) > Number(loanRemaining.currentDebt)) {
+      const overpaymentStart = Date.now();
+      const remainingAmount = Number(amount) - Number(loanRemaining.currentDebt);
+
+      this.logger.debug(`Overpayment detected: ${remainingAmount}`);
+
+      // Soft delete old loan remaining
+      await this.prisma.loanRemaining.update({
+        where: { id: loanRemaining.id },
+        data: { deletedAt: new Date() },
+      });
+
+      // Create new loan remaining with increased penalty
+      const newLoanRemaining = await this.prisma.loanRemaining.create({
+        data: {
+          loanId: loan.id,
+          principal: loanRemaining.principal,
+          interest: loanRemaining.interest,
+          penalty: Number(loanRemaining.penalty) + remainingAmount,
+          otherFee: loanRemaining.otherFee,
+          legalCharges: loanRemaining.legalCharges,
+          currentDebt: Number(loanRemaining.currentDebt) + remainingAmount,
+          agreementMin: loanRemaining.agreementMin,
+        },
+      });
+
+      loanRemaining = newLoanRemaining;
+
+      this.logger.debug(`Overpayment handled in ${Date.now() - overpaymentStart}ms`);
+    }
+
+    // ========== STEP 3: CREATE TRANSACTION RECORD ==========
+    const transactionStart = Date.now();
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        loanId: loan.id,
+        amount: Number(amount || 0),
+        currency: loan.currency,
+        rate: currencyRate,
+        paymentDate: data.paymentDate,
+        transactionChannelAccountId: data.accountId,
+        publicId: randomUUID(),
+        userId: userId,
+        principal: 0, // Will be updated next
+        interest: 0,
+        penalty: 0,
+        fees: 0,
+        legal: 0,
+        comment: data.comment || null,
+      },
+    });
+
+    this.logger.debug(`Transaction created in ${Date.now() - transactionStart}ms`);
+
+    // ========== STEP 4: ALLOCATE PAYMENT ==========
+    const allocationStart = Date.now();
+
+    const allocationResult = await this.paymentHelper.allocatePayment(
+      transaction.id,
+      'PAYMENT',
+      Number(amount || 0),
+      loanRemaining,
+      this.prisma, // Pass prisma directly (no transaction)
+    );
+
+    this.logger.debug(`Payment allocated in ${Date.now() - allocationStart}ms`);
+
+    // ========== STEP 5: UPDATE TRANSACTION SUMMARY ==========
+    const updateStart = Date.now();
+
+    await this.prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        principal: allocationResult.transactionSummary.principal,
+        interest: allocationResult.transactionSummary.interest,
+        penalty: allocationResult.transactionSummary.penalty,
+        fees: allocationResult.transactionSummary.fees,
+        legal: allocationResult.transactionSummary.legal,
+      },
+    });
+
+    this.logger.debug(`Transaction summary updated in ${Date.now() - updateStart}ms`);
+
+    // ========== STEP 6: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const event: PaymentTransactionCreatedEvent = {
+      transactionId: transaction.id,
+      loanId: loan.id,
+      amount: Number(amount || 0),
+      paymentDate: new Date(data.paymentDate),
+      userId: userId,
+      loanRemainingId: loanRemaining.id,
+      allocationResult: allocationResult,
+      loanStatusName: loan.LoanStatus.name,
+      oldLoanStatus: loan.statusId,
+      agreementMin: loanRemaining.agreementMin.toNumber(),
+    };
+
+    this.eventEmitter.emit('payment.transaction.created', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(`Payment created successfully in ${totalTime}ms (synchronous part)`);
+
+    return {
+      message: 'Payment added successfully'
+    };
   }
 }

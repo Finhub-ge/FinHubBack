@@ -93,7 +93,8 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('addPayment') // Loan publicId
   async addPayment(@GetUser() user: User, @Body() data: CreatePaymentDto) {
-    return await this.adminService.addPayment(data, user.id);
+    // return await this.adminService.addPayment(data, user.id);
+    return await this.adminService.createPaymentNew(data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })

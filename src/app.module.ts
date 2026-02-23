@@ -12,6 +12,7 @@ import { CommonModule } from './common/common.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ClientPortalModule } from './clientPortal/clientPortal.module';
 import { OnlinePaymentsModule } from './onlinePayments/onlinePayments.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 
 @Module({
@@ -21,6 +22,7 @@ import { OnlinePaymentsModule } from './onlinePayments/onlinePayments.module';
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     CommonModule,
     PrismaModule,
     AuthModule,

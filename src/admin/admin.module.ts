@@ -10,11 +10,23 @@ import { CurrencyHelper } from "src/helpers/currency.helper";
 import { HttpModule } from "@nestjs/axios";
 import { LoanModule } from "src/loan/loan.module";
 import { ScopeService } from "src/helpers/scope.helper";
+import { PaymentBackgroundListener } from "src/listeners/payment-background.listener";
+import { PaymentMonitoringListener } from "src/listeners/payment-monitoring.listener";
 
 @Module({
   imports: [JwtModule.register({}), HttpModule, LoanModule],
   controllers: [AdminController],
-  providers: [AdminService, JwtStrategy, PaymentsHelper, S3Helper, PermissionsHelper, CurrencyHelper, ScopeService],
+  providers: [
+    AdminService,
+    JwtStrategy,
+    PaymentsHelper,
+    S3Helper,
+    PermissionsHelper,
+    CurrencyHelper,
+    ScopeService,
+    PaymentBackgroundListener,
+    PaymentMonitoringListener,
+  ],
   exports: [AdminService]
 })
 export class AdminModule { }
