@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContactDto } from './dto/createContact.dto';
 import { AddLoanAttributesDto } from './dto/addLoanAttribute.dto';
@@ -36,9 +36,13 @@ import { daysFromDate, getMinutesAgo } from 'src/helpers/date.helper';
 import { shouldSkipUserScope } from 'src/helpers/loan.helper';
 import { UpdateCommentDto } from './dto/updateComment.dto';
 import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CommentCreatedEvent, LoanStatusUpdatedEvent } from 'src/events/events.interface';
 
 @Injectable()
 export class LoanService {
+  private readonly logger = new Logger(LoanService.name);
+
   constructor(
     private prisma: PrismaService,
     private readonly paymentsHelper: PaymentsHelper,
@@ -46,6 +50,7 @@ export class LoanService {
     private readonly uploadsHelper: UploadsHelper,
     private readonly permissionsHelper: PermissionsHelper,
     private readonly paginationService: PaginationService,
+    private readonly eventEmitter: EventEmitter2,
 
   ) { }
 
@@ -1428,6 +1433,100 @@ export class LoanService {
     };
   }
 
+  async addCommentNew(
+    publicId: ParseUUIDPipe,
+    addCommentDto: AddCommentDto,
+    user: any,
+    file?: Express.Multer.File,
+  ) {
+    const startTime = Date.now();
+    this.logger.log(`[AddComment] Starting comment creation for loan ${publicId}`);
+
+    // ========== STEP 1: VALIDATION ==========
+    const validationStart = Date.now();
+
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        debtorId: true,
+        caseId: true,
+        statusId: true,
+        LoanAssignment: true,
+      },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 2: FILE UPLOAD (if provided) ==========
+    let upload = null;
+
+    if (file) {
+      const uploadStart = Date.now();
+      upload = await this.uploadsHelper.uploadFile(
+        file,
+        `loans/${loan.id}/comments`,
+      );
+      this.logger.debug(`File uploaded in ${Date.now() - uploadStart}ms`);
+    }
+
+    // ========== STEP 3: CREATE COMMENT ON MAIN LOAN ==========
+    const commentStart = Date.now();
+
+    const comment = await this.prisma.comments.create({
+      data: {
+        loanId: loan.id,
+        userId: user.id,
+        comment: addCommentDto.comment,
+        uploadId: upload?.id,
+      },
+    });
+
+    this.logger.debug(`Comment created in ${Date.now() - commentStart}ms`);
+
+    // ========== STEP 4: DETERMINE IF SHOULD UPDATE LAST ACTIVITY ==========
+    const isUserAssigned =
+      loan.LoanAssignment?.some((assignment) => assignment.userId === user.id) ??
+      false;
+
+    const shouldUpdateLastActivity =
+      loan.statusId !== LoanStatusId.NEW &&
+      user.role_name === Role.COLLECTOR &&
+      isUserAssigned;
+
+    // ========== STEP 5: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const event: CommentCreatedEvent = {
+      commentId: comment.id,
+      loanId: loan.id,
+      loanCaseId: loan.caseId,
+      debtorId: loan.debtorId,
+      userId: user.id,
+      comment: addCommentDto.comment,
+      uploadId: upload?.id || null,
+      loanStatusId: loan.statusId,
+      shouldUpdateLastActivity: shouldUpdateLastActivity,
+      userRoleName: user.role_name,
+    };
+
+    this.eventEmitter.emit('comment.created', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `Comment created successfully in ${totalTime}ms (synchronous part)`,
+    );
+
+    // ========== STEP 6: RETURN TO CLIENT ==========
+    return {
+      message: 'Comment added successfully',
+    };
+  }
+
   async updateComment(commentId: number, updateComment: UpdateCommentDto, userId: number) {
     // Find the comment
     const comment = await this.prisma.comments.findFirst({
@@ -1815,6 +1914,338 @@ export class LoanService {
       timeout: 15000,
     });
 
+    return {
+      message: 'Loan status updated successfully',
+    };
+  }
+
+  async updateLoanStatusNew(
+    publicId: ParseUUIDPipe,
+    updateLoanStatusDto: UpdateLoanStatusDto,
+    user: any,
+  ) {
+    const startTime = Date.now();
+    this.logger.log(
+      `[UpdateLoanStatus] Starting status update for loan ${publicId}`,
+    );
+
+    // ========== STEP 1: VALIDATION ==========
+    const validationStart = Date.now();
+
+    const loan = await this.prisma.loan.findUnique({
+      where: { publicId: String(publicId), deletedAt: null },
+      select: {
+        id: true,
+        caseId: true,
+        debtorId: true,
+        LoanStatus: true,
+        LoanAssignment: true,
+      },
+    });
+
+    if (!loan) {
+      throw new NotFoundException('Loan not found');
+    }
+
+    const status = await this.prisma.loanStatus.findUnique({
+      where: { id: updateLoanStatusDto.statusId },
+    });
+
+    if (!status) {
+      throw new NotFoundException('Status not found');
+    }
+
+    // Check StatusMatrix - is this transition allowed?
+    const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
+      where: {
+        entityType: 'LOAN',
+        fromStatusId: loan.LoanStatus.id,
+        toStatusId: updateLoanStatusDto.statusId,
+        isAllowed: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!isTransitionAllowed) {
+      throw new BadRequestException(
+        `Status transition from ${loan.LoanStatus.name} status to ${status.name} is not allowed`,
+      );
+    }
+
+    // Check if reason is required
+    if (
+      isTransitionAllowed.requiresReason === true &&
+      !updateLoanStatusDto.comment
+    ) {
+      throw new BadRequestException(
+        'Reason/comment is required for this status change',
+      );
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 2: CHECK LAST ACTIVITY CONDITIONS ==========
+    const minutesAgo = getMinutesAgo(60);
+    const myLastComment = await this.prisma.comments.findFirst({
+      where: {
+        loanId: loan.id,
+        deletedAt: null,
+        userId: user.id,
+        createdAt: { gte: minutesAgo },
+      },
+    });
+
+    const isUserAssigned =
+      loan.LoanAssignment?.some((assignment) => assignment.userId === user.id) ??
+      false;
+
+    const hasRecentComment = !!myLastComment;
+
+    const shouldUpdateLastActivity =
+      loan.LoanStatus.id === LoanStatusId.NEW &&
+      hasRecentComment &&
+      user.role_name === Role.COLLECTOR &&
+      isUserAssigned;
+
+    // ========== STEP 3: DETERMINE IF SHOULD UPDATE ALL LOANS ==========
+    const shouldUpdateAllLoans = ![
+      LoanStatusId.PROMISED_TO_PAY, // 26
+      LoanStatusId.AGREEMENT, // 3
+      LoanStatusId.AGREEMENT_CANCELED, // 14
+    ].includes(updateLoanStatusDto.statusId);
+
+    // Get all other loans for this debtor (for background processing)
+    let debtorLoans: { id: number; statusId: number; publicId: string }[] = [];
+    if (shouldUpdateAllLoans) {
+      debtorLoans = await this.prisma.loan.findMany({
+        where: {
+          debtorId: loan.debtorId,
+          deletedAt: null,
+          id: { not: loan.id }, // Exclude current loan
+        },
+        select: {
+          id: true,
+          statusId: true,
+          publicId: true,
+        },
+      });
+    }
+
+    // ========== STEP 4: VALIDATE AGREEMENT/PROMISE DATA ==========
+    if (status.name === 'Agreement') {
+      if (!updateLoanStatusDto.agreement) {
+        throw new BadRequestException(
+          'Agreement data is required for agreement status',
+        );
+      }
+      const currentDebt = await this.prisma.loanRemaining.findFirst({
+        where: { loanId: loan.id, deletedAt: null },
+      });
+
+      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+
+      // Validate schedule
+      const adjustedSchedule =
+        await this.paymentsHelper.validateAndAdjustPaymentSchedule(
+          updateLoanStatusDto.agreement.schedule,
+          updateLoanStatusDto.agreement.agreedAmount,
+          updateLoanStatusDto.agreement.numberOfMonths,
+          currentDebtAmount,
+        );
+
+      updateLoanStatusDto.agreement.schedule = adjustedSchedule;
+
+      const transactions = await this.paymentsHelper.getTransactionByLoanId(
+        loan.id,
+      );
+      const latestCommittee = await this.prisma.committee.findFirst({
+        where: {
+          loanId: loan.id,
+          status: Committee_status.complete,
+          deletedAt: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (transactions.length === 0 && !latestCommittee) {
+        throw new BadRequestException(
+          'Cannot update loan status without transactions or completed committee',
+        );
+      }
+    }
+
+    if (status.name === 'Promised To Pay') {
+      if (!updateLoanStatusDto.promise) {
+        throw new BadRequestException(
+          'Promise data is required for promise status',
+        );
+      }
+
+      const currentDebt = await this.prisma.loanRemaining.findFirst({
+        where: { loanId: loan.id, deletedAt: null },
+      });
+
+      if (!currentDebt) {
+        throw new NotFoundException('Loan remaining data not found');
+      }
+
+      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+      const promiseAmount = Number(
+        Number(updateLoanStatusDto.promise.agreedAmount).toFixed(2),
+      );
+
+      if (promiseAmount > currentDebtAmount) {
+        throw new BadRequestException(
+          'Amount must be less or equal to current debt',
+        );
+      }
+    }
+
+    // ========== STEP 5: CREATE STATUS HISTORY FOR MAIN LOAN ==========
+    const historyStart = Date.now();
+
+    await this.prisma.loanStatusHistory.create({
+      data: {
+        loanId: loan.id,
+        oldStatusId: loan.LoanStatus.id,
+        newStatusId: updateLoanStatusDto.statusId,
+        changedBy: user.id,
+        notes: updateLoanStatusDto.comment ?? null,
+      },
+    });
+
+    this.logger.debug(
+      `Status history created in ${Date.now() - historyStart}ms`,
+    );
+
+    // ========== STEP 6: HANDLE AGREEMENT STATUS ==========
+    let commitmentId: number | null = null;
+
+    if (status.name === 'Agreement') {
+      const agreementStart = Date.now();
+
+      // Deactivate old commitments
+      await this.prisma.paymentCommitment.updateMany({
+        where: { loanId: loan.id, isActive: 1 },
+        data: { isActive: 0 },
+      });
+
+      const commitment = await this.paymentsHelper.createPaymentCommitment(
+        {
+          loanId: loan.id,
+          amount: updateLoanStatusDto.agreement.agreedAmount,
+          paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+          comment: updateLoanStatusDto?.comment || null,
+          userId: user.id,
+          type: 'agreement',
+        },
+        this.prisma,
+      );
+
+      commitmentId = commitment.id;
+
+      // Save the schedule
+      await this.paymentsHelper.savePaymentSchedule(
+        {
+          commitmentId: commitment.id,
+          schedules: updateLoanStatusDto.agreement.schedule,
+        },
+        this.prisma,
+      );
+
+      this.logger.debug(
+        `Agreement commitment and schedule created in ${Date.now() - agreementStart}ms`,
+      );
+    }
+
+    // ========== STEP 7: HANDLE PROMISE STATUS ==========
+    if (status.name === 'Promised To Pay') {
+      const promiseStart = Date.now();
+
+      // Deactivate old commitments
+      await this.prisma.paymentCommitment.updateMany({
+        where: { loanId: loan.id, isActive: 1 },
+        data: { isActive: 0 },
+      });
+
+      const commitment = await this.paymentsHelper.createPaymentCommitment(
+        {
+          loanId: loan.id,
+          amount: updateLoanStatusDto.promise.agreedAmount,
+          paymentDate: updateLoanStatusDto.promise.paymentDate,
+          comment: updateLoanStatusDto?.comment || null,
+          userId: user.id,
+          type: 'promise',
+        },
+        this.prisma,
+      );
+
+      commitmentId = commitment.id;
+
+      // Save the schedule
+      await this.paymentsHelper.savePaymentSchedule(
+        {
+          commitmentId: commitment.id,
+          schedules: [
+            {
+              paymentDate: updateLoanStatusDto.promise.paymentDate,
+              amount: updateLoanStatusDto.promise.agreedAmount,
+            },
+          ],
+        },
+        this.prisma,
+      );
+
+      this.logger.debug(
+        `Promise commitment and schedule created in ${Date.now() - promiseStart}ms`,
+      );
+    }
+
+    // ========== STEP 8: UPDATE MAIN LOAN STATUS ==========
+    const updateStart = Date.now();
+
+    const updateData: any = {
+      statusId: updateLoanStatusDto.statusId,
+    };
+    if (shouldUpdateLastActivity) {
+      updateData.lastActivite = new Date();
+    }
+
+    await this.prisma.loan.update({
+      where: { publicId: String(publicId) },
+      data: updateData,
+    });
+
+    this.logger.debug(`Main loan updated in ${Date.now() - updateStart}ms`);
+
+    // ========== STEP 9: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const event: LoanStatusUpdatedEvent = {
+      loanId: loan.id,
+      loanCaseId: loan.caseId,
+      debtorId: loan.debtorId,
+      oldStatusId: loan.LoanStatus.id,
+      newStatusId: updateLoanStatusDto.statusId,
+      newStatusName: status.name,
+      userId: user.id,
+      comment: updateLoanStatusDto.comment ?? null,
+      shouldUpdateAllLoans: shouldUpdateAllLoans,
+      shouldUpdateLastActivity: shouldUpdateLastActivity,
+      commitmentId: commitmentId,
+      debtorLoans: debtorLoans,
+    };
+
+    this.eventEmitter.emit('loan.status.updated', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `Loan status updated successfully in ${totalTime}ms (synchronous part)`,
+    );
+
+    // ========== STEP 10: RETURN TO CLIENT ==========
     return {
       message: 'Loan status updated successfully',
     };

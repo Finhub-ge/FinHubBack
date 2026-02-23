@@ -93,7 +93,8 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('addPayment') // Loan publicId
   async addPayment(@GetUser() user: User, @Body() data: CreatePaymentDto) {
-    return await this.adminService.addPayment(data, user.id);
+    // return await this.adminService.addPayment(data, user.id);
+    return await this.adminService.createPaymentNew(data, user.id);
   }
 
   @ApiParam({ name: 'publicId', type: 'string', format: 'uuid' })
@@ -108,7 +109,8 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('deleteTransaction/:id')
   async deleteTransaction(@Param('id') id: string, @GetUser() user: User) {
-    return await this.adminService.deleteTransaction(+id, user.id);
+    // return await this.adminService.deleteTransaction(+id, user.id);
+    return await this.adminService.deleteTransactionNew(+id, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -142,7 +144,8 @@ export class AdminController {
     @Body() data: ResponseCommitteeDto,
     @Param('id') id: number
   ) {
-    return await this.adminService.responseCommittee(id, data, user.id);
+    // return await this.adminService.responseCommittee(id, data, user.id);
+    return await this.adminService.responseCommitteeNew(id, data, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -226,7 +229,8 @@ export class AdminController {
   @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('addCharge')
   async addCharge(@GetUser() user: User, @Body() data: CreateChargeDto) {
-    return await this.adminService.addCharge(data, user.id);
+    // return await this.adminService.addCharge(data, user.id);
+    return await this.adminService.addChargeNew(data, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -236,7 +240,8 @@ export class AdminController {
     @Param('chargeId', ParseIntPipe) chargeId: number,
     @GetUser() user: User
   ) {
-    return await this.adminService.deleteCharge(chargeId, user.id);
+    // return await this.adminService.deleteCharge(chargeId, user.id);
+    return await this.adminService.deleteChargeNew(chargeId, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
