@@ -12,7 +12,7 @@ export class PrismaService extends PrismaClient {
     super({
       datasources: {
         db: {
-          url: `${dbUrl}?connection_limit=${connectionLimit}&pool_timeout=${poolTimeout}`,
+          url: config.get('DATABASE_URL'),
         },
       },
     });
