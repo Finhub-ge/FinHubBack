@@ -1347,7 +1347,7 @@ export class LoanService {
         caseId: true
       }
     });
-    console.log(debtorLoans.length)
+    console.log('related loans on add comment', debtorLoans.length)
     const isUserAssigned =
       loan.LoanAssignment?.some(
         assignment => assignment.userId === user.id,
@@ -1810,6 +1810,9 @@ export class LoanService {
         where: { publicId: String(publicId) },
         data: updateData,
       });
+    }, {
+      maxWait: 10000,
+      timeout: 15000,
     });
 
     return {
@@ -1961,6 +1964,9 @@ export class LoanService {
         currentAssignment,
         tx
       });
+    }, {
+      maxWait: 10000,
+      timeout: 20000,
     });
   }
 

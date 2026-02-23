@@ -621,6 +621,9 @@ export class AdminService {
           transactionId: transaction.id,
           allocationResult
         }
+      }, {
+        maxWait: 10000,
+        timeout: 20000,
       });
 
       this.paymentHelper.applyPaymentToCharges(result)
@@ -1186,6 +1189,9 @@ export class AdminService {
       }
 
       return { message: 'Committee response submitted successfully' };
+    }, {
+      maxWait: 10000,
+      timeout: 20000,
     });
   }
 

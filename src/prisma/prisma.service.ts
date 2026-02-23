@@ -6,9 +6,6 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient {
   private readonly logger = new Logger(PrismaService.name);
   constructor(config: ConfigService) {
-    const dbUrl = config.get<string>('DATABASE_URL');
-    const connectionLimit = config.get<number>('DB_CONNECTION_LIMIT', 20);  // default 20
-    const poolTimeout = config.get<number>('DB_POOL_TIMEOUT', 20);  // default 20
     super({
       datasources: {
         db: {
