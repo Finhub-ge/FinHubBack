@@ -27,6 +27,27 @@ export class PaymentTransactionCreatedEvent {
   agreementMin: number;
 }
 
+export class TransactionDeletedEvent {
+  transactionId: number;
+  loanId: number;
+  amount: number;
+  paymentDate: Date;
+  userId: number;
+  loanRemainingId: number;
+  newBalances: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    otherFee: number;
+    legalCharges: number;
+  };
+  newCurrentDebt: number;
+  loanStatusName: string;
+  currentLoanStatusId: number;
+  balanceHistoryId: number | null;
+  closingStatusHistoryId: number | null;
+  oldLoanStatusId: number | null;
+}
 export class PaymentProcessingFailedEvent {
   transactionId: number;
   step: string;

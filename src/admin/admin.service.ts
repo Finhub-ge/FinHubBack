@@ -43,7 +43,7 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 import { LoanService } from "src/loan/loan.service";
 import { ScopeService } from "src/helpers/scope.helper";
-import { PaymentTransactionCreatedEvent } from "src/events/payment.events";
+import { PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 
 dayjs.extend(utc);
@@ -3126,6 +3126,163 @@ export class AdminService {
 
     return {
       message: 'Payment added successfully'
+    };
+  }
+
+  async deleteTransactionNew(id: number, userId: number) {
+    const startTime = Date.now();
+    this.logger.log(`[TransactionDelete] Starting deletion for transaction ${id}`);
+
+    // ========== STEP 1: VALIDATION ==========
+    const validationStart = Date.now();
+
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id },
+      include: {
+        Loan: {
+          include: {
+            LoanStatus: true,
+            LoanRemaining: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    if (transaction.deleted === 1) {
+      throw new BadRequestException('Transaction already deleted');
+    }
+
+    const loan = transaction.Loan;
+    const currentRemaining = loan.LoanRemaining[0];
+
+    if (!currentRemaining) {
+      throw new NotFoundException('Loan remaining balance not found');
+    }
+
+    // Check for later transactions (prevent out-of-order deletion)
+    const laterTransactions = await this.prisma.transaction.count({
+      where: {
+        loanId: loan.id,
+        createdAt: { gt: transaction.createdAt },
+        deleted: 0,
+      },
+    });
+
+    if (laterTransactions > 0) {
+      throw new BadRequestException(
+        'Cannot delete this transaction. There are newer transactions that depend on it. Delete newer transactions first.',
+      );
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 2: GET BALANCE HISTORY ==========
+    const balanceHistory = await this.prisma.loanBalanceHistory.findFirst({
+      where: {
+        sourceType: 'PAYMENT',
+        sourceId: transaction.id,
+        deletedAt: null,
+      },
+    });
+
+    // ========== STEP 3: CALCULATE REVERSED BALANCES ==========
+    const calculationStart = Date.now();
+
+    const newBalances = {
+      principal: Number(currentRemaining.principal) + Number(transaction.principal || 0),
+      interest: Number(currentRemaining.interest) + Number(transaction.interest || 0),
+      penalty: Number(currentRemaining.penalty) + Number(transaction.penalty || 0),
+      otherFee: Number(currentRemaining.otherFee) + Number(transaction.fees || 0),
+      legalCharges: Number(currentRemaining.legalCharges) + Number(transaction.legal || 0),
+    };
+
+    const newCurrentDebt = Number(currentRemaining.currentDebt) + Number(transaction.amount || 0);
+
+    this.logger.debug(`Balance calculation completed in ${Date.now() - calculationStart}ms`);
+
+    // ========== STEP 4: SOFT DELETE OLD LOAN REMAINING ==========
+    const remainingStart = Date.now();
+
+    await this.prisma.loanRemaining.update({
+      where: { id: currentRemaining.id },
+      data: { deletedAt: new Date() },
+    });
+
+    this.logger.debug(`Old LoanRemaining soft deleted in ${Date.now() - remainingStart}ms`);
+
+    // ========== STEP 5: CREATE NEW LOAN REMAINING WITH REVERTED BALANCES ==========
+    const newRemaining = await this.prisma.loanRemaining.create({
+      data: {
+        loanId: loan.id,
+        principal: newBalances.principal,
+        interest: newBalances.interest,
+        penalty: newBalances.penalty,
+        otherFee: newBalances.otherFee,
+        legalCharges: newBalances.legalCharges,
+        currentDebt: newCurrentDebt,
+        agreementMin: currentRemaining.agreementMin,
+      },
+    });
+
+    this.logger.debug(`New LoanRemaining created with reverted balances`);
+
+    // ========== STEP 6: SOFT DELETE TRANSACTION ==========
+    const deleteStart = Date.now();
+
+    await this.prisma.transaction.update({
+      where: { id },
+      data: { deleted: 1 },
+    });
+
+    this.logger.debug(`Transaction soft deleted in ${Date.now() - deleteStart}ms`);
+
+    // ========== STEP 7: CHECK FOR CLOSING STATUS HISTORY ==========
+    const closingStatusHistory = await this.prisma.loanStatusHistory.findFirst({
+      where: {
+        loanId: loan.id,
+        newStatusId: 12, // Closed status
+        notes: { contains: 'loan balance reached 0' },
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // ========== STEP 8: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const event: TransactionDeletedEvent = {
+      transactionId: transaction.id,
+      loanId: loan.id,
+      amount: Number(transaction.amount || 0),
+      paymentDate: transaction.paymentDate,
+      userId: userId,
+      loanRemainingId: newRemaining.id,
+      newBalances: newBalances,
+      newCurrentDebt: newCurrentDebt,
+      loanStatusName: loan.LoanStatus.name,
+      currentLoanStatusId: loan.statusId,
+      balanceHistoryId: balanceHistory?.id || null,
+      closingStatusHistoryId: closingStatusHistory?.id || null,
+      oldLoanStatusId: closingStatusHistory?.oldStatusId || null,
+    };
+
+    this.eventEmitter.emit('transaction.deleted', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(`Transaction deleted successfully in ${totalTime}ms (synchronous part)`);
+
+    // ========== STEP 9: RETURN TO CLIENT ==========
+    return {
+      message: 'Transaction deleted and all changes reverted successfully',
+      transactionId: transaction.id,
     };
   }
 }

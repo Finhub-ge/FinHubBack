@@ -109,7 +109,8 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT)
   @Post('deleteTransaction/:id')
   async deleteTransaction(@Param('id') id: string, @GetUser() user: User) {
-    return await this.adminService.deleteTransaction(+id, user.id);
+    // return await this.adminService.deleteTransaction(+id, user.id);
+    return await this.adminService.deleteTransactionNew(+id, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

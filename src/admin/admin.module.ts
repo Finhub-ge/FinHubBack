@@ -12,6 +12,7 @@ import { LoanModule } from "src/loan/loan.module";
 import { ScopeService } from "src/helpers/scope.helper";
 import { PaymentBackgroundListener } from "src/listeners/payment-background.listener";
 import { PaymentMonitoringListener } from "src/listeners/payment-monitoring.listener";
+import { TransactionDeleteBackgroundListener } from "src/listeners/transaction-delete-background.listener";
 
 @Module({
   imports: [JwtModule.register({}), HttpModule, LoanModule],
@@ -26,6 +27,7 @@ import { PaymentMonitoringListener } from "src/listeners/payment-monitoring.list
     ScopeService,
     PaymentBackgroundListener,
     PaymentMonitoringListener,
+    TransactionDeleteBackgroundListener
   ],
   exports: [AdminService]
 })
