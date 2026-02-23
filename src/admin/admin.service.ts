@@ -43,7 +43,7 @@ import { CreateRegionDto } from "./dto/createRegion.dto";
 import { GetRegionsFilterDto } from "./dto/getRegions.dto";
 import { LoanService } from "src/loan/loan.service";
 import { ScopeService } from "src/helpers/scope.helper";
-import { PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
+import { ChargeCreatedEvent, ChargeDeletedEvent, PaymentTransactionCreatedEvent, TransactionDeletedEvent } from "src/events/payment.events";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 
 dayjs.extend(utc);
@@ -1739,6 +1739,192 @@ export class AdminService {
     }
   }
 
+  async addChargeNew(data: CreateChargeDto, userId: number) {
+    const startTime = Date.now();
+    this.logger.log(`[AddCharge] Starting charge creation for case ${data.caseId}`);
+
+    // ========== STEP 1: VALIDATION ==========
+    const validationStart = Date.now();
+
+    const loan = await this.prisma.loan.findFirst({
+      where: { caseId: String(data.caseId) },
+      include: {
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            unassignedAt: null,
+          },
+          select: {
+            User: {
+              select: {
+                id: true,
+              },
+            },
+            Role: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!loan) throw new HttpException('Loan not found', 404);
+
+    const chargeType = await this.prisma.chargeType.findUnique({
+      where: { id: data.chargeTypeId },
+    });
+
+    if (!chargeType) throw new HttpException('Charge type not found', 404);
+
+    const loanRemaining = await this.prisma.loanRemaining.findFirst({
+      where: { loanId: loan.id, deletedAt: null },
+    });
+
+    if (!loanRemaining) {
+      throw new HttpException('Loan remaining balance not found', 404);
+    }
+
+    // Find collector and lawyer from assignments
+    const collectorAssignment = loan.LoanAssignment.find(
+      (assignment) => assignment.Role.name === 'collector',
+    );
+    const lawyerAssignment = loan.LoanAssignment.find(
+      (assignment) => assignment.Role.name === 'lawyer',
+    );
+
+    const transactionChannelAccount =
+      await this.prisma.transactionChannelAccounts.findFirst({
+        where: { transactionChannelId: data.channel, active: 1 },
+        orderBy: { id: 'desc' },
+        take: 1,
+      });
+
+    if (!transactionChannelAccount) {
+      throw new HttpException('Transaction channel account not found', 404);
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 2: CREATE CHARGE RECORD ==========
+    const chargeStart = Date.now();
+
+    const charge = await this.prisma.charges.create({
+      data: {
+        loanId: loan.id,
+        chargeTypeId: data.chargeTypeId,
+        amount: Number(data.amount),
+        comment: data.comment,
+        currency: loan.currency,
+        transactionChannelAccountId: transactionChannelAccount.id,
+        userId: userId,
+        channelId: data.channel,
+        chargeDate: data.chargeDate,
+        collectorId: collectorAssignment?.User.id,
+        lawyerId: lawyerAssignment?.User.id,
+      },
+    });
+
+    this.logger.debug(`Charge created in ${Date.now() - chargeStart}ms`);
+
+    // ========== STEP 3: SOFT DELETE OLD LOAN REMAINING ==========
+    const deleteStart = Date.now();
+
+    await this.prisma.loanRemaining.update({
+      where: { id: loanRemaining.id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    this.logger.debug(
+      `Old loan remaining soft deleted in ${Date.now() - deleteStart}ms`,
+    );
+
+    // ========== STEP 4: CALCULATE NEW BALANCES ==========
+    const isLegalCharge = ['Court', 'Execution'].includes(chargeType.title);
+    const isOtherFee = ['Other', 'Post', 'Registry'].includes(chargeType.title);
+
+    const oldBalances = {
+      principal: Number(loanRemaining.principal),
+      interest: Number(loanRemaining.interest),
+      penalty: Number(loanRemaining.penalty),
+      otherFee: Number(loanRemaining.otherFee),
+      legalCharges: Number(loanRemaining.legalCharges),
+    };
+
+    const newBalances = { ...oldBalances };
+
+    if (isLegalCharge) {
+      newBalances.legalCharges = oldBalances.legalCharges + Number(data.amount);
+    }
+
+    if (isOtherFee) {
+      newBalances.otherFee = oldBalances.otherFee + Number(data.amount);
+    }
+
+    const newCurrentDebt =
+      Number(loanRemaining.currentDebt) + Number(data.amount);
+    const newAgreementMin =
+      Number(loanRemaining.agreementMin) + Number(data.amount);
+
+    // ========== STEP 5: CREATE NEW LOAN REMAINING ==========
+    const createStart = Date.now();
+
+    const newLoanRemaining = await this.prisma.loanRemaining.create({
+      data: {
+        loanId: loan.id,
+        principal: newBalances.principal,
+        interest: newBalances.interest,
+        penalty: newBalances.penalty,
+        otherFee: newBalances.otherFee,
+        legalCharges: newBalances.legalCharges,
+        currentDebt: newCurrentDebt,
+        agreementMin: newAgreementMin,
+      },
+    });
+
+    this.logger.debug(
+      `New loan remaining created in ${Date.now() - createStart}ms`,
+    );
+
+    // ========== STEP 6: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';
+    const sourceType = isLegalCharge ? 'LEGAL_CHARGES_ADDED' : 'OTHER_FEE_ADDED';
+
+    const event: ChargeCreatedEvent = {
+      chargeId: charge.id,
+      loanId: loan.id,
+      chargeTypeTitle: chargeType.title,
+      amount: Number(data.amount),
+      isLegalCharge: isLegalCharge,
+      isOtherFee: isOtherFee,
+      sourceType: sourceType,
+      componentType: componentType,
+      oldBalances: oldBalances,
+      newBalances: newBalances,
+      newCurrentDebt: newCurrentDebt,
+      newLoanRemainingId: newLoanRemaining.id,
+    };
+
+    this.eventEmitter.emit('charge.created', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `Charge created successfully in ${totalTime}ms (synchronous part)`,
+    );
+
+    // ========== STEP 7: RETURN TO CLIENT ==========
+    return {
+      message: 'Charge added successfully',
+    };
+  }
+
   async deleteCharge(chargeId: number, userId: number) {
     // 1. Get charge with all related data
     const charge = await this.prisma.charges.findUnique({
@@ -1948,6 +2134,225 @@ export class AdminService {
         message: 'Charge deleted successfully',
       };
     });
+  }
+
+  async deleteChargeNew(chargeId: number, userId: number) {
+    const startTime = Date.now();
+    this.logger.log(`[DeleteCharge] Starting charge deletion for charge ${chargeId}`);
+
+    // ========== STEP 1: VALIDATION ==========
+    const validationStart = Date.now();
+
+    const charge = await this.prisma.charges.findUnique({
+      where: { id: chargeId },
+      include: {
+        Loan: {
+          include: {
+            LoanRemaining: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+        ChargeType: true,
+      },
+    });
+
+    if (!charge) {
+      throw new NotFoundException('Charge not found');
+    }
+
+    if (charge.deletedAt !== null) {
+      throw new BadRequestException('Charge already deleted');
+    }
+
+    const loan = charge.Loan;
+    const currentRemaining = loan.LoanRemaining[0];
+
+    if (!currentRemaining) {
+      throw new NotFoundException('Loan remaining balance not found');
+    }
+
+    // Check if there are any transactions/charges AFTER this charge
+    const [laterCharges, laterTransactions] = await Promise.all([
+      this.prisma.charges.count({
+        where: {
+          loanId: loan.id,
+          createdAt: { gt: charge.createdAt },
+          deletedAt: null,
+        },
+      }),
+      this.prisma.transaction.count({
+        where: {
+          loanId: loan.id,
+          createdAt: { gt: charge.createdAt },
+          deleted: 0,
+        },
+      }),
+    ]);
+
+    if (laterCharges > 0 || laterTransactions > 0) {
+      throw new BadRequestException(
+        'Cannot delete this charge. There are newer charges or transactions that depend on it. Delete newer records first.',
+      );
+    }
+
+    this.logger.debug(`Validation completed in ${Date.now() - validationStart}ms`);
+
+    // ========== STEP 2: GET ALLOCATION AND HISTORY IDs ==========
+    const isLegalCharge = ['Court', 'Execution'].includes(charge.ChargeType.title);
+    const isOtherFee = ['Other', 'Post', 'Registry'].includes(charge.ChargeType.title);
+    const sourceType = isLegalCharge ? 'LEGAL_CHARGES_ADDED' : 'OTHER_FEE_ADDED';
+
+    const allocationDetail = await this.prisma.paymentAllocationDetail.findFirst({
+      where: {
+        loanId: loan.id,
+        sourceType: sourceType,
+        sourceId: charge.id,
+        deletedAt: null,
+      },
+    });
+
+    const balanceHistory = await this.prisma.loanBalanceHistory.findFirst({
+      where: {
+        loanId: loan.id,
+        sourceType: sourceType,
+        sourceId: charge.id,
+        deletedAt: null,
+      },
+    });
+
+    // ========== STEP 3: CALCULATE NEW BALANCES AND VALIDATE ==========
+    const calculationStart = Date.now();
+
+    const oldBalances = {
+      principal: Number(currentRemaining.principal),
+      interest: Number(currentRemaining.interest),
+      penalty: Number(currentRemaining.penalty),
+      otherFee: Number(currentRemaining.otherFee),
+      legalCharges: Number(currentRemaining.legalCharges),
+    };
+
+    const newBalances = { ...oldBalances };
+
+    // Reverse the specific charge type increase
+    if (isLegalCharge) {
+      newBalances.legalCharges = oldBalances.legalCharges - Number(charge.amount);
+
+      if (newBalances.legalCharges < 0) {
+        throw new BadRequestException(
+          `Cannot delete charge: Would result in negative legal charges balance (${newBalances.legalCharges})`,
+        );
+      }
+    }
+
+    if (isOtherFee) {
+      newBalances.otherFee = oldBalances.otherFee - Number(charge.amount);
+
+      if (newBalances.otherFee < 0) {
+        throw new BadRequestException(
+          `Cannot delete charge: Would result in negative other fees balance (${newBalances.otherFee})`,
+        );
+      }
+    }
+
+    const newCurrentDebt =
+      Number(currentRemaining.currentDebt) - Number(charge.amount);
+    const newAgreementMin =
+      Number(currentRemaining.agreementMin) - Number(charge.amount);
+
+    if (newCurrentDebt < 0) {
+      throw new BadRequestException(
+        `Cannot delete charge: Would result in negative current debt (${newCurrentDebt})`,
+      );
+    }
+
+    this.logger.debug(
+      `Balance calculation completed in ${Date.now() - calculationStart}ms`,
+    );
+
+    // ========== STEP 4: SOFT DELETE OLD LOAN REMAINING ==========
+    const deleteStart = Date.now();
+
+    await this.prisma.loanRemaining.update({
+      where: { id: currentRemaining.id },
+      data: { deletedAt: new Date() },
+    });
+
+    this.logger.debug(
+      `Old loan remaining soft deleted in ${Date.now() - deleteStart}ms`,
+    );
+
+    // ========== STEP 5: CREATE NEW LOAN REMAINING WITH REVERTED BALANCES ==========
+    const createStart = Date.now();
+
+    const newLoanRemaining = await this.prisma.loanRemaining.create({
+      data: {
+        loanId: loan.id,
+        principal: newBalances.principal,
+        interest: newBalances.interest,
+        penalty: newBalances.penalty,
+        otherFee: newBalances.otherFee,
+        legalCharges: newBalances.legalCharges,
+        currentDebt: newCurrentDebt,
+        agreementMin: newAgreementMin,
+      },
+    });
+
+    this.logger.debug(
+      `New loan remaining created in ${Date.now() - createStart}ms`,
+    );
+
+    // ========== STEP 6: SOFT DELETE CHARGE ==========
+    const chargeDeleteStart = Date.now();
+
+    await this.prisma.charges.update({
+      where: { id: chargeId },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    this.logger.debug(`Charge soft deleted in ${Date.now() - chargeDeleteStart}ms`);
+
+    // ========== STEP 7: EMIT EVENT FOR BACKGROUND PROCESSING ==========
+    const componentType = isLegalCharge ? 'LEGAL_CHARGES' : 'OTHER_FEE';
+    const deletionSourceType = isLegalCharge
+      ? 'LEGAL_CHARGES_REMOVED'
+      : 'OTHER_FEE_REMOVED';
+
+    const event: ChargeDeletedEvent = {
+      chargeId: charge.id,
+      loanId: loan.id,
+      chargeTypeTitle: charge.ChargeType.title,
+      amount: Number(charge.amount),
+      isLegalCharge: isLegalCharge,
+      isOtherFee: isOtherFee,
+      sourceType: sourceType,
+      deletionSourceType: deletionSourceType,
+      componentType: componentType,
+      oldBalances: oldBalances,
+      newBalances: newBalances,
+      newCurrentDebt: newCurrentDebt,
+      newLoanRemainingId: newLoanRemaining.id,
+      oldAllocationDetailId: allocationDetail?.id || null,
+      oldBalanceHistoryId: balanceHistory?.id || null,
+    };
+
+    this.eventEmitter.emit('charge.deleted', event);
+
+    this.logger.log(`Event emitted for background processing`);
+
+    const totalTime = Date.now() - startTime;
+    this.logger.log(
+      `Charge deleted successfully in ${totalTime}ms (synchronous part)`,
+    );
+
+    // ========== STEP 8: RETURN TO CLIENT ==========
+    return {
+      message: 'Charge deleted successfully'
+    };
   }
 
   async getCharges(getChargeDto: GetChargeWithPaginationDto | GetChargeReportWithPaginationDto, options?: { isReport?: boolean }) {

@@ -228,7 +228,8 @@ export class AdminController {
   @ExceptRoles(Role.CONTROLLER, Role.ANALYST)
   @Post('addCharge')
   async addCharge(@GetUser() user: User, @Body() data: CreateChargeDto) {
-    return await this.adminService.addCharge(data, user.id);
+    // return await this.adminService.addCharge(data, user.id);
+    return await this.adminService.addChargeNew(data, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -238,7 +239,8 @@ export class AdminController {
     @Param('chargeId', ParseIntPipe) chargeId: number,
     @GetUser() user: User
   ) {
-    return await this.adminService.deleteCharge(chargeId, user.id);
+    // return await this.adminService.deleteCharge(chargeId, user.id);
+    return await this.adminService.deleteChargeNew(chargeId, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)

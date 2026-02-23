@@ -81,3 +81,60 @@ export class LoanStatusUpdatedEvent {
   commitmentId: number | null;
   debtorLoans: Array<{ id: number; statusId: number; publicId: string }>;
 }
+
+export class ChargeCreatedEvent {
+  chargeId: number;
+  loanId: number;
+  chargeTypeTitle: string;
+  amount: number;
+  isLegalCharge: boolean;
+  isOtherFee: boolean;
+  sourceType: string;
+  componentType: string;
+  oldBalances: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    otherFee: number;
+    legalCharges: number;
+  };
+  newBalances: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    otherFee: number;
+    legalCharges: number;
+  };
+  newCurrentDebt: number;
+  newLoanRemainingId: number;
+}
+
+export class ChargeDeletedEvent {
+  chargeId: number;
+  loanId: number;
+  chargeTypeTitle: string;
+  amount: number;
+  isLegalCharge: boolean;
+  isOtherFee: boolean;
+  sourceType: string;
+  deletionSourceType: string;
+  componentType: string;
+  oldBalances: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    otherFee: number;
+    legalCharges: number;
+  };
+  newBalances: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    otherFee: number;
+    legalCharges: number;
+  };
+  newCurrentDebt: number;
+  newLoanRemainingId: number;
+  oldAllocationDetailId: number | null;
+  oldBalanceHistoryId: number | null;
+}
