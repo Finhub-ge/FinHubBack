@@ -490,19 +490,27 @@ export class AdminController {
     });
   }
 
-  // TEMPORARY: Backfill transaction assignments for February 2026
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('backfill-transaction-assignments')
-  async backfillTransactionAssignments(@GetUser() user: User) {
-    return await this.adminService.backfillTransactionAssignments();
-  }
+  // // TEMPORARY: Backfill transaction assignments for February 2026
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @Roles(Role.ADMIN)
+  // @Post('backfill-transaction-assignments')
+  // async backfillTransactionAssignments(@GetUser() user: User) {
+  //   return await this.adminService.backfillTransactionAssignments();
+  // }
 
-  // TEMPORARY: Reconcile transaction assignments with current active assignments
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('reconcile-transaction-assignments')
-  async reconcileTransactionAssignments(@GetUser() user: User) {
-    return await this.adminService.reconcileTransactionAssignments();
-  }
+  // // TEMPORARY: Reconcile transaction assignments with current active assignments
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @Roles(Role.ADMIN)
+  // @Post('reconcile-transaction-assignments')
+  // async reconcileTransactionAssignments(@GetUser() user: User) {
+  //   return await this.adminService.reconcileTransactionAssignments();
+  // }
+
+  // // TEMPORARY: Verify all transaction assignments are correct for February 2026
+  // @UseGuards(JwtGuard, RolesGuard)
+  // @Roles(Role.ADMIN)
+  // @Get('verify-transaction-assignments')
+  // async verifyTransactionAssignments(@GetUser() user: User) {
+  //   return await this.adminService.verifyTransactionAssignments();
+  // }
 }
