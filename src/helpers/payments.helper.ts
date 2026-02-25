@@ -566,36 +566,18 @@ export class PaymentsHelper {
   }
 
   async saveTransactionAssignments(transactionId: number) {
-    // Fetch the transaction
-    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+    });
     if (!transaction) return;
 
-    // Fetch the loan
-    const loan = await this.prisma.loan.findUnique({ where: { id: transaction.loanId } });
-    if (!loan) return;
+    const loanAssignment = await this.getAssignmentForPaymentDate(
+      transaction.loanId,
+      transaction.paymentDate,
+    );
 
-    // Calculate the full day range for the payment date
-    const startOfDay = getStartOfDay(transaction.paymentDate);
-    const endOfDay = getEndOfDay(transaction.paymentDate);
+    if (!loanAssignment.length) return;
 
-    // Fetch active assignments for this loan at the transaction date
-    const loanAssignment = await this.prisma.loanAssignment.findMany({
-      where: {
-        loanId: loan.id,
-        assignedAt: { lte: endOfDay },
-        OR: [
-          { unassignedAt: null },
-          { unassignedAt: { gte: startOfDay } },
-        ],
-      },
-      select: {
-        userId: true,
-        roleId: true,
-      },
-    });
-    if (loanAssignment.length === 0) return;
-
-    // Prepare insert data
     const insertData = loanAssignment.map((assignment) => ({
       transactionId: transaction.id,
       userId: assignment.userId,
@@ -607,6 +589,50 @@ export class PaymentsHelper {
 
     await this.prisma.transactionUserAssignments.createMany({
       data: insertData,
+    });
+  }
+
+  private async getAssignmentForPaymentDate(
+    loanId: number,
+    paymentDate: Date,
+  ) {
+    const now = new Date();
+
+    const isCurrentMonth =
+      paymentDate.getFullYear() === now.getFullYear() &&
+      paymentDate.getMonth() === now.getMonth();
+
+    if (isCurrentMonth) {
+      // Take currently active assignment
+      return this.prisma.loanAssignment.findMany({
+        where: {
+          loanId,
+          unassignedAt: null, // safer than isActive
+        },
+        select: {
+          userId: true,
+          roleId: true,
+        },
+      });
+    }
+
+    // Historical assignment
+    const startOfDay = getStartOfDay(paymentDate);
+    const endOfDay = getEndOfDay(paymentDate);
+
+    return this.prisma.loanAssignment.findMany({
+      where: {
+        loanId,
+        assignedAt: { lte: endOfDay },
+        OR: [
+          { unassignedAt: null },
+          { unassignedAt: { gte: startOfDay } },
+        ],
+      },
+      select: {
+        userId: true,
+        roleId: true,
+      },
     });
   }
 }
