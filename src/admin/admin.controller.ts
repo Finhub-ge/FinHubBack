@@ -497,4 +497,12 @@ export class AdminController {
   async backfillTransactionAssignments(@GetUser() user: User) {
     return await this.adminService.backfillTransactionAssignments();
   }
+
+  // TEMPORARY: Reconcile transaction assignments with current active assignments
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('reconcile-transaction-assignments')
+  async reconcileTransactionAssignments(@GetUser() user: User) {
+    return await this.adminService.reconcileTransactionAssignments();
+  }
 }

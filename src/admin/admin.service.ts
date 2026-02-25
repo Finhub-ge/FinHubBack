@@ -4051,4 +4051,171 @@ export class AdminService {
       throw new HttpException('Failed to backfill transaction assignments', 500);
     }
   }
+
+  // TEMPORARY: Helper function to get transactions for a specific month
+  private async getTransactionsForMonth(year: number, month: number) {
+    const monthStartDate = new Date(year, month - 1, 1); // month is 1-indexed
+    const monthEndDate = new Date(year, month, 0, 23, 59, 59, 999); // last day of month
+
+    return await this.prisma.transaction.findMany({
+      where: {
+        paymentDate: {
+          gte: monthStartDate,
+          lte: monthEndDate,
+        },
+        deleted: 0,
+      },
+      include: {
+        Loan: {
+          select: {
+            id: true,
+          },
+        },
+        TransactionUserAssignments: {
+          where: {
+            deletedAt: null,
+            roleId: 4, // Only collectors
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  // TEMPORARY: Check if transaction has duplicate or invalid assignments
+  private async validateTransactionAssignments(
+    transactionId: number,
+    loanId: number,
+    existingAssignments: any[]
+  ) {
+    // Get current active collector assignment on the loan
+    const currentCollectorAssignment = await this.prisma.loanAssignment.findFirst({
+      where: {
+        loanId: loanId,
+        roleId: 4, // Only collectors
+        assignedAt: { lte: new Date() },
+        OR: [
+          { unassignedAt: null },
+          { unassignedAt: { gte: new Date() } },
+        ],
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    if (!currentCollectorAssignment) {
+      return {
+        isValid: false,
+        hasDuplicates: false,
+        currentCollectorId: null,
+        invalidAssignments: existingAssignments,
+        reason: 'No active collector assignment on loan',
+      };
+    }
+
+    const currentCollectorId = currentCollectorAssignment.userId;
+
+    // Check for duplicates (multiple assignments with roleId = 4)
+    const collectorAssignments = existingAssignments.filter((a) => a.roleId === 4);
+    const hasDuplicates = collectorAssignments.length > 1;
+
+    // Check if any assignments are for users NOT currently assigned to the loan
+    const invalidAssignments = [];
+    let hasCorrectAssignment = false;
+
+    for (const assignment of collectorAssignments) {
+      if (assignment.userId === currentCollectorId) {
+        hasCorrectAssignment = true;
+      } else {
+        // Check if this user has a valid assignment on the loan
+        const userHasAssignment = await this.prisma.loanAssignment.findFirst({
+          where: {
+            loanId: loanId,
+            userId: assignment.userId,
+            roleId: 4,
+            assignedAt: { lte: new Date() },
+            OR: [
+              { unassignedAt: null },
+              { unassignedAt: { gte: new Date() } },
+            ],
+          },
+        });
+
+        if (!userHasAssignment) {
+          invalidAssignments.push(assignment);
+        }
+      }
+    }
+
+    return {
+      isValid: hasCorrectAssignment && !hasDuplicates && invalidAssignments.length === 0,
+      hasDuplicates,
+      currentCollectorId,
+      hasCorrectAssignment,
+      invalidAssignments,
+      totalAssignments: collectorAssignments.length,
+    };
+  }
+
+  // TEMPORARY: Reconcile transaction assignments with current active assignments for Feb 2026
+  async reconcileTransactionAssignments() {
+    const startTime = Date.now();
+    this.logger.log('Finding transactions with duplicate assignments for February 2026');
+
+    try {
+      // STEP 1: Get all February 2026 transactions
+      const transactions = await this.getTransactionsForMonth(2026, 2);
+      this.logger.log(`Found ${transactions.length} transactions to check`);
+
+      const duplicates = [];
+
+      // STEP 2: Find transactions with duplicate assignments
+      for (const transaction of transactions) {
+        if (!transaction.Loan) {
+          continue;
+        }
+
+        const assignments = transaction.TransactionUserAssignments;
+
+        // Check if transaction has more than one assignment (duplicates)
+        if (assignments.length > 1) {
+          duplicates.push({
+            transactionId: transaction.id,
+            loanId: transaction.Loan.id,
+            amount: Number(transaction.amount || 0),
+            paymentDate: transaction.paymentDate,
+            assignmentCount: assignments.length,
+            assignments: assignments.map(a => ({
+              id: a.id,
+              userId: a.userId,
+              roleId: a.roleId,
+              amount: Number(a.amount || 0),
+            })),
+          });
+        }
+
+        // Log progress
+        if (duplicates.length % 100 === 0 && duplicates.length > 0) {
+          this.logger.log(`Found ${duplicates.length} transactions with duplicates so far...`);
+        }
+      }
+
+      const totalTime = Date.now() - startTime;
+      this.logger.log(`Analysis completed in ${totalTime}ms`);
+
+      return {
+        message: 'Duplicate transaction assignments found',
+        stats: {
+          totalTransactions: transactions.length,
+          transactionsWithDuplicates: duplicates.length,
+          durationMs: totalTime,
+        },
+        duplicates: duplicates,
+      };
+    } catch (error) {
+      this.logger.error(`Duplicate search failed: ${error.message}`, error.stack);
+      throw new HttpException('Failed to find duplicate transaction assignments', 500);
+    }
+  }
 }

@@ -650,28 +650,39 @@ export const buildLoanSearchWhere = (searchValue: string) => {
   orConditions.push({ caseId: String(searchTerm) });
 
   // Debtor personal ID
-  orConditions.push({ Debtor: { idNumber: searchTerm } });
+  orConditions.push({
+    Debtor: {
+      idNumber: {
+        startsWith: searchTerm,
+      },
+    },
+  });
 
   // Debtor first/last name
   orConditions.push({ Debtor: { firstName: { contains: searchTerm } } });
   orConditions.push({ Debtor: { lastName: { contains: searchTerm } } });
 
   // Debtor phone
-  orConditions.push({ Debtor: { mainPhone: { contains: searchTerm } } });
+  orConditions.push({ Debtor: { mainPhone: { startsWith: searchTerm } } });
 
-  orConditions.push({ Debtor: { DebtorContact: { some: { value: { contains: searchTerm } } } } });
+  orConditions.push({ Debtor: { DebtorContact: { some: { value: { startsWith: searchTerm } } } } });
 
   // Guarantors
-  const guarantorFields = ['firstName', 'lastName', 'phone', 'mobile', 'idNumber'];
-  guarantorFields.forEach((field) => {
-    orConditions.push({
-      Debtor: {
-        DebtorGuarantors: {
-          some: { [field]: { contains: searchTerm } },
-        },
-      },
-    });
-  });
+  // TODO: temporary disabled guarantors search
+  // const guarantorFields = ['firstName', 'lastName', 'phone', 'mobile', 'idNumber'];
+  // guarantorFields.forEach((field) => {
+  //   orConditions.push({
+  //     Debtor: {
+  //       DebtorGuarantors: {
+  //         some: {
+  //           [field]: {
+  //             startsWith: searchTerm,
+  //           },
+  //         },
+  //       },
+  //     },
+  //   });
+  // });
 
   return { conditions: orConditions, isGlobalSearch };
 };
