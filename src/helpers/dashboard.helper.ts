@@ -95,7 +95,7 @@ export const fetchActivityData = async (
   firstDayOfMonth: Date,
   endDate: Date
 ) => {
-  if (targetIds.length === 0) {
+  if (targetIds?.length === 0) {
     return {
       smsData: [],
       marksData: [],
@@ -108,7 +108,7 @@ export const fetchActivityData = async (
 
   const [smsData, marksData, commentsData, committeeData, chargesData, legalStagesData] = await Promise.all([
     // SMS History - JOIN with junction table instead of large IN clause
-    prisma.$queryRaw<Array<{id: number, loanId: number, userId: number, createdAt: Date}>>`
+    prisma.$queryRaw<Array<{ id: number, loanId: number, userId: number, createdAt: Date }>>`
       SELECT DISTINCT s.id, s.loanId, s.userId, s.createdAt
       FROM SmsHistory s
       INNER JOIN CollectorMonthlyTargetLoan j ON s.loanId = j.loanId
@@ -116,44 +116,44 @@ export const fetchActivityData = async (
         AND s.deletedAt IS NULL
         AND s.status = 'success'
         AND s.createdAt BETWEEN ${firstDayOfMonth} AND ${endDate}
-        ${collectorIds.length > 0 ? Prisma.sql`AND s.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
+        ${collectorIds?.length > 0 ? Prisma.sql`AND s.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
     `,
 
     // Loan Marks - JOIN with junction table
-    prisma.$queryRaw<Array<{id: number, loanId: number, userId: number | null, createdAt: Date}>>`
+    prisma.$queryRaw<Array<{ id: number, loanId: number, userId: number | null, createdAt: Date }>>`
       SELECT DISTINCT m.id, m.loanId, m.userId, m.createdAt
       FROM LoanMarks m
       INNER JOIN CollectorMonthlyTargetLoan j ON m.loanId = j.loanId
       WHERE j.monthlyTargetId IN (${Prisma.join(targetIds)})
         AND m.deletedAt IS NULL
         AND m.createdAt BETWEEN ${firstDayOfMonth} AND ${endDate}
-        ${collectorIds.length > 0 ? Prisma.sql`AND m.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
+        ${collectorIds?.length > 0 ? Prisma.sql`AND m.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
     `,
 
     // Comments - JOIN with junction table
-    prisma.$queryRaw<Array<{id: number, loanId: number, userId: number, createdAt: Date}>>`
+    prisma.$queryRaw<Array<{ id: number, loanId: number, userId: number, createdAt: Date }>>`
       SELECT DISTINCT c.id, c.loanId, c.userId, c.createdAt
       FROM Comments c
       INNER JOIN CollectorMonthlyTargetLoan j ON c.loanId = j.loanId
       WHERE j.monthlyTargetId IN (${Prisma.join(targetIds)})
         AND c.deletedAt IS NULL
         AND c.createdAt BETWEEN ${firstDayOfMonth} AND ${endDate}
-        ${collectorIds.length > 0 ? Prisma.sql`AND c.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
+        ${collectorIds?.length > 0 ? Prisma.sql`AND c.userId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
     `,
 
     // Committee - JOIN with junction table
-    prisma.$queryRaw<Array<{id: number, loanId: number, requesterId: number, createdAt: Date}>>`
+    prisma.$queryRaw<Array<{ id: number, loanId: number, requesterId: number, createdAt: Date }>>`
       SELECT DISTINCT c.id, c.loanId, c.requesterId, c.createdAt
       FROM Committee c
       INNER JOIN CollectorMonthlyTargetLoan j ON c.loanId = j.loanId
       WHERE j.monthlyTargetId IN (${Prisma.join(targetIds)})
         AND c.deletedAt IS NULL
         AND c.createdAt BETWEEN ${firstDayOfMonth} AND ${endDate}
-        ${collectorIds.length > 0 ? Prisma.sql`AND c.requesterId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
+        ${collectorIds?.length > 0 ? Prisma.sql`AND c.requesterId IN (${Prisma.join(collectorIds)})` : Prisma.empty}
     `,
 
     // Charges - JOIN with junction table
-    prisma.$queryRaw<Array<{id: number, loanId: number, amount: any, createdAt: Date, chargeTypeId: number, currency: string | null}>>`
+    prisma.$queryRaw<Array<{ id: number, loanId: number, amount: any, createdAt: Date, chargeTypeId: number, currency: string | null }>>`
       SELECT DISTINCT ch.id, ch.loanId, ch.amount, ch.createdAt, ch.chargeTypeId, ch.currency
       FROM Charges ch
       INNER JOIN CollectorMonthlyTargetLoan j ON ch.loanId = j.loanId
