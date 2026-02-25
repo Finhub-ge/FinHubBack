@@ -45,6 +45,14 @@ export class PaymentEventListener {
         this.logger.debug(`[Payment ${event.transactionId}] Loan status updated to closed`);
       }
 
+      // STEP 5: Apply payment to charges
+      await this.applyPaymentToCharges(event);
+      this.logger.debug(`[Payment ${event.transactionId}] Payment applied to charges`);
+
+      // STEP 6: Save transaction assignments
+      await this.saveTransactionAssignments(event);
+      this.logger.debug(`[Payment ${event.transactionId}] Transaction assignments saved`);
+
       const duration = Date.now() - startTime;
       this.logger.log(`[Payment ${event.transactionId}] ✅ Background processing completed in ${duration}ms`);
 
@@ -170,7 +178,19 @@ export class PaymentEventListener {
         );
       }
 
-      // STEP 5: Create transaction deletion record
+      // STEP 4: Revert charge updates
+      await this.revertChargeUpdates(event);
+      this.logger.log(
+        `[Transaction ${event.transactionId}] Charge updates reverted`,
+      );
+
+      // STEP 5: Delete transaction assignments
+      await this.deleteTransactionAssignments(event);
+      this.logger.log(
+        `[Transaction ${event.transactionId}] Transaction assignments deleted`,
+      );
+
+      // STEP 6: Create transaction deletion record
       await this.prisma.transactionDeleted.create({
         data: {
           transactionId: event.transactionId,
@@ -274,6 +294,90 @@ export class PaymentEventListener {
         changedBy: event.userId,
         notes: 'Automatically updated to Closed (paid) - loan balance reached 0',
       },
+    });
+  }
+
+  private async applyPaymentToCharges(event: PaymentTransactionCreatedEvent) {
+    await this.paymentHelper.applyPaymentToCharges({
+      loanId: event.loanId,
+      allocationResult: event.allocationResult,
+    });
+  }
+
+  private async saveTransactionAssignments(event: PaymentTransactionCreatedEvent) {
+    await this.paymentHelper.saveTransactionAssignments(event.transactionId);
+  }
+
+  private async revertChargeUpdates(event: TransactionDeletedEvent) {
+    // Get the allocation amounts from the transaction
+    const { transactionSummary } = event;
+    let remainingOtherFee = Number(transactionSummary.fees || 0);
+    let remainingLegalCharges = Number(transactionSummary.legal || 0);
+
+    // Skip if nothing was allocated to charges
+    if (remainingOtherFee <= 0 && remainingLegalCharges <= 0) return;
+
+    // Define charge type mapping
+    const legalTypeIds = [1, 2]; // Court, Execution
+    const otherTypeIds = [3, 4, 5]; // Post, Registry, Other
+
+    // Find charges that were updated around the transaction date
+    // We look for charges that were paid or partially paid
+    const charges = await this.prisma.charges.findMany({
+      where: {
+        loanId: event.loanId,
+        deletedAt: null,
+        paidAmount: { gt: 0 }, // Has some payment applied
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Reverse the payment application in the same order
+    for (const charge of charges) {
+      const currentPaid = Number(charge.paidAmount || 0);
+
+      // Determine how much to reverse based on charge type
+      let amountToReverse = 0;
+      if (legalTypeIds.includes(charge.chargeTypeId) && remainingLegalCharges > 0) {
+        amountToReverse = Math.min(remainingLegalCharges, currentPaid);
+        remainingLegalCharges -= amountToReverse;
+      } else if (otherTypeIds.includes(charge.chargeTypeId) && remainingOtherFee > 0) {
+        amountToReverse = Math.min(remainingOtherFee, currentPaid);
+        remainingOtherFee -= amountToReverse;
+      }
+
+      if (amountToReverse > 0) {
+        const newPaidAmount = currentPaid - amountToReverse;
+        const chargeTotal = Number(charge.amount);
+
+        // Determine new status
+        let newStatus;
+        if (newPaidAmount <= 0) {
+          newStatus = 'UNPAID';
+        } else if (newPaidAmount < chargeTotal) {
+          newStatus = 'PARTIALLY_PAID';
+        } else {
+          newStatus = 'PAID';
+        }
+
+        await this.prisma.charges.update({
+          where: { id: charge.id },
+          data: {
+            paidAmount: newPaidAmount,
+            status: newStatus as any,
+            paymentDate: newStatus === 'PAID' ? charge.paymentDate : null,
+          },
+        });
+      }
+
+      if (remainingLegalCharges <= 0 && remainingOtherFee <= 0) break;
+    }
+  }
+
+  private async deleteTransactionAssignments(event: TransactionDeletedEvent) {
+    // Delete all transaction assignment records for this transaction
+    await this.prisma.transactionUserAssignments.deleteMany({
+      where: { transactionId: event.transactionId },
     });
   }
 }

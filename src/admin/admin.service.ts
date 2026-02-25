@@ -31,7 +31,7 @@ import { GetFuturePaymentsWithPaginationDto } from "./dto/getFuturePayments.dto"
 import { UploadPlanDto } from "src/admin/dto/uploadPlan.dto";
 import { parseExcelBuffer, paymentReportExport } from "src/helpers/excel.helper";
 import { normalizeName } from "src/helpers/accountId.helper";
-import { calculateCollectorLoanStats, createOrUpdatePlanReport, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
+import { calculateCollectorLoanStats, createOrUpdatePlanReport, createOrUpdatePlanReportNew, executeBatchOperations, fetchExistingReports, loanAssignments, prepareDataForInsert, preparePaymentReportExportData, separateCreatesAndUpdates, updateCollectedAmount } from "src/helpers/reports.helper";
 import { buildLoanQuery, hasLoanAssignmentInTransactionWhere } from "src/helpers/loanFilter.helper";
 import { PermissionsHelper } from "src/helpers/permissions.helper";
 import { logAssignmentHistory } from "src/helpers/loan.helper";
@@ -428,6 +428,7 @@ export class AdminService {
       const allTransactions = await this.permissionsHelper.payment.findMany({
         where,
         select: {
+          loanId: true,
           currency: true,
           amount: true,
           principal: true,
@@ -3442,6 +3443,114 @@ export class AdminService {
     };
   }
 
+  async importPlanNew(fileBuffer: Buffer, userId: number) {
+    const parsedData = await parseExcelBuffer(fileBuffer);
+
+    // Validate and prepare data
+    const dataToInsert = prepareDataForInsert(parsedData);
+
+    if (dataToInsert.length === 0) {
+      return { message: 'No valid records found', insertedCount: 0 };
+    }
+
+    // Get unique collector IDs
+    const collectorIds = dataToInsert.map(d => d.collectorId);
+
+    const firstDayOfMonth = new Date(Date.UTC(dataToInsert[0].year, (dataToInsert[0].month - 1), 1));
+    const lastDayOfMonth = new Date(Date.UTC(dataToInsert[0].year, dataToInsert[0].month, 0));
+
+    // TEMPORARY: Fetch loan assignments based on existing CollectorsMonthlyTarget created date
+    // const enrichedData = [];
+
+    // for (const item of dataToInsert) {
+    //   // Get the existing target's created date for this collector
+    //   const existingTarget = await this.prisma.collectorsMonthlyTarget.findFirst({
+    //     where: { collectorId: item.collectorId },
+    //     orderBy: { createdAt: 'desc' },
+    //     select: { createdAt: true },
+    //   });
+
+    //   // Use the existing target's created date, or current date if no target exists
+    //   const referenceDate = existingTarget?.createdAt || new Date();
+
+    //   // Calculate month start and end dates for the target month
+    //   // const monthStartDate = new Date(item.year, item.month - 1, 1); // month is 1-indexed
+    //   // const monthEndDate = new Date(item.year, item.month, 0, 23, 59, 59, 999); // last day of month
+
+    //   const monthStartDate = new Date(Date.UTC(item.year, item.month - 1, 1));
+    //   const monthEndDate = new Date(Date.UTC(item.year, item.month, 0));
+
+    //   // STEP 1: Fetch active assignments at the reference date (excluding closed loans)
+    //   const activeAssignments = await this.prisma.loanAssignment.findMany({
+    //     where: {
+    //       userId: item.collectorId,
+    //       assignedAt: { lte: referenceDate },
+    //       OR: [
+    //         { unassignedAt: null },
+    //         { unassignedAt: { gte: referenceDate } },
+    //       ],
+    //       Loan: {
+    //         deletedAt: null,
+    //         statusId: { notIn: [12, 13, 27] }, // Exclude closed statuses
+    //       },
+    //     },
+    //     select: { loanId: true },
+    //   });
+
+    //   // STEP 2: Fetch assignments where loan status is 12 (closed) and closed within the month
+    //   const closedAssignments = await this.prisma.loanAssignment.findMany({
+    //     where: {
+    //       userId: item.collectorId,
+    //       assignedAt: { lte: referenceDate },
+    //       OR: [
+    //         { unassignedAt: null },
+    //         { unassignedAt: { gte: referenceDate } },
+    //       ],
+    //       Loan: {
+    //         deletedAt: null,
+    //         statusId: 12, // Closed status
+    //         closedAt: {
+    //           gte: monthStartDate,
+    //           lte: monthEndDate,
+    //         },
+    //       },
+    //     },
+    //     select: { loanId: true },
+    //   });
+
+    //   // Combine both sets of loan IDs
+    //   const activeLoanIds = activeAssignments.map(a => a.loanId);
+    //   const closedLoanIds = closedAssignments.map(a => a.loanId);
+    //   const allLoanIds = [...new Set([...activeLoanIds, ...closedLoanIds])]; // Remove duplicates
+
+    //   enrichedData.push({
+    //     collectorId: item.collectorId,
+    //     targetAmount: item.targetAmount,
+    //     year: item.year,
+    //     month: item.month,
+    //     loanIds: allLoanIds,
+    //   });
+    // }
+
+    // Fetch loan assignments for collectors
+    const assignments = await loanAssignments(collectorIds, firstDayOfMonth, lastDayOfMonth);
+
+    const enrichedData = dataToInsert.map(item => ({
+      ...item,
+      loanIds: assignments[item.collectorId] ?? []
+    }));
+
+    // Create or update targets with event emission for junction table sync
+    await createOrUpdatePlanReportNew(enrichedData, this.eventEmitter);
+
+    return {
+      message: 'Plan imported successfully',
+      totalRecords: parsedData.length,
+      skippedRecords: parsedData.length - dataToInsert.length,
+      processedTargets: enrichedData.length,
+    };
+  }
+
   async getCurrency(date?: string, currency?: string) {
     // If specific currency provided, return only that one
     if (currency) {
@@ -3784,6 +3893,13 @@ export class AdminService {
       paymentDate: transaction.paymentDate,
       userId: userId,
       loanRemainingId: newRemaining.id,
+      transactionSummary: {
+        principal: Number(transaction.principal || 0),
+        interest: Number(transaction.interest || 0),
+        penalty: Number(transaction.penalty || 0),
+        fees: Number(transaction.fees || 0),
+        legal: Number(transaction.legal || 0),
+      },
       newBalances: newBalances,
       newCurrentDebt: newCurrentDebt,
       loanStatusName: loan.LoanStatus.name,
@@ -3804,5 +3920,135 @@ export class AdminService {
     return {
       message: 'Transaction deleted and all changes reverted successfully',
     };
+  }
+
+  // TEMPORARY: Backfill transaction assignments for February 2026
+  async backfillTransactionAssignments() {
+    const startTime = Date.now();
+    this.logger.log('Starting transaction assignments backfill for transactions > 432920');
+
+    try {
+      // STEP 1: Fetch all transactions with id > 432920
+      const transactions = await this.prisma.transaction.findMany({
+        where: {
+          id: { gt: 432920 },
+          deleted: 0, // Only active transactions
+        },
+        include: {
+          Loan: {
+            select: {
+              id: true,
+            },
+          },
+        },
+        orderBy: { id: 'asc' },
+      });
+
+      this.logger.log(`Found ${transactions.length} transactions to process`);
+
+      // STEP 2: Prepare data array for batch insert
+      const insertData = [];
+      let skippedCount = 0;
+      let processedCount = 0;
+
+      for (const transaction of transactions) {
+        // Skip if transaction has no loan
+        if (!transaction.Loan) {
+          skippedCount++;
+          continue;
+        }
+
+        // STEP 3: Get loan assignment at the time of transaction (only collectors - role 4)
+        const loanAssignments = await this.prisma.loanAssignment.findMany({
+          where: {
+            loanId: transaction.Loan.id,
+            roleId: 4, // Only collectors
+            assignedAt: { lte: transaction.paymentDate },
+            OR: [
+              { unassignedAt: null },
+              { unassignedAt: { gte: transaction.paymentDate } },
+            ],
+          },
+          select: {
+            userId: true,
+            roleId: true,
+          },
+        });
+
+        // Skip if no assignments found
+        if (loanAssignments.length === 0) {
+          skippedCount++;
+          continue;
+        }
+
+        // STEP 4: Add to insert data with year 2026 and month 2
+        for (const assignment of loanAssignments) {
+          insertData.push({
+            transactionId: transaction.id,
+            userId: assignment.userId,
+            roleId: assignment.roleId,
+            amount: Number(transaction.amount || 0),
+            year: 2026,
+            month: 2,
+          });
+        }
+
+        processedCount++;
+
+        // Log progress every 1000 transactions
+        if (processedCount % 1000 === 0) {
+          this.logger.log(`Processed ${processedCount}/${transactions.length} transactions...`);
+        }
+      }
+
+      this.logger.log(`Prepared ${insertData.length} assignment records to insert`);
+      this.logger.log(`Processed: ${processedCount}, Skipped: ${skippedCount}`);
+
+      console.log('insertData', insertData.length)
+      // return insertData;
+      // STEP 5: Batch insert into TransactionUserAssignments
+      if (insertData.length > 0) {
+        // Split into chunks of 5000 to avoid database limits
+        const chunkSize = 5000;
+        let insertedCount = 0;
+
+        for (let i = 0; i < insertData.length; i += chunkSize) {
+          const chunk = insertData.slice(i, i + chunkSize);
+          await this.prisma.transactionUserAssignments.createMany({
+            data: chunk,
+            skipDuplicates: true, // Skip if already exists
+          });
+          insertedCount += chunk.length;
+          this.logger.log(`Inserted ${insertedCount}/${insertData.length} records...`);
+        }
+
+        const totalTime = Date.now() - startTime;
+        this.logger.log(`Backfill completed in ${totalTime}ms`);
+
+        return {
+          message: 'Transaction assignments backfilled successfully',
+          stats: {
+            totalTransactions: transactions.length,
+            processedTransactions: processedCount,
+            skippedTransactions: skippedCount,
+            assignmentsCreated: insertData.length,
+            durationMs: totalTime,
+          },
+        };
+      } else {
+        return {
+          message: 'No assignments to backfill',
+          stats: {
+            totalTransactions: transactions.length,
+            processedTransactions: processedCount,
+            skippedTransactions: skippedCount,
+            assignmentsCreated: 0,
+          },
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Backfill failed: ${error.message}`, error.stack);
+      throw new HttpException('Failed to backfill transaction assignments', 500);
+    }
   }
 }

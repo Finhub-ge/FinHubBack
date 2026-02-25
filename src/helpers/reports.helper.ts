@@ -27,7 +27,7 @@ export const fetchExistingReports = async (dataToInsert: any[], collectorIds: nu
   });
 }
 
-export const loanAssignments = async (collectorIds: number[]) => {
+export const loanAssignments = async (collectorIds: number[], firstDayOfMonth?: Date, lastDayOfMonth?: Date) => {
   const uploadDate = new Date();
 
   const assignments = await prisma.loanAssignment.findMany({
@@ -432,4 +432,127 @@ export const createOrUpdatePlanReport = async (data: any[]) => {
       })
     ),
   ]);
+}
+
+export const createOrUpdatePlanReportNew = async (data: any[], eventEmitter?: any) => {
+  if (!data.length) return;
+
+  const existing = await prisma.collectorsMonthlyTarget.findMany({
+    where: {
+      OR: data.map((item) => ({
+        collectorId: item.collectorId,
+        month: item.month,
+        year: item.year,
+      })),
+    },
+    select: {
+      id: true,
+      collectorId: true,
+      month: true,
+      year: true,
+    },
+  });
+
+  const existingMap = new Map(
+    existing.map(
+      (e) => [`${e.collectorId}-${e.month}-${e.year}`, e.id]
+    )
+  );
+
+  const toCreate = [];
+  const toUpdate = [];
+
+  for (const item of data) {
+    const key = `${item.collectorId}-${item.month}-${item.year}`;
+
+    if (existingMap.has(key)) {
+      toUpdate.push(item);
+    } else {
+      toCreate.push(item);
+    }
+  }
+
+  // Bulk create
+  if (toCreate.length) {
+    await prisma.collectorsMonthlyTarget.createMany({
+      data: toCreate,
+    });
+  }
+
+  // Individual updates
+  for (const item of toUpdate) {
+    await prisma.collectorsMonthlyTarget.update({
+      where: {
+        collectorId_year_month: {
+          collectorId: item.collectorId,
+          month: item.month,
+          year: item.year,
+        },
+      },
+      data: {
+        targetAmount: item.targetAmount,
+        loanIds: item.loanIds,
+      },
+    });
+  }
+
+  // Emit events for junction table sync (if eventEmitter provided)
+  if (eventEmitter) {
+    // Fetch IDs for newly created records
+    const createdRecords = toCreate.length
+      ? await prisma.collectorsMonthlyTarget.findMany({
+        where: {
+          OR: toCreate.map((item) => ({
+            collectorId: item.collectorId,
+            month: item.month,
+            year: item.year,
+          })),
+        },
+        select: {
+          id: true,
+          collectorId: true,
+          month: true,
+          year: true,
+        },
+      })
+      : [];
+
+    const createdMap = new Map(
+      createdRecords.map(
+        (r) => [`${r.collectorId}-${r.month}-${r.year}`, r.id]
+      )
+    );
+
+    // Emit events for created targets
+    for (const item of toCreate) {
+      const key = `${item.collectorId}-${item.month}-${item.year}`;
+      const targetId = createdMap.get(key);
+
+      if (targetId) {
+        eventEmitter.emit('plan.target.created', {
+          targetId,
+          collectorId: item.collectorId,
+          year: item.year,
+          month: item.month,
+          loanIds: Array.isArray(item.loanIds) ? item.loanIds : [],
+        });
+      }
+    }
+
+    // Emit events for updated targets
+    for (const item of toUpdate) {
+      const key = `${item.collectorId}-${item.month}-${item.year}`;
+      const targetId = existingMap.get(key);
+
+      if (targetId) {
+        eventEmitter.emit('plan.target.updated', {
+          targetId,
+          collectorId: item.collectorId,
+          year: item.year,
+          month: item.month,
+          loanIds: Array.isArray(item.loanIds) ? item.loanIds : [],
+        });
+      }
+    }
+  }
 }

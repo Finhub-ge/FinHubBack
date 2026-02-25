@@ -1225,3 +1225,88 @@ export const getEmptySummary = () => {
     executionPrincipalSum: 0,
   };
 };
+
+export const buildDataMapsByTarget = (targetData: any): DataMaps => {
+  const { loans, sms, marks, comments, committeeRequests, charges, courtCases, executionCases } = targetData;
+
+  // Build loan map
+  const loanMap = new Map();
+  for (const loan of loans) {
+    loanMap.set(loan.id, loan);
+  }
+
+  // Build SMS map
+  const smsMap = new Map<number, any[]>();
+  for (const s of sms) {
+    if (!smsMap.has(s.loanId)) smsMap.set(s.loanId, []);
+    smsMap.get(s.loanId)!.push(s);
+  }
+
+  // Build marks map
+  const markMap = new Map<number, any[]>();
+  for (const m of marks) {
+    if (!markMap.has(m.loanId)) markMap.set(m.loanId, []);
+    markMap.get(m.loanId)!.push(m);
+  }
+
+  // Build comments map
+  const commentMap = new Map<number, any[]>();
+  for (const c of comments) {
+    if (!commentMap.has(c.loanId)) commentMap.set(c.loanId, []);
+    commentMap.get(c.loanId)!.push(c);
+  }
+
+  // Build committee request map
+  const committeeRequestMap = new Map<number, any[]>();
+  for (const c of committeeRequests) {
+    if (!committeeRequestMap.has(c.loanId)) committeeRequestMap.set(c.loanId, []);
+    committeeRequestMap.get(c.loanId)!.push(c);
+  }
+
+  // Build charge map
+  const chargeMap = new Map<number, any[]>();
+  for (const c of charges) {
+    if (!chargeMap.has(c.loanId)) chargeMap.set(c.loanId, []);
+    chargeMap.get(c.loanId)!.push(c);
+  }
+
+  // Build court case map
+  const courtCaseMap = new Map<number, any[]>();
+  for (const c of courtCases) {
+    const loanId = c?.Loan?.id;
+    if (!loanId) continue;
+    if (!courtCaseMap.has(loanId)) courtCaseMap.set(loanId, []);
+    courtCaseMap.get(loanId)!.push(c);
+  }
+
+  // Build execution case map
+  const executionCaseMap = new Map<number, any[]>();
+  for (const e of executionCases) {
+    const loanId = e?.Loan?.id;
+    if (!loanId) continue;
+    if (!executionCaseMap.has(loanId)) executionCaseMap.set(loanId, []);
+    executionCaseMap.get(loanId)!.push(e);
+  }
+
+  return {
+    loanMap,
+    smsMap,
+    markMap,
+    commentMap,
+    committeeRequestMap,
+    chargeMap,
+    courtCaseMap,
+    executionCaseMap,
+  };
+};
+
+export const calculateCollectorMetricsNew = (
+  item: CollectorTarget,
+  targetData: any,
+  transactionData: TransactionData,
+  debtorStatusMap: Map<number, any[]>,
+  filters: FilterParams
+) => {
+  const dataMaps = buildDataMapsByTarget(targetData);
+  return calculateCollectorMetrics(item, dataMaps, transactionData, debtorStatusMap, filters);
+};

@@ -14,6 +14,7 @@ import { PaymentEventListener } from "src/listeners/payment.listener";
 import { ErrorMonitoringEventListener } from "src/listeners/errorMonitoring.listener";
 import { ChargeEventListener } from "src/listeners/charge.listener";
 import { CommitteeEventListener } from "src/listeners/committee.listener";
+import { PlanTargetEventListener } from "src/listeners/planTarget.listener";
 
 @Module({
   imports: [JwtModule.register({}), HttpModule, LoanModule],
@@ -29,7 +30,8 @@ import { CommitteeEventListener } from "src/listeners/committee.listener";
     PaymentEventListener,
     ErrorMonitoringEventListener,
     ChargeEventListener,
-    CommitteeEventListener
+    CommitteeEventListener,
+    PlanTargetEventListener
   ],
   exports: [AdminService]
 })

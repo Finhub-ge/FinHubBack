@@ -26,29 +26,15 @@ export class DashboardController {
   @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
   @Get('planReport')
   getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto, @GetUser() user: any) {
-    return this.dashboardService.getPlanReport(getPlanReportDto, user);
+    // return this.dashboardService.getPlanReport(getPlanReportDto, user);
+    return this.dashboardService.getPlanReportNew(getPlanReportDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
   @Get('planReportSummary')
   getPlanReportSummary(@Query() getPlanReportDto: GetPlanReportDto, @GetUser() user: any) {
-    return this.dashboardService.getPlanReportSummary(getPlanReportDto, user);
-  }
-
-  // TODO: remove this function
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Get('planReportTest')
-  getPlanReportTest(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
-    return this.dashboardService.getPlanReportV1(getPlanReportDto);
-  }
-
-  // TODO: remove this function
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Get('planReportData')
-  getPlanReportData(@Query() getPlanReportDto: GetPlanReportWithPaginationDto) {
-    return this.dashboardService.getPlanReportV2(getPlanReportDto);
+    // return this.dashboardService.getPlanReportSummary(getPlanReportDto, user);
+    return this.dashboardService.getPlanReportSummaryNew(getPlanReportDto, user);
   }
 }
