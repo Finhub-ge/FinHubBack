@@ -319,6 +319,7 @@ export class AdminService {
         loanFilter.LoanAssignment = {
           some: {
             userId: { in: filters.assignedCollector },
+            isActive: true,
           },
         };
       }
@@ -3922,300 +3923,546 @@ export class AdminService {
     };
   }
 
-  // TEMPORARY: Backfill transaction assignments for February 2026
-  async backfillTransactionAssignments() {
-    const startTime = Date.now();
-    this.logger.log('Starting transaction assignments backfill for transactions > 432920');
+  // // TEMPORARY: Backfill transaction assignments for February 2026
+  // async backfillTransactionAssignments() {
+  //   const startTime = Date.now();
+  //   this.logger.log('Starting transaction assignments backfill for transactions > 432920');
 
-    try {
-      // STEP 1: Fetch all transactions with id > 432920
-      const transactions = await this.prisma.transaction.findMany({
-        where: {
-          id: { gt: 432920 },
-          deleted: 0, // Only active transactions
-        },
-        include: {
-          Loan: {
-            select: {
-              id: true,
-            },
-          },
-        },
-        orderBy: { id: 'asc' },
-      });
+  //   try {
+  //     // STEP 1: Fetch all transactions with id > 432920
+  //     const transactions = await this.prisma.transaction.findMany({
+  //       where: {
+  //         id: { gt: 432920 },
+  //         deleted: 0, // Only active transactions
+  //       },
+  //       include: {
+  //         Loan: {
+  //           select: {
+  //             id: true,
+  //           },
+  //         },
+  //       },
+  //       orderBy: { id: 'asc' },
+  //     });
 
-      this.logger.log(`Found ${transactions.length} transactions to process`);
+  //     this.logger.log(`Found ${transactions.length} transactions to process`);
 
-      // STEP 2: Prepare data array for batch insert
-      const insertData = [];
-      let skippedCount = 0;
-      let processedCount = 0;
+  //     // STEP 2: Prepare data array for batch insert
+  //     const insertData = [];
+  //     let skippedCount = 0;
+  //     let processedCount = 0;
 
-      for (const transaction of transactions) {
-        // Skip if transaction has no loan
-        if (!transaction.Loan) {
-          skippedCount++;
-          continue;
-        }
+  //     for (const transaction of transactions) {
+  //       // Skip if transaction has no loan
+  //       if (!transaction.Loan) {
+  //         skippedCount++;
+  //         continue;
+  //       }
 
-        // STEP 3: Get loan assignment at the time of transaction (only collectors - role 4)
-        const loanAssignments = await this.prisma.loanAssignment.findMany({
-          where: {
-            loanId: transaction.Loan.id,
-            roleId: 4, // Only collectors
-            assignedAt: { lte: transaction.paymentDate },
-            OR: [
-              { unassignedAt: null },
-              { unassignedAt: { gte: transaction.paymentDate } },
-            ],
-          },
-          select: {
-            userId: true,
-            roleId: true,
-          },
-        });
+  //       // STEP 3: Get loan assignment at the time of transaction (only collectors - role 4)
+  //       const loanAssignments = await this.prisma.loanAssignment.findMany({
+  //         where: {
+  //           loanId: transaction.Loan.id,
+  //           roleId: 4, // Only collectors
+  //           assignedAt: { lte: transaction.paymentDate },
+  //           OR: [
+  //             { unassignedAt: null },
+  //             { unassignedAt: { gte: transaction.paymentDate } },
+  //           ],
+  //         },
+  //         select: {
+  //           userId: true,
+  //           roleId: true,
+  //         },
+  //       });
 
-        // Skip if no assignments found
-        if (loanAssignments.length === 0) {
-          skippedCount++;
-          continue;
-        }
+  //       // Skip if no assignments found
+  //       if (loanAssignments.length === 0) {
+  //         skippedCount++;
+  //         continue;
+  //       }
 
-        // STEP 4: Add to insert data with year 2026 and month 2
-        for (const assignment of loanAssignments) {
-          insertData.push({
-            transactionId: transaction.id,
-            userId: assignment.userId,
-            roleId: assignment.roleId,
-            amount: Number(transaction.amount || 0),
-            year: 2026,
-            month: 2,
-          });
-        }
+  //       // STEP 4: Add to insert data with year 2026 and month 2
+  //       for (const assignment of loanAssignments) {
+  //         insertData.push({
+  //           transactionId: transaction.id,
+  //           userId: assignment.userId,
+  //           roleId: assignment.roleId,
+  //           amount: Number(transaction.amount || 0),
+  //           year: 2026,
+  //           month: 2,
+  //         });
+  //       }
 
-        processedCount++;
+  //       processedCount++;
 
-        // Log progress every 1000 transactions
-        if (processedCount % 1000 === 0) {
-          this.logger.log(`Processed ${processedCount}/${transactions.length} transactions...`);
-        }
-      }
+  //       // Log progress every 1000 transactions
+  //       if (processedCount % 1000 === 0) {
+  //         this.logger.log(`Processed ${processedCount}/${transactions.length} transactions...`);
+  //       }
+  //     }
 
-      this.logger.log(`Prepared ${insertData.length} assignment records to insert`);
-      this.logger.log(`Processed: ${processedCount}, Skipped: ${skippedCount}`);
+  //     this.logger.log(`Prepared ${insertData.length} assignment records to insert`);
+  //     this.logger.log(`Processed: ${processedCount}, Skipped: ${skippedCount}`);
 
-      console.log('insertData', insertData.length)
-      // return insertData;
-      // STEP 5: Batch insert into TransactionUserAssignments
-      if (insertData.length > 0) {
-        // Split into chunks of 5000 to avoid database limits
-        const chunkSize = 5000;
-        let insertedCount = 0;
+  //     console.log('insertData', insertData.length)
+  //     // return insertData;
+  //     // STEP 5: Batch insert into TransactionUserAssignments
+  //     if (insertData.length > 0) {
+  //       // Split into chunks of 5000 to avoid database limits
+  //       const chunkSize = 5000;
+  //       let insertedCount = 0;
 
-        for (let i = 0; i < insertData.length; i += chunkSize) {
-          const chunk = insertData.slice(i, i + chunkSize);
-          await this.prisma.transactionUserAssignments.createMany({
-            data: chunk,
-            skipDuplicates: true, // Skip if already exists
-          });
-          insertedCount += chunk.length;
-          this.logger.log(`Inserted ${insertedCount}/${insertData.length} records...`);
-        }
+  //       for (let i = 0; i < insertData.length; i += chunkSize) {
+  //         const chunk = insertData.slice(i, i + chunkSize);
+  //         await this.prisma.transactionUserAssignments.createMany({
+  //           data: chunk,
+  //           skipDuplicates: true, // Skip if already exists
+  //         });
+  //         insertedCount += chunk.length;
+  //         this.logger.log(`Inserted ${insertedCount}/${insertData.length} records...`);
+  //       }
 
-        const totalTime = Date.now() - startTime;
-        this.logger.log(`Backfill completed in ${totalTime}ms`);
+  //       const totalTime = Date.now() - startTime;
+  //       this.logger.log(`Backfill completed in ${totalTime}ms`);
 
-        return {
-          message: 'Transaction assignments backfilled successfully',
-          stats: {
-            totalTransactions: transactions.length,
-            processedTransactions: processedCount,
-            skippedTransactions: skippedCount,
-            assignmentsCreated: insertData.length,
-            durationMs: totalTime,
-          },
-        };
-      } else {
-        return {
-          message: 'No assignments to backfill',
-          stats: {
-            totalTransactions: transactions.length,
-            processedTransactions: processedCount,
-            skippedTransactions: skippedCount,
-            assignmentsCreated: 0,
-          },
-        };
-      }
-    } catch (error) {
-      this.logger.error(`Backfill failed: ${error.message}`, error.stack);
-      throw new HttpException('Failed to backfill transaction assignments', 500);
-    }
-  }
+  //       return {
+  //         message: 'Transaction assignments backfilled successfully',
+  //         stats: {
+  //           totalTransactions: transactions.length,
+  //           processedTransactions: processedCount,
+  //           skippedTransactions: skippedCount,
+  //           assignmentsCreated: insertData.length,
+  //           durationMs: totalTime,
+  //         },
+  //       };
+  //     } else {
+  //       return {
+  //         message: 'No assignments to backfill',
+  //         stats: {
+  //           totalTransactions: transactions.length,
+  //           processedTransactions: processedCount,
+  //           skippedTransactions: skippedCount,
+  //           assignmentsCreated: 0,
+  //         },
+  //       };
+  //     }
+  //   } catch (error) {
+  //     this.logger.error(`Backfill failed: ${error.message}`, error.stack);
+  //     throw new HttpException('Failed to backfill transaction assignments', 500);
+  //   }
+  // }
 
-  // TEMPORARY: Helper function to get transactions for a specific month
-  private async getTransactionsForMonth(year: number, month: number) {
-    const monthStartDate = new Date(year, month - 1, 1); // month is 1-indexed
-    const monthEndDate = new Date(year, month, 0, 23, 59, 59, 999); // last day of month
+  // // TEMPORARY: Helper function to get transactions for a specific month
+  // private async getTransactionsForMonth(year: number, month: number) {
+  //   const monthStartDate = new Date(year, month - 1, 1); // month is 1-indexed
+  //   const monthEndDate = new Date(year, month, 0, 23, 59, 59, 999); // last day of month
 
-    return await this.prisma.transaction.findMany({
-      where: {
-        paymentDate: {
-          gte: monthStartDate,
-          lte: monthEndDate,
-        },
-        deleted: 0,
-      },
-      include: {
-        Loan: {
-          select: {
-            id: true,
-          },
-        },
-        TransactionUserAssignments: {
-          where: {
-            deletedAt: null,
-            roleId: 4, // Only collectors
-          },
-        },
-      },
-      orderBy: { id: 'asc' },
-    });
-  }
+  //   return await this.prisma.transaction.findMany({
+  //     where: {
+  //       paymentDate: {
+  //         gte: monthStartDate,
+  //         lte: monthEndDate,
+  //       },
+  //       deleted: 0,
+  //     },
+  //     include: {
+  //       Loan: {
+  //         select: {
+  //           id: true,
+  //         },
+  //       },
+  //       TransactionUserAssignments: {
+  //         where: {
+  //           deletedAt: null,
+  //           roleId: 4, // Only collectors
+  //         },
+  //       },
+  //     },
+  //     orderBy: { id: 'asc' },
+  //   });
+  // }
 
-  // TEMPORARY: Check if transaction has duplicate or invalid assignments
-  private async validateTransactionAssignments(
-    transactionId: number,
-    loanId: number,
-    existingAssignments: any[]
-  ) {
-    // Get current active collector assignment on the loan
-    const currentCollectorAssignment = await this.prisma.loanAssignment.findFirst({
-      where: {
-        loanId: loanId,
-        roleId: 4, // Only collectors
-        assignedAt: { lte: new Date() },
-        OR: [
-          { unassignedAt: null },
-          { unassignedAt: { gte: new Date() } },
-        ],
-      },
-      select: {
-        userId: true,
-      },
-    });
+  // // TEMPORARY: Check if transaction has duplicate or invalid assignments
+  // private async validateTransactionAssignments(
+  //   transactionId: number,
+  //   loanId: number,
+  //   existingAssignments: any[]
+  // ) {
+  //   // Get current active collector assignment on the loan
+  //   const currentCollectorAssignment = await this.prisma.loanAssignment.findFirst({
+  //     where: {
+  //       loanId: loanId,
+  //       roleId: 4, // Only collectors
+  //       assignedAt: { lte: new Date() },
+  //       OR: [
+  //         { unassignedAt: null },
+  //         { unassignedAt: { gte: new Date() } },
+  //       ],
+  //     },
+  //     select: {
+  //       userId: true,
+  //     },
+  //   });
 
-    if (!currentCollectorAssignment) {
-      return {
-        isValid: false,
-        hasDuplicates: false,
-        currentCollectorId: null,
-        invalidAssignments: existingAssignments,
-        reason: 'No active collector assignment on loan',
-      };
-    }
+  //   if (!currentCollectorAssignment) {
+  //     return {
+  //       isValid: false,
+  //       hasDuplicates: false,
+  //       currentCollectorId: null,
+  //       invalidAssignments: existingAssignments,
+  //       reason: 'No active collector assignment on loan',
+  //     };
+  //   }
 
-    const currentCollectorId = currentCollectorAssignment.userId;
+  //   const currentCollectorId = currentCollectorAssignment.userId;
 
-    // Check for duplicates (multiple assignments with roleId = 4)
-    const collectorAssignments = existingAssignments.filter((a) => a.roleId === 4);
-    const hasDuplicates = collectorAssignments.length > 1;
+  //   // Check for duplicates (multiple assignments with roleId = 4)
+  //   const collectorAssignments = existingAssignments.filter((a) => a.roleId === 4);
+  //   const hasDuplicates = collectorAssignments.length > 1;
 
-    // Check if any assignments are for users NOT currently assigned to the loan
-    const invalidAssignments = [];
-    let hasCorrectAssignment = false;
+  //   // Check if any assignments are for users NOT currently assigned to the loan
+  //   const invalidAssignments = [];
+  //   let hasCorrectAssignment = false;
 
-    for (const assignment of collectorAssignments) {
-      if (assignment.userId === currentCollectorId) {
-        hasCorrectAssignment = true;
-      } else {
-        // Check if this user has a valid assignment on the loan
-        const userHasAssignment = await this.prisma.loanAssignment.findFirst({
-          where: {
-            loanId: loanId,
-            userId: assignment.userId,
-            roleId: 4,
-            assignedAt: { lte: new Date() },
-            OR: [
-              { unassignedAt: null },
-              { unassignedAt: { gte: new Date() } },
-            ],
-          },
-        });
+  //   for (const assignment of collectorAssignments) {
+  //     if (assignment.userId === currentCollectorId) {
+  //       hasCorrectAssignment = true;
+  //     } else {
+  //       // Check if this user has a valid assignment on the loan
+  //       const userHasAssignment = await this.prisma.loanAssignment.findFirst({
+  //         where: {
+  //           loanId: loanId,
+  //           userId: assignment.userId,
+  //           roleId: 4,
+  //           assignedAt: { lte: new Date() },
+  //           OR: [
+  //             { unassignedAt: null },
+  //             { unassignedAt: { gte: new Date() } },
+  //           ],
+  //         },
+  //       });
 
-        if (!userHasAssignment) {
-          invalidAssignments.push(assignment);
-        }
-      }
-    }
+  //       if (!userHasAssignment) {
+  //         invalidAssignments.push(assignment);
+  //       }
+  //     }
+  //   }
 
-    return {
-      isValid: hasCorrectAssignment && !hasDuplicates && invalidAssignments.length === 0,
-      hasDuplicates,
-      currentCollectorId,
-      hasCorrectAssignment,
-      invalidAssignments,
-      totalAssignments: collectorAssignments.length,
-    };
-  }
+  //   return {
+  //     isValid: hasCorrectAssignment && !hasDuplicates && invalidAssignments.length === 0,
+  //     hasDuplicates,
+  //     currentCollectorId,
+  //     hasCorrectAssignment,
+  //     invalidAssignments,
+  //     totalAssignments: collectorAssignments.length,
+  //   };
+  // }
 
-  // TEMPORARY: Reconcile transaction assignments with current active assignments for Feb 2026
-  async reconcileTransactionAssignments() {
-    const startTime = Date.now();
-    this.logger.log('Finding transactions with duplicate assignments for February 2026');
+  // // TEMPORARY: Reconcile transaction assignments with current active assignments for Feb 2026
+  // async reconcileTransactionAssignments() {
+  //   const startTime = Date.now();
+  //   this.logger.log('Fixing mismatched collector assignments for February 2026');
 
-    try {
-      // STEP 1: Get all February 2026 transactions
-      const transactions = await this.getTransactionsForMonth(2026, 2);
-      this.logger.log(`Found ${transactions.length} transactions to check`);
+  //   try {
+  //     // STEP 1: Get all February 2026 transactions
+  //     const transactions = await this.getTransactionsForMonth(2026, 2);
+  //     this.logger.log(`Found ${transactions.length} transactions to check`);
 
-      const duplicates = [];
+  //     // STEP 2: Get all unique loan IDs from transactions
+  //     const loanIds = [...new Set(transactions.filter(t => t.Loan).map(t => t.Loan.id))];
+  //     this.logger.log(`Found ${loanIds.length} unique loans`);
 
-      // STEP 2: Find transactions with duplicate assignments
-      for (const transaction of transactions) {
-        if (!transaction.Loan) {
-          continue;
-        }
+  //     // STEP 3: Batch fetch all current active collector assignments for these loans
+  //     const activeAssignments = await this.prisma.loanAssignment.findMany({
+  //       where: {
+  //         loanId: { in: loanIds },
+  //         roleId: 4, // Only collectors
+  //         assignedAt: { lte: new Date() },
+  //         OR: [
+  //           { unassignedAt: null },
+  //           { unassignedAt: { gte: new Date() } },
+  //         ],
+  //       },
+  //       select: {
+  //         loanId: true,
+  //         userId: true,
+  //       },
+  //     });
 
-        const assignments = transaction.TransactionUserAssignments;
+  //     // STEP 4: Create a map of loanId -> activeCollectorId for fast lookup
+  //     const activeCollectorMap = new Map<number, number>();
+  //     for (const assignment of activeAssignments) {
+  //       activeCollectorMap.set(assignment.loanId, assignment.userId);
+  //     }
 
-        // Check if transaction has more than one assignment (duplicates)
-        if (assignments.length > 1) {
-          duplicates.push({
-            transactionId: transaction.id,
-            loanId: transaction.Loan.id,
-            amount: Number(transaction.amount || 0),
-            paymentDate: transaction.paymentDate,
-            assignmentCount: assignments.length,
-            assignments: assignments.map(a => ({
-              id: a.id,
-              userId: a.userId,
-              roleId: a.roleId,
-              amount: Number(a.amount || 0),
-            })),
-          });
-        }
+  //     this.logger.log(`Mapped ${activeCollectorMap.size} active collector assignments`);
 
-        // Log progress
-        if (duplicates.length % 100 === 0 && duplicates.length > 0) {
-          this.logger.log(`Found ${duplicates.length} transactions with duplicates so far...`);
-        }
-      }
+  //     // STEP 5: Find and fix mismatched/missing transactions
+  //     const fixed = {
+  //       mismatched: [],
+  //       missing: [],
+  //     };
+  //     let deletedCount = 0;
+  //     let createdCount = 0;
 
-      const totalTime = Date.now() - startTime;
-      this.logger.log(`Analysis completed in ${totalTime}ms`);
+  //     for (const transaction of transactions) {
+  //       if (!transaction.Loan) {
+  //         continue;
+  //       }
 
-      return {
-        message: 'Duplicate transaction assignments found',
-        stats: {
-          totalTransactions: transactions.length,
-          transactionsWithDuplicates: duplicates.length,
-          durationMs: totalTime,
-        },
-        duplicates: duplicates,
-      };
-    } catch (error) {
-      this.logger.error(`Duplicate search failed: ${error.message}`, error.stack);
-      throw new HttpException('Failed to find duplicate transaction assignments', 500);
-    }
-  }
+  //       const assignments = transaction.TransactionUserAssignments;
+  //       const activeCollectorId = activeCollectorMap.get(transaction.Loan.id) || null;
+
+  //       // Skip if no active collector exists for this loan
+  //       if (!activeCollectorId) {
+  //         continue;
+  //       }
+
+  //       // CASE 1: Missing assignments - create new one
+  //       if (assignments.length === 0) {
+  //         await this.prisma.transactionUserAssignments.create({
+  //           data: {
+  //             transactionId: transaction.id,
+  //             userId: activeCollectorId,
+  //             roleId: 4,
+  //             amount: Number(transaction.amount || 0),
+  //             year: 2026,
+  //             month: 2,
+  //           },
+  //         });
+  //         createdCount++;
+
+  //         fixed.missing.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //           amount: Number(transaction.amount || 0),
+  //           paymentDate: transaction.paymentDate,
+  //           createdCollectorId: activeCollectorId,
+  //         });
+
+  //         // Log progress
+  //         if ((fixed.mismatched.length + fixed.missing.length) % 100 === 0) {
+  //           this.logger.log(`Processed ${fixed.mismatched.length + fixed.missing.length} transactions so far...`);
+  //         }
+  //         continue;
+  //       }
+
+  //       // CASE 2: Mismatched assignments - delete wrong ones and create correct one
+  //       const hasMatchingAssignment = assignments.some(a => a.userId === activeCollectorId);
+
+  //       if (!hasMatchingAssignment) {
+  //         const wrongAssignments = [];
+
+  //         // Soft delete all wrong assignments
+  //         for (const assignment of assignments) {
+  //           await this.prisma.transactionUserAssignments.update({
+  //             where: { id: assignment.id },
+  //             data: { deletedAt: new Date() },
+  //           });
+  //           deletedCount++;
+
+  //           wrongAssignments.push({
+  //             id: assignment.id,
+  //             userId: assignment.userId,
+  //             roleId: assignment.roleId,
+  //           });
+  //         }
+
+  //         // Create new assignment with correct collector
+  //         await this.prisma.transactionUserAssignments.create({
+  //           data: {
+  //             transactionId: transaction.id,
+  //             userId: activeCollectorId,
+  //             roleId: 4,
+  //             amount: Number(transaction.amount || 0),
+  //             year: 2026,
+  //             month: 2,
+  //           },
+  //         });
+  //         createdCount++;
+
+  //         fixed.mismatched.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //           amount: Number(transaction.amount || 0),
+  //           paymentDate: transaction.paymentDate,
+  //           currentActiveCollectorId: activeCollectorId,
+  //           deletedAssignments: wrongAssignments,
+  //         });
+
+  //         // Log progress
+  //         if ((fixed.mismatched.length + fixed.missing.length) % 100 === 0) {
+  //           this.logger.log(`Processed ${fixed.mismatched.length + fixed.missing.length} transactions so far...`);
+  //         }
+  //       }
+  //     }
+
+  //     const totalTime = Date.now() - startTime;
+  //     this.logger.log(`Fix completed in ${totalTime}ms`);
+
+  //     return {
+  //       message: 'Transaction assignments fixed successfully',
+  //       stats: {
+  //         totalTransactions: transactions.length,
+  //         mismatchedFixed: fixed.mismatched.length,
+  //         missingCreated: fixed.missing.length,
+  //         totalFixed: fixed.mismatched.length + fixed.missing.length,
+  //         wrongAssignmentsDeleted: deletedCount,
+  //         correctAssignmentsCreated: createdCount,
+  //         durationMs: totalTime,
+  //       },
+  //       fixed: {
+  //         mismatched: fixed.mismatched,
+  //         missing: fixed.missing,
+  //       },
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(`Fix failed: ${error.message}`, error.stack);
+  //     throw new HttpException('Failed to fix mismatched transaction assignments', 500);
+  //   }
+  // }
+
+  // // TEMPORARY: Verify all transaction assignments are correct for Feb 2026
+  // async verifyTransactionAssignments() {
+  //   const startTime = Date.now();
+  //   this.logger.log('Verifying transaction assignments for February 2026');
+
+  //   try {
+  //     // STEP 1: Get all February 2026 transactions
+  //     const transactions = await this.getTransactionsForMonth(2026, 2);
+  //     this.logger.log(`Found ${transactions.length} transactions to verify`);
+
+  //     // STEP 2: Get all unique loan IDs from transactions
+  //     const loanIds = [...new Set(transactions.filter(t => t.Loan).map(t => t.Loan.id))];
+  //     this.logger.log(`Found ${loanIds.length} unique loans`);
+
+  //     // STEP 3: Batch fetch all current active collector assignments for these loans
+  //     const activeAssignments = await this.prisma.loanAssignment.findMany({
+  //       where: {
+  //         loanId: { in: loanIds },
+  //         roleId: 4, // Only collectors
+  //         assignedAt: { lte: new Date() },
+  //         OR: [
+  //           { unassignedAt: null },
+  //           { unassignedAt: { gte: new Date() } },
+  //         ],
+  //       },
+  //       select: {
+  //         loanId: true,
+  //         userId: true,
+  //       },
+  //     });
+
+  //     // STEP 4: Create a map of loanId -> activeCollectorId for fast lookup
+  //     const activeCollectorMap = new Map<number, number>();
+  //     for (const assignment of activeAssignments) {
+  //       activeCollectorMap.set(assignment.loanId, assignment.userId);
+  //     }
+
+  //     this.logger.log(`Mapped ${activeCollectorMap.size} active collector assignments`);
+
+  //     // STEP 5: Verify each transaction
+  //     let correctCount = 0;
+  //     const issues = {
+  //       missing: [],
+  //       mismatched: [],
+  //       duplicates: [],
+  //       noActiveCollector: [],
+  //     };
+
+  //     for (const transaction of transactions) {
+  //       if (!transaction.Loan) {
+  //         continue;
+  //       }
+
+  //       const assignments = transaction.TransactionUserAssignments;
+  //       const activeCollectorId = activeCollectorMap.get(transaction.Loan.id);
+
+  //       // Case 1: No active collector on loan
+  //       if (!activeCollectorId) {
+  //         issues.noActiveCollector.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //         });
+  //         continue;
+  //       }
+
+  //       // Case 2: Missing assignment
+  //       if (assignments.length === 0) {
+  //         issues.missing.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //           expectedCollectorId: activeCollectorId,
+  //         });
+  //         continue;
+  //       }
+
+  //       // Case 3: Duplicate assignments
+  //       if (assignments.length > 1) {
+  //         issues.duplicates.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //           assignmentCount: assignments.length,
+  //           expectedCollectorId: activeCollectorId,
+  //           actualAssignments: assignments.map(a => ({
+  //             id: a.id,
+  //             userId: a.userId,
+  //           })),
+  //         });
+  //         continue;
+  //       }
+
+  //       // Case 4: Mismatched assignment
+  //       const assignment = assignments[0];
+  //       if (assignment.userId !== activeCollectorId) {
+  //         issues.mismatched.push({
+  //           transactionId: transaction.id,
+  //           loanId: transaction.Loan.id,
+  //           expectedCollectorId: activeCollectorId,
+  //           actualCollectorId: assignment.userId,
+  //           assignmentId: assignment.id,
+  //         });
+  //         continue;
+  //       }
+
+  //       // All good!
+  //       correctCount++;
+  //     }
+
+  //     const totalTime = Date.now() - startTime;
+  //     this.logger.log(`Verification completed in ${totalTime}ms`);
+
+  //     const totalIssues =
+  //       issues.missing.length +
+  //       issues.mismatched.length +
+  //       issues.duplicates.length +
+  //       issues.noActiveCollector.length;
+
+  //     return {
+  //       message: totalIssues === 0
+  //         ? 'All transaction assignments are correct!'
+  //         : 'Found issues with transaction assignments',
+  //       stats: {
+  //         totalTransactions: transactions.length,
+  //         correctAssignments: correctCount,
+  //         missingAssignments: issues.missing.length,
+  //         mismatchedAssignments: issues.mismatched.length,
+  //         duplicateAssignments: issues.duplicates.length,
+  //         noActiveCollector: issues.noActiveCollector.length,
+  //         totalIssues: totalIssues,
+  //         durationMs: totalTime,
+  //       },
+  //       issues: {
+  //         missing: issues.missing.slice(0, 50), // First 50 of each type
+  //         mismatched: issues.mismatched.slice(0, 50),
+  //         duplicates: issues.duplicates.slice(0, 50),
+  //         noActiveCollector: issues.noActiveCollector.slice(0, 50),
+  //       },
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(`Verification failed: ${error.message}`, error.stack);
+  //     throw new HttpException('Failed to verify transaction assignments', 500);
+  //   }
+  // }
 }
