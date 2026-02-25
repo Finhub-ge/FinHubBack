@@ -462,7 +462,8 @@ export class AdminController {
     @Body() data: UploadPlanDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return await this.adminService.importPlan(file.buffer, user.id);
+    // return await this.adminService.importPlan(file.buffer, user.id);
+    return await this.adminService.importPlanNew(file.buffer, user.id);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
@@ -487,5 +488,13 @@ export class AdminController {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       disposition: `attachment; filename=Payment_report_${Date.now()}.xlsx`
     });
+  }
+
+  // TEMPORARY: Backfill transaction assignments for February 2026
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('backfill-transaction-assignments')
+  async backfillTransactionAssignments(@GetUser() user: User) {
+    return await this.adminService.backfillTransactionAssignments();
   }
 }

@@ -1,18 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { GetPlanReportDto, GetPlanReportWithPaginationDto } from './dto/getPlanReport.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CurrencyExchange_currency, Prisma, User } from '@prisma/client';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { statusNameMap } from 'src/enums/loanStatus.enum';
-import { aggregateActivityCounts, aggregateCharges, aggregateCourtAndExecutionCases, aggregateLoanStatistics, aggregateOldPlanReport, aggregateTransactionData, buildDataMaps, buildSummaryFromAggregates, calculateCollectorMetrics, calculateDebtorStatusChanges, calculateTransactionCountWithTwoDayRule, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory, fetchTargetAggregates, getEmptySummary, mapOldPlanReport } from 'src/helpers/report.helper';
+import { aggregateActivityCounts, aggregateCharges, aggregateCourtAndExecutionCases, aggregateLoanStatistics, aggregateOldPlanReport, aggregateTransactionData, buildDataMaps, buildSummaryFromAggregates, calculateCollectorMetrics, calculateCollectorMetricsNew, calculateDebtorStatusChanges, calculateTransactionCountWithTwoDayRule, determinePlanDataSource, fetchAndProcessTransactions, fetchCollectionData, fetchDebtorStatusHistory, fetchTargetAggregates, getEmptySummary, mapOldPlanReport } from 'src/helpers/report.helper';
 import { getYear } from 'src/helpers/date.helper';
 import { Role } from 'src/enums/role.enum';
 import { LoanService } from 'src/loan/loan.service';
 import { CurrencyHelper } from 'src/helpers/currency.helper';
 import { ScopeService } from 'src/helpers/scope.helper';
+import { buildActivityMaps, calculateDateRange, fetchActivityData, fetchTargetsWithLoans, transformTargetsWithActivity } from 'src/helpers/dashboard.helper';
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
   constructor(
     private prisma: PrismaService,
     private readonly paginationService: PaginationService,
@@ -1108,5 +1110,299 @@ export class DashboardService {
       where: targetWhere,
     });
     return this.paginationService.createPaginatedResult(result, total, { page, limit, skip });
+  }
+
+  /**
+   * NEW: Get plan report using junction table - optimized for performance
+   */
+  async getPlanReportNew(getPlanReportDto: GetPlanReportWithPaginationDto, user: any) {
+    const currentYear = new Date().getFullYear();
+
+    const { page, limit, skip, ...filters } = getPlanReportDto;
+    let { collectorId } = filters;
+
+    const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
+
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
+
+    if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
+      return this.getOldPlanReport(getPlanReportDto, collectorId);
+    }
+
+    if (newYears.length > 0 || defaultIsNew) {
+      const paginationParams = this.paginationService.getPaginationParams({ page, limit, skip });
+
+      // Build Prisma where clause for targets
+      const targetWhere: any = { User: { isActive: true } };
+      if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
+      if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
+
+      // Calculate date range
+      const dateRange = await calculateDateRange(this.prisma, targetWhere, filters);
+      // console.log('dateRange', dateRange)
+      if (!dateRange) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit, skip });
+      }
+
+      const { firstDayOfMonth, endDate } = dateRange;
+
+      // const collectorIds = collectorId?.length ? collectorId : [];
+
+      // STEP 1: Fetch targets with junction and basic loan data
+      const data = await fetchTargetsWithLoans(this.prisma, targetWhere, paginationParams);
+
+      if (data.length === 0) {
+        return this.paginationService.createPaginatedResult([], 0, { page, limit, skip });
+      }
+
+      const targetIds = data.map(t => t.id);
+
+      // STEP 2: Fetch all activity data and exchange rates in parallel
+      const [rates, activityData] = await Promise.all([
+        this.currencyHelper.getExchangeRates(firstDayOfMonth, [
+          CurrencyExchange_currency.USD,
+          CurrencyExchange_currency.EUR,
+        ]),
+        fetchActivityData(this.prisma, targetIds, collectorId, firstDayOfMonth, endDate)
+      ]);
+
+      // STEP 3: Build lookup maps and transform data
+      const activityMaps = buildActivityMaps(activityData);
+      const transformedData = transformTargetsWithActivity(data, activityMaps);
+
+      // Fetch and process transactions with 2-day rule
+      const actualCollectorIds = data.map(t => t.collectorId);
+      const transactionData = await fetchAndProcessTransactions(
+        this.prisma,
+        actualCollectorIds,
+        data.map(d => d.year),
+        data.map(d => d.month)
+      );
+      console.log('transactionData', JSON.stringify(transactionData))
+      // Fetch debtor status history
+      const allLoans = transformedData.flatMap(td => td.collectionData.loans);
+      const debtorIds = allLoans.map(l => l.debtorId).filter(Boolean) as number[];
+      const debtorStatusMap = await fetchDebtorStatusHistory(this.prisma, debtorIds);
+
+      // Calculate metrics for each collector target
+      const result = transformedData.map(({ target, collectionData }) => {
+        // Normalize loans
+        const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
+          collectionData.loans,
+          rates
+        );
+
+        const normalizedData = {
+          ...collectionData,
+          loans: normalizedLoans,
+        };
+
+        // Add loanIds for backward compatibility
+        const itemWithLoanIds = {
+          ...target,
+          loanIds: normalizedLoans.map(l => l.id),
+        };
+
+        return calculateCollectorMetricsNew(
+          itemWithLoanIds,
+          normalizedData,
+          transactionData,
+          debtorStatusMap,
+          filters
+        );
+      });
+
+      // Get total count for pagination
+      const total = await this.prisma.collectorsMonthlyTarget.count({
+        where: targetWhere,
+      });
+
+
+      return this.paginationService.createPaginatedResult(result, total, { page, limit, skip });
+    }
+  }
+
+  /**
+   * NEW: Get plan report summary using junction table
+   * Single query with all relations included
+   */
+  async getPlanReportSummaryNew(getPlanReportDto: GetPlanReportDto, user: any) {
+    const currentYear = new Date().getFullYear();
+    const filters = getPlanReportDto;
+    let { collectorId } = filters;
+
+    const { oldYears, newYears, defaultIsNew } = determinePlanDataSource(filters.year, currentYear);
+
+    collectorId = await this.scopeService.resolveCollectorScope(
+      user,
+      collectorId
+    );
+
+    if (oldYears.length > 0 || (!filters.year && currentYear < 2026)) {
+      return this.getOldPlanReportSummer(getPlanReportDto, collectorId);
+    }
+
+    if (newYears.length > 0 || defaultIsNew) {
+      // Build Prisma where clause for targets
+      const targetWhere: any = { User: { isActive: true } };
+      if (filters.year && filters.year.length > 0) targetWhere.year = { in: filters.year };
+      if (filters.month && filters.month.length > 0) targetWhere.month = { in: filters.month };
+      if (collectorId?.length) targetWhere.collectorId = { in: collectorId };
+
+      // Calculate date range
+      const dateRange = await calculateDateRange(this.prisma, targetWhere, filters);
+      if (!dateRange) {
+        return getEmptySummary();
+      }
+
+      const { firstDayOfMonth, endDate } = dateRange;
+      const collectorIds = collectorId?.length ? collectorId : [];
+
+      // Fetch targets with basic loan data (no nested activity relations)
+      const data = await fetchTargetsWithLoans(this.prisma, targetWhere);
+
+      if (data.length === 0) {
+        return getEmptySummary();
+      }
+
+      const targetIds = data.map(t => t.id);
+
+      // Fetch all activity data and exchange rates in parallel using optimized JOINs
+      const [rates, activityData] = await Promise.all([
+        this.currencyHelper.getExchangeRates(firstDayOfMonth, [
+          CurrencyExchange_currency.USD,
+          CurrencyExchange_currency.EUR,
+        ]),
+        fetchActivityData(this.prisma, targetIds, collectorIds, firstDayOfMonth, endDate)
+      ]);
+
+      // Build lookup maps and transform data
+      const activityMaps = buildActivityMaps(activityData);
+      const transformedData = transformTargetsWithActivity(data, activityMaps);
+
+      // Fetch and process transactions with 2-day rule
+      const actualCollectorIds = data.map(t => t.collectorId);
+      const transactionData = await fetchAndProcessTransactions(
+        this.prisma,
+        actualCollectorIds,
+        data.map(d => d.year),
+        data.map(d => d.month)
+      );
+
+      // Fetch debtor status history
+      const allLoans = transformedData.flatMap(td => td.collectionData.loans);
+      const debtorIds = allLoans.map(l => l.debtorId).filter(Boolean) as number[];
+      const debtorStatusMap = await fetchDebtorStatusHistory(this.prisma, debtorIds);
+
+      // Calculate metrics for each collector target and sum them
+      const results = transformedData.map(({ target, collectionData }) => {
+        // Normalize loans
+        const normalizedLoans = this.currencyHelper.convertLoanRemainingToBaseCurrency(
+          collectionData.loans,
+          rates
+        );
+
+        const normalizedData = {
+          ...collectionData,
+          loans: normalizedLoans,
+        };
+
+        // Add loanIds for backward compatibility
+        const itemWithLoanIds = {
+          ...target,
+          loanIds: normalizedLoans.map(l => l.id),
+        };
+
+        return calculateCollectorMetricsNew(
+          itemWithLoanIds,
+          normalizedData,
+          transactionData,
+          debtorStatusMap,
+          filters
+        );
+      });
+
+      // Aggregate all results
+      const summary = results.reduce((acc, item) => {
+        return {
+          openingPrincipal: acc.openingPrincipal + item.openingPrincipal,
+          monthlyPlan: acc.monthlyPlan + item.monthlyPlan,
+          adjustedPlan: acc.adjustedPlan + item.adjustedPlan,
+          collectedAmount: acc.collectedAmount + item.collectedAmount,
+          paidLoanCount: acc.paidLoanCount + item.paidLoanCount,
+          newLoanCount: acc.newLoanCount + item.newLoanCount,
+          communicatedCount: acc.communicatedCount + item.communicatedCount,
+          unreachableCount: acc.unreachableCount + item.unreachableCount,
+          agreementCount: acc.agreementCount + item.agreementCount,
+          agreementCancelledCount: acc.agreementCancelledCount + item.agreementCancelledCount,
+          refuseToPayCount: acc.refuseToPayCount + item.refuseToPayCount,
+          promiseToPayCount: acc.promiseToPayCount + item.promiseToPayCount,
+          failedPromiseCount: acc.failedPromiseCount + item.failedPromiseCount,
+          totalLoanCount: acc.totalLoanCount + item.totalLoanCount,
+          callCount: acc.callCount + item.callCount,
+          smsCount: acc.smsCount + item.smsCount,
+          markCount: acc.markCount + item.markCount,
+          commentCount: acc.commentCount + item.commentCount,
+          committeeRequestCount: acc.committeeRequestCount + item.committeeRequestCount,
+          inactiveOver40DaysCount: acc.inactiveOver40DaysCount + item.inactiveOver40DaysCount,
+          debtorStatusCount: acc.debtorStatusCount + item.debtorStatusCount,
+          totalActivities: acc.totalActivities + item.totalActivities,
+          totalLegalCharges: acc.totalLegalCharges + item.totalLegalCharges,
+          totalOtherCharges: acc.totalOtherCharges + item.totalOtherCharges,
+          courtCaseCount: acc.courtCaseCount + item.courtCaseCount,
+          courtPrincipalSum: acc.courtPrincipalSum + item.courtPrincipalSum,
+          executionCaseCount: acc.executionCaseCount + item.executionCaseCount,
+          executionPrincipalSum: acc.executionPrincipalSum + item.executionPrincipalSum,
+        };
+      }, {
+        openingPrincipal: 0,
+        monthlyPlan: 0,
+        adjustedPlan: 0,
+        collectedAmount: 0,
+        paidLoanCount: 0,
+        newLoanCount: 0,
+        communicatedCount: 0,
+        unreachableCount: 0,
+        agreementCount: 0,
+        agreementCancelledCount: 0,
+        refuseToPayCount: 0,
+        promiseToPayCount: 0,
+        failedPromiseCount: 0,
+        totalLoanCount: 0,
+        callCount: 0,
+        smsCount: 0,
+        markCount: 0,
+        commentCount: 0,
+        committeeRequestCount: 0,
+        inactiveOver40DaysCount: 0,
+        debtorStatusCount: 0,
+        totalActivities: 0,
+        totalLegalCharges: 0,
+        totalOtherCharges: 0,
+        courtCaseCount: 0,
+        courtPrincipalSum: 0,
+        executionCaseCount: 0,
+        executionPrincipalSum: 0,
+      });
+
+      // Calculate average rates
+      const collectionRatePercent = summary.monthlyPlan > 0
+        ? (summary.collectedAmount / summary.monthlyPlan) * 100
+        : 0;
+      const paymentSuccessRate = summary.totalLoanCount > 0
+        ? (summary.paidLoanCount / summary.totalLoanCount) * 100
+        : 0;
+
+      return {
+        ...summary,
+        collectionRatePercent,
+        paymentSuccessRate,
+        totalCallDurationSec: "00:00:00",
+      };
+    }
   }
 }

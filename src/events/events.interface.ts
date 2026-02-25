@@ -34,6 +34,13 @@ export interface TransactionDeletedEvent {
   paymentDate: Date;
   userId: number;
   loanRemainingId: number;
+  transactionSummary: {
+    principal: number;
+    interest: number;
+    penalty: number;
+    fees: number;
+    legal: number;
+  };
   newBalances: {
     principal: number;
     interest: number;
@@ -156,3 +163,18 @@ export interface CommitteeRespondedEvent {
   currentLoanRemainingId: number;
 }
 
+export interface MonthlyTargetCreatedEvent {
+  targetId: number;
+  collectorId: number;
+  year: number;
+  month: number;
+  loanIds: number[];
+}
+
+export interface MonthlyTargetUpdatedEvent {
+  targetId: number;
+  collectorId: number;
+  year: number;
+  month: number;
+  loanIds: number[];
+}
