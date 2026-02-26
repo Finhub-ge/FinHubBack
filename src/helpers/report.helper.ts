@@ -503,7 +503,7 @@ export const calculateCollectorMetrics = (
   const relatedLoans = ids.map((id: number) => loanMap.get(id)).filter(Boolean);
 
   // Calculate total principal
-  const totalPrincipal = relatedLoans.reduce((sum, loan) => sum + Number(loan.LoanRemaining[0]?.principal), 0);
+  const totalPrincipal = relatedLoans.reduce((sum, loan) => sum + Number(loan?.LoanRemaining?.[0]?.principal ?? 0), 0);
 
   // Calculate over 40 days count
   const over40DaysCount = relatedLoans.filter(loan => loan.actDays > 40).length;
