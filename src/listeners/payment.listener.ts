@@ -229,6 +229,9 @@ export class PaymentEventListener {
   }
 
   private async updateLoanRemaining(event: PaymentTransactionCreatedEvent) {
+    const newAgreementMin = event.allocationResult.newCurrentDebt = Number(event.agreementMin)
+      ? Number(event.allocationResult.newCurrentDebt)
+      : Number(event.agreementMin);
     // Soft delete old loan remaining
     await this.prisma.loanRemaining.update({
       where: { id: event.loanRemainingId },
@@ -245,7 +248,7 @@ export class PaymentEventListener {
         otherFee: event.allocationResult.newBalances.otherFee,
         legalCharges: event.allocationResult.newBalances.legalCharges,
         currentDebt: event.allocationResult.newCurrentDebt,
-        agreementMin: event.agreementMin,
+        agreementMin: newAgreementMin,
       },
     });
   }
