@@ -17,6 +17,7 @@ export class ScopeService {
       Role.ADMIN,
       Role.SUPER_ADMIN,
       Role.OPERATIONAL_MANAGER,
+      Role.CONTROLLER,
     ].includes(user.role_name);
 
     // 1. Collector Logic
