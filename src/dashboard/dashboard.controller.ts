@@ -16,14 +16,14 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) { }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR, Role.CONTROLLER)
   @Get('planChart')
   getPlanChart(@Query() getPlanChartDto: GetPlanReportDto, @GetUser() user: User) {
     return this.dashboardService.getPlanChart(getPlanChartDto, user);
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR, Role.CONTROLLER)
   @Get('planReport')
   getPlanReport(@Query() getPlanReportDto: GetPlanReportWithPaginationDto, @GetUser() user: any) {
     // return this.dashboardService.getPlanReport(getPlanReportDto, user);
@@ -31,7 +31,7 @@ export class DashboardController {
   }
 
   @UseGuards(JwtGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR)
+  @Roles(Role.ADMIN, Role.OPERATIONAL_MANAGER, Role.COLLECTOR, Role.CONTROLLER)
   @Get('planReportSummary')
   getPlanReportSummary(@Query() getPlanReportDto: GetPlanReportDto, @GetUser() user: any) {
     // return this.dashboardService.getPlanReportSummary(getPlanReportDto, user);
