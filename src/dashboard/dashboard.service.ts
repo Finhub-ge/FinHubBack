@@ -1182,7 +1182,7 @@ export class DashboardService {
         data.map(d => d.year),
         data.map(d => d.month)
       );
-      console.log('transactionData', JSON.stringify(transactionData))
+
       // Fetch debtor status history
       const allLoans = transformedData.flatMap(td => td.collectionData.loans);
       const debtorIds = allLoans.map(l => l.debtorId).filter(Boolean) as number[];
