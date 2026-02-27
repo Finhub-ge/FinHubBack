@@ -482,6 +482,7 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.ACCOUNTANT, Role.OPERATIONAL_MANAGER, Role.OPERATIONAL_DIRECTOR)
   @Get('paymentReport/exportExcel')
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @Header('Access-Control-Expose-Headers', 'Content-Disposition')
   async exportPaymentReport(@GetUser() user: User, @Query() getPaymentReportDto: GetPaymentReportDto) {
     const excelBuffer = await this.adminService.exportPaymentReport(getPaymentReportDto, user);
     return new StreamableFile(Buffer.from(excelBuffer), {
