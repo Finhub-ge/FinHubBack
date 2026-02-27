@@ -105,8 +105,9 @@ export class LoanController {
     // Disable response buffering for streaming large files
     res.set({
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no', // Disable nginx buffering if behind nginx
+      'Access-Control-Expose-Headers': 'Content-Disposition',
     });
 
     const excelBuffer = await this.loanService.exportLoans(filterDto, user);
