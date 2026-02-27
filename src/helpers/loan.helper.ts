@@ -149,16 +149,28 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   const regionalManager = isRegionalManager(user);
   const isCollector = user.role_name === 'collector';
 
-  const getUserTeamLead = await prisma.teamMembership.findFirst({
+  const membership = await prisma.teamMembership.findFirst({
     where: {
       teamId: user.team_membership?.[0]?.teamId,
       deletedAt: null,
       teamRole: TeamMembership_teamRole.leader
     },
     select: {
-      userId: true
+      userId: true, // team lead id
+      Team: {
+        select: {
+          Region: {
+            select: {
+              managerId: true // regional manager id
+            }
+          }
+        }
+      }
     }
   });
+
+  const teamLeadId = membership?.userId;
+  const regionalManagerId = membership?.Team?.Region?.managerId;
 
   // Lawyers, team leads, admins: see ALL comments
   if (!isCollector || teamLead || regionalManager) {
@@ -186,29 +198,51 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   // const assignmentDate = assignments[0].createdAt;
 
   // Build collector filter: combines BOTH requirements
+  const orConditions: any[] = [
+    { userId: user.id }, // Own comments
+    {
+      User: {
+        Role: {
+          name: {
+            in: [
+              'lawyer',
+              'junior_lawyer',
+              'execution_lawyer',
+              'super_lawyer'
+            ]
+          }
+        }
+      }
+    }
+  ];
+
+  // Add team lead if exists
+  if (teamLeadId) {
+    orConditions.push({ userId: teamLeadId });
+  }
+
+  // Add regional manager if exists
+  if (regionalManagerId) {
+    orConditions.push({ userId: regionalManagerId });
+  }
   return {
     AND: [
       { deletedAt: null },
 
-      // Only from assignment date onwards
-      // { createdAt: { gte: assignmentDate } },
-
-      // Only own + team leads + lawyers
       {
-        OR: [
-          { userId: user.id }, // Own comments
-          { userId: getUserTeamLead?.userId }, // Team lead comments
-          { User: { Role: { name: { in: ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'] } } } } // Lawyer comments
-        ]
+        OR: orConditions
       },
 
-      // Exclude other collectors' archived comments (preserve existing logic)
       {
         NOT: {
           AND: [
-            { archived: true }, // Is archived
-            { userId: { not: user.id } }, // Not their own
-            { User: { Role: { name: 'collector' } } } // Is from a collector
+            { archived: true }, // archived
+            { userId: { not: user.id } }, // not their own
+            {
+              User: {
+                Role: { name: 'collector' }
+              }
+            }
           ]
         }
       }
