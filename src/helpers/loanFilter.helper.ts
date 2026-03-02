@@ -279,6 +279,11 @@ export const hasLoanAssignmentInTransactionWhere = (where: any): boolean => {
     return true;
   }
 
+  // Also check for TransactionUserAssignments filter (used for payment reports)
+  if (where.TransactionUserAssignments) {
+    return true;
+  }
+
   return false;
 };
 
