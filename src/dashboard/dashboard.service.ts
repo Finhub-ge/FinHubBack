@@ -73,7 +73,7 @@ export class DashboardService {
         const firstDayOfMonth = new Date(Date.UTC(c.year, c.month - 1, 1));
         const lastDayOfMonth = new Date(Date.UTC(c.year, c.month, 1));
 
-        if (c.createdAt >= firstDayOfMonth && c.createdAt <= lastDayOfMonth) {
+        if (c.Transaction.paymentDate >= firstDayOfMonth && c.Transaction.paymentDate <= lastDayOfMonth) {
           collectedAmounts[c.month - 1] += amount * rate;
         }
       });
@@ -164,6 +164,7 @@ export class DashboardService {
               amount: true,
               currency: true,
               rate: true,
+              paymentDate: true,
               Loan: {
                 select: {
                   id: true,
