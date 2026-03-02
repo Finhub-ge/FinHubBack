@@ -248,6 +248,26 @@ export class AdminService {
             },
           },
         }
+      },
+      TransactionUserAssignments: {
+        where: {
+          roleId: 4,  // Only collectors
+          deletedAt: null
+        },
+        select: {
+          userId: true,
+          roleId: true,
+          amount: true,
+          year: true,
+          month: true,
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true
+            }
+          }
+        }
       }
     };
     if (options?.isReport) {
@@ -316,10 +336,13 @@ export class AdminService {
         loanFilter.Portfolio = { id: { in: filters.portfolioseller } };
       }
       if (filters.assignedCollector?.length) {
-        loanFilter.LoanAssignment = {
+        // Filter by TransactionUserAssignments, not LoanAssignment
+        // This shows collectors who were assigned on the paymentDate
+        where.TransactionUserAssignments = {
           some: {
             userId: { in: filters.assignedCollector },
-            isActive: true,
+            roleId: 4,  // Collectors only
+            deletedAt: null,
           },
         };
       }
@@ -437,6 +460,10 @@ export class AdminService {
           penalty: true,
           fees: true,
           legal: true,
+          TransactionUserAssignments: {
+            where: { roleId: 4, deletedAt: null },
+            select: { userId: true }
+          }
         },
         ...(skipUserScope ? { _skipUserScope: true } : {}),
         ...(allowTeamAccess && !skipUserScope ? { _allowTeamAccess: true } : {}),
