@@ -3458,7 +3458,7 @@ export class AdminService {
     const collectorIds = dataToInsert.map(d => d.collectorId);
 
     const firstDayOfMonth = new Date(Date.UTC(dataToInsert[0].year, (dataToInsert[0].month - 1), 1));
-    const lastDayOfMonth = new Date(Date.UTC(dataToInsert[0].year, dataToInsert[0].month, 0));
+    const lastDayOfMonth = new Date(Date.UTC(dataToInsert[0].year, dataToInsert[0].month, 1));
 
     // TEMPORARY: Fetch loan assignments based on existing CollectorsMonthlyTarget created date
     // const enrichedData = [];
