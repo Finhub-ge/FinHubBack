@@ -518,7 +518,7 @@ export const calculateCollectorMetrics = (
   // Determine date range for filtering
   // const start = getDateOnlyString(item.createdAt);
   const firstDayOfMonth = new Date(Date.UTC(item.year, (item.month - 1), 1));
-  const lastDayOfMonth = new Date(Date.UTC(item.year, item.month, 0));
+  const lastDayOfMonth = new Date(Date.UTC(item.year, item.month, 1));
 
   const key = `${item.collectorId}_${item.year}_${item.month}`;
   const txs = txMap.get(key) ?? [];
