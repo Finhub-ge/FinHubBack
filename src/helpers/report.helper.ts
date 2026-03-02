@@ -385,6 +385,7 @@ export const fetchAndProcessTransactions = async (
           legal: true,
           currency: true,
           rate: true,
+          paymentDate: true,
           Loan: {
             select: {
               id: true,
@@ -523,7 +524,7 @@ export const calculateCollectorMetrics = (
   const key = `${item.collectorId}_${item.year}_${item.month}`;
   const txs = txMap.get(key) ?? [];
 
-  const filteredTxs = txs.filter((tx: any) => tx.createdAt >= firstDayOfMonth && tx.createdAt <= lastDayOfMonth);
+  const filteredTxs = txs.filter((tx: any) => tx?.Transaction?.paymentDate >= firstDayOfMonth && tx?.Transaction?.paymentDate <= lastDayOfMonth);
 
   const totals = filteredTxs.reduce(
     (acc, { amount = 0, fees = 0, legal = 0, Transaction }) => {
