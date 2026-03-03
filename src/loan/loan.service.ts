@@ -330,7 +330,9 @@ export class LoanService {
 
     // Portfolio filter
     if (portfolio?.length) {
-      where.portfolioCaseGroupId = { in: portfolio };
+      where.PortfolioCaseGroup = {
+        id: { in: portfolio },
+      };
     }
 
     // Portfolio seller filter

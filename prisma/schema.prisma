@@ -2352,7 +2352,7 @@ model CreditInfoBatch {
   periodStart        DateTime             @db.Date
   periodEnd          DateTime             @db.Date
   asOfDate           DateTime             @db.DateTime(0)
-  batchIdentifier    String               @unique(map: "CreditInfoBatch_batchIdentifier") @db.VarChar(255)
+  batchIdentifier    String               @db.VarChar(255)
   contractsTotal     Int                  @default(0)
   contractsOpen      Int                  @default(0)
   contractsClosed    Int                  @default(0)
