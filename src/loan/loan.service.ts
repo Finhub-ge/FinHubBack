@@ -945,7 +945,7 @@ export class LoanService {
             createdAt: true,
             User_Reminders_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
           },
-          where: { deletedAt: null, status: true },
+          where: { deletedAt: null, fromUserId: user.id, toUserId: user.id },
           orderBy: { deadline: 'desc' }
         },
         LoanAssignmentHistory: {
@@ -3311,6 +3311,8 @@ export class LoanService {
         type: {
           in: [Reminders_type.Callback]
         },
+        fromUserId: userId,
+        toUserId: userId,
       },
       select: {
         id: true,
