@@ -296,6 +296,8 @@ export const generateExcelStream = async (
     width: 15,
   }));
 
+  // add extra columns
+  columns.splice(columns.indexOf('visitStatus') + 1, 0, 'visitStatusDate');
   // Add header row
   const loanHeaders = headerMap || getLoanExportHeaders();
   const displayHeaders = getDisplayHeaders(columns, loanHeaders);
