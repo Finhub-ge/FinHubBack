@@ -1099,6 +1099,7 @@ export const attachLatestRecordsToLoans = (
       id: visit.id,
       status: visit.status,
       comment: visit.comment,
+      createdAt: visit.createdAt,
       LoanAddress: visit.addressId ? {
         id: visit.addressId,
         address: visit.addressText,
