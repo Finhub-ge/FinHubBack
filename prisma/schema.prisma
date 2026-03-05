@@ -203,6 +203,7 @@ model Loan {
   Comments                   Comments[]
   Committee                  Committee[]
   CreditInfoContract         CreditInfoContract[]
+  DebtorGuarantors           DebtorGuarantors[]
   LawyerRequest              LawyerRequest?
   Debtor                     Debtor                       @relation(fields: [debtorId], references: [id], onDelete: Cascade)
   Portfolio                  Portfolio                    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
@@ -936,6 +937,7 @@ model DebtorRealEstate {
 model DebtorGuarantors {
   id        Int       @id @default(autoincrement())
   debtorId  Int
+  loanId    Int?
   firstName String
   lastName  String
   phone     String?
@@ -946,8 +948,10 @@ model DebtorGuarantors {
   updatedAt DateTime  @default(now()) @db.DateTime(0)
   deletedAt DateTime? @db.DateTime(0)
   Debtor    Debtor    @relation(fields: [debtorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorGuarantors_1")
+  Loan      Loan?     @relation(fields: [loanId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_DebtorGuarantors_2")
 
   @@index([debtorId], map: "fk_DebtorGuarantors_1")
+  @@index([loanId], map: "fk_DebtorGuarantors_2")
 }
 
 model Uploads {
@@ -2352,7 +2356,7 @@ model CreditInfoBatch {
   periodStart        DateTime             @db.Date
   periodEnd          DateTime             @db.Date
   asOfDate           DateTime             @db.DateTime(0)
-  batchIdentifier    String               @unique(map: "CreditInfoBatch_batchIdentifier") @db.VarChar(255)
+  batchIdentifier    String               @db.VarChar(255)
   contractsTotal     Int                  @default(0)
   contractsOpen      Int                  @default(0)
   contractsClosed    Int                  @default(0)
