@@ -3111,10 +3111,6 @@ export class LoanService {
         orderBy: { createdAt: 'desc' },
       });
 
-      if (!visit) {
-        return
-      }
-
       // Map enum to ID
       const visitStatusToId = {
         'n_a': 1,
@@ -3123,8 +3119,8 @@ export class LoanService {
         'canceled': 4,
       };
 
-      currentStatusId = visitStatusToId[visit.status];
-      currentStatusName = visit.status;
+      currentStatusId = visit ? visitStatusToId[visit.status] : 1;
+      currentStatusName = visit ? visit.status : 'n_a';
     }
 
     // Get allowed transitions from StatusMatrix
@@ -3338,7 +3334,14 @@ export class LoanService {
     }
 
     return await this.prisma.tasks.findMany({
-      where: { loanId: loan.id, deletedAt: null, toUserId: userId, viewedAt: null },
+      where: {
+        deletedAt: null,
+        loanId: loan.id,
+        OR: [
+          { fromUser: userId, viewedAt: null },
+          { toUserId: userId, taskStatusId: { not: { in: [2, 4] } } }
+        ],
+      },
       include: {
         User_Tasks_fromUserToUser: { select: { id: true, firstName: true, lastName: true } },
         User_Tasks_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
@@ -3422,7 +3425,7 @@ export class LoanService {
     const rules: Record<number, any> = {
       60: { id: { in: [0] } },
       61: { id: { notIn: [6] } },
-      62: { id: { in: [6] } },
+      62: { id: { in: [6, 10] } },
       64: { id: { in: [8] } },
       65: { id: { in: [5, 8] } },
     };

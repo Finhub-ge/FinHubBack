@@ -1044,11 +1044,11 @@ export class AdminService {
   async updateTasksViewed(ids: number[], userId: number) {
     const where = {
       id: { in: ids },
-      toUserId: userId,
+      fromUser: userId,
       viewedAt: null,
       deletedAt: null,
       taskStatusId: {
-        in: [2, 4, 6]
+        in: [2, 4]
       }
     };
     const tasks = await this.prisma.tasks.findMany({
