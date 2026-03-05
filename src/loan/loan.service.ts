@@ -719,6 +719,9 @@ export class LoanService {
           }
         },
         LoanStatusHistory: {
+          where: {
+            deletedAt: null
+          },
           select: {
             LoanStatusNewStatus: { select: { name: true } },
             LoanStatusOldStatus: { select: { name: true } },
@@ -1609,317 +1612,317 @@ export class LoanService {
     throw new HttpException('Debtor status updated successfully', 200);
   }
 
-  async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, user: any) {
-    const loan = await this.prisma.loan.findUnique({
-      where: { publicId: String(publicId), deletedAt: null },
-      select: {
-        id: true,
-        caseId: true,
-        debtorId: true,
-        LoanStatus: true,
-        LoanAssignment: true,
-      }
-    });
+  // async updateLoanStatus(publicId: ParseUUIDPipe, updateLoanStatusDto: UpdateLoanStatusDto, user: any) {
+  //   const loan = await this.prisma.loan.findUnique({
+  //     where: { publicId: String(publicId), deletedAt: null },
+  //     select: {
+  //       id: true,
+  //       caseId: true,
+  //       debtorId: true,
+  //       LoanStatus: true,
+  //       LoanAssignment: true,
+  //     }
+  //   });
 
-    if (!loan) {
-      throw new NotFoundException('Loan not found');
-    }
+  //   if (!loan) {
+  //     throw new NotFoundException('Loan not found');
+  //   }
 
-    const status = await this.prisma.loanStatus.findUnique({
-      where: { id: updateLoanStatusDto.statusId },
-    });
+  //   const status = await this.prisma.loanStatus.findUnique({
+  //     where: { id: updateLoanStatusDto.statusId },
+  //   });
 
-    if (!status) {
-      throw new NotFoundException('Status not found');
-    }
+  //   if (!status) {
+  //     throw new NotFoundException('Status not found');
+  //   }
 
-    // Check StatusMatrix - is this transition allowed?
-    const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
-      where: {
-        entityType: 'LOAN',
-        fromStatusId: loan.LoanStatus.id,
-        toStatusId: updateLoanStatusDto.statusId,
-        isAllowed: true,
-        deletedAt: null,
-      },
-    });
+  //   // Check StatusMatrix - is this transition allowed?
+  //   const isTransitionAllowed = await this.prisma.statusMatrix.findFirst({
+  //     where: {
+  //       entityType: 'LOAN',
+  //       fromStatusId: loan.LoanStatus.id,
+  //       toStatusId: updateLoanStatusDto.statusId,
+  //       isAllowed: true,
+  //       deletedAt: null,
+  //     },
+  //   });
 
-    if (!isTransitionAllowed) {
-      throw new BadRequestException(
-        `Status transition from ${loan.LoanStatus.name} status to ${status.name} is not allowed`
-      );
-    }
+  //   if (!isTransitionAllowed) {
+  //     throw new BadRequestException(
+  //       `Status transition from ${loan.LoanStatus.name} status to ${status.name} is not allowed`
+  //     );
+  //   }
 
-    // Check if reason is required
-    if (isTransitionAllowed.requiresReason === true && !updateLoanStatusDto.comment) {
-      throw new BadRequestException(
-        'Reason/comment is required for this status change'
-      );
-    }
+  //   // Check if reason is required
+  //   if (isTransitionAllowed.requiresReason === true && !updateLoanStatusDto.comment) {
+  //     throw new BadRequestException(
+  //       'Reason/comment is required for this status change'
+  //     );
+  //   }
 
-    const minutesAgo = getMinutesAgo(60);
-    const myLastComment = await this.prisma.comments.findFirst({
-      where: {
-        loanId: loan.id,
-        deletedAt: null,
-        userId: user.id,
-        createdAt: { gte: minutesAgo },
-      },
-    });
+  //   const minutesAgo = getMinutesAgo(60);
+  //   const myLastComment = await this.prisma.comments.findFirst({
+  //     where: {
+  //       loanId: loan.id,
+  //       deletedAt: null,
+  //       userId: user.id,
+  //       createdAt: { gte: minutesAgo },
+  //     },
+  //   });
 
-    const isUserAssigned =
-      loan.LoanAssignment?.some(
-        assignment => assignment.userId === user.id,
-      ) ?? false;
+  //   const isUserAssigned =
+  //     loan.LoanAssignment?.some(
+  //       assignment => assignment.userId === user.id,
+  //     ) ?? false;
 
-    const hasRecentComment = !!myLastComment;
+  //   const hasRecentComment = !!myLastComment;
 
-    const lastActivity =
-      loan.LoanStatus.id === LoanStatusId.NEW &&
-      hasRecentComment &&
-      user.role_name === Role.COLLECTOR &&
-      isUserAssigned;
+  //   const lastActivity =
+  //     loan.LoanStatus.id === LoanStatusId.NEW &&
+  //     hasRecentComment &&
+  //     user.role_name === Role.COLLECTOR &&
+  //     isUserAssigned;
 
-    // Determine if this status should update all debtor's loans (exclude Promise and Agreement)
-    const shouldUpdateAllLoans = ![
-      LoanStatusId.PROMISED_TO_PAY,  // 26
-      LoanStatusId.AGREEMENT,          // 3
-      LoanStatusId.AGREEMENT_CANCELED, // 14
-    ].includes(updateLoanStatusDto.statusId);
+  //   // Determine if this status should update all debtor's loans (exclude Promise and Agreement)
+  //   const shouldUpdateAllLoans = ![
+  //     LoanStatusId.PROMISED_TO_PAY,  // 26
+  //     LoanStatusId.AGREEMENT,          // 3
+  //     LoanStatusId.AGREEMENT_CANCELED, // 14
+  //   ].includes(updateLoanStatusDto.statusId);
 
-    // Get all other loans for this debtor
-    let debtorLoans: { id: number; statusId: number; publicId: string }[] = [];
-    if (shouldUpdateAllLoans) {
-      debtorLoans = await this.prisma.loan.findMany({
-        where: {
-          debtorId: loan.debtorId,
-          deletedAt: null,
-          id: { not: loan.id }  // Exclude current loan
-        },
-        select: {
-          id: true,
-          statusId: true,
-          publicId: true
-        }
-      });
-    }
+  //   // Get all other loans for this debtor
+  //   let debtorLoans: { id: number; statusId: number; publicId: string }[] = [];
+  //   if (shouldUpdateAllLoans) {
+  //     debtorLoans = await this.prisma.loan.findMany({
+  //       where: {
+  //         debtorId: loan.debtorId,
+  //         deletedAt: null,
+  //         id: { not: loan.id }  // Exclude current loan
+  //       },
+  //       select: {
+  //         id: true,
+  //         statusId: true,
+  //         publicId: true
+  //       }
+  //     });
+  //   }
 
-    if (status.name === 'Agreement') {
-      if (!updateLoanStatusDto.agreement) {
-        throw new BadRequestException('Agreement data is required for agreement status');
-      }
-      const currentDebt = await this.prisma.loanRemaining.findFirst({
-        where: { loanId: loan.id, deletedAt: null },
-      });
+  //   if (status.name === 'Agreement') {
+  //     if (!updateLoanStatusDto.agreement) {
+  //       throw new BadRequestException('Agreement data is required for agreement status');
+  //     }
+  //     const currentDebt = await this.prisma.loanRemaining.findFirst({
+  //       where: { loanId: loan.id, deletedAt: null },
+  //     });
 
-      // Convert Decimal to number with 2 decimal precision
-      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+  //     // Convert Decimal to number with 2 decimal precision
+  //     const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
 
-      // Validate schedule
-      const adjustedSchedule = await this.paymentsHelper.validateAndAdjustPaymentSchedule(
-        updateLoanStatusDto.agreement.schedule,
-        updateLoanStatusDto.agreement.agreedAmount,
-        updateLoanStatusDto.agreement.numberOfMonths,
-        currentDebtAmount
-      );
+  //     // Validate schedule
+  //     const adjustedSchedule = await this.paymentsHelper.validateAndAdjustPaymentSchedule(
+  //       updateLoanStatusDto.agreement.schedule,
+  //       updateLoanStatusDto.agreement.agreedAmount,
+  //       updateLoanStatusDto.agreement.numberOfMonths,
+  //       currentDebtAmount
+  //     );
 
-      // Store adjusted schedule for use in transaction
-      updateLoanStatusDto.agreement.schedule = adjustedSchedule;
+  //     // Store adjusted schedule for use in transaction
+  //     updateLoanStatusDto.agreement.schedule = adjustedSchedule;
 
-      const transactions = await this.paymentsHelper.getTransactionByLoanId(loan.id);
-      const latestCommittee = await this.prisma.committee.findFirst({
-        where: {
-          loanId: loan.id,
-          // type: {
-          //   in: [Committee_type.discount, Committee_type.correction],
-          // },
-          status: Committee_status.complete,
-          deletedAt: null,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
+  //     const transactions = await this.paymentsHelper.getTransactionByLoanId(loan.id);
+  //     const latestCommittee = await this.prisma.committee.findFirst({
+  //       where: {
+  //         loanId: loan.id,
+  //         // type: {
+  //         //   in: [Committee_type.discount, Committee_type.correction],
+  //         // },
+  //         status: Committee_status.complete,
+  //         deletedAt: null,
+  //       },
+  //       orderBy: {
+  //         createdAt: 'desc',
+  //       },
+  //     });
 
-      // throw only if NO transactions AND NO committee
-      if (transactions.length === 0 && !latestCommittee) {
-        throw new BadRequestException(
-          'Cannot update loan status without transactions or completed committee',
-        );
-      }
-    }
+  //     // throw only if NO transactions AND NO committee
+  //     if (transactions.length === 0 && !latestCommittee) {
+  //       throw new BadRequestException(
+  //         'Cannot update loan status without transactions or completed committee',
+  //       );
+  //     }
+  //   }
 
-    if (status.name === 'Promised To Pay') {
-      if (!updateLoanStatusDto.promise) {
-        throw new BadRequestException('Promise data is required for promise status');
-      }
+  //   if (status.name === 'Promised To Pay') {
+  //     if (!updateLoanStatusDto.promise) {
+  //       throw new BadRequestException('Promise data is required for promise status');
+  //     }
 
-      const currentDebt = await this.prisma.loanRemaining.findFirst({
-        where: { loanId: loan.id, deletedAt: null },
-      });
+  //     const currentDebt = await this.prisma.loanRemaining.findFirst({
+  //       where: { loanId: loan.id, deletedAt: null },
+  //     });
 
-      if (!currentDebt) {
-        throw new NotFoundException('Loan remaining data not found');
-      }
+  //     if (!currentDebt) {
+  //       throw new NotFoundException('Loan remaining data not found');
+  //     }
 
-      const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
-      const promiseAmount = Number(Number(updateLoanStatusDto.promise.agreedAmount).toFixed(2));
+  //     const currentDebtAmount = Number(Number(currentDebt.currentDebt).toFixed(2));
+  //     const promiseAmount = Number(Number(updateLoanStatusDto.promise.agreedAmount).toFixed(2));
 
-      if (promiseAmount > currentDebtAmount) {
-        throw new BadRequestException('Amount must be less or equal to current debt');
-      }
-    }
+  //     if (promiseAmount > currentDebtAmount) {
+  //       throw new BadRequestException('Amount must be less or equal to current debt');
+  //     }
+  //   }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Create history record
-      await tx.loanStatusHistory.create({
-        data: {
-          loanId: loan.id,
-          oldStatusId: loan.LoanStatus.id,
-          newStatusId: updateLoanStatusDto.statusId,
-          changedBy: user.id,
-          notes: updateLoanStatusDto.comment ?? null,
-        },
-      });
+  //   await this.prisma.$transaction(async (tx) => {
+  //     // Create history record
+  //     await tx.loanStatusHistory.create({
+  //       data: {
+  //         loanId: loan.id,
+  //         oldStatusId: loan.LoanStatus.id,
+  //         newStatusId: updateLoanStatusDto.statusId,
+  //         changedBy: user.id,
+  //         notes: updateLoanStatusDto.comment ?? null,
+  //       },
+  //     });
 
-      if (shouldUpdateAllLoans && debtorLoans.length > 0) {
-        // Create history records for all other loans
-        const historyRecords = debtorLoans.map(debtorLoan => ({
-          loanId: debtorLoan.id,
-          oldStatusId: debtorLoan.statusId,
-          newStatusId: updateLoanStatusDto.statusId,
-          changedBy: user.id,
-          notes: `Status changed from Case: ${loan.caseId}${updateLoanStatusDto.comment ? `: ${updateLoanStatusDto.comment}` : ''}`
-        }));
+  //     if (shouldUpdateAllLoans && debtorLoans.length > 0) {
+  //       // Create history records for all other loans
+  //       const historyRecords = debtorLoans.map(debtorLoan => ({
+  //         loanId: debtorLoan.id,
+  //         oldStatusId: debtorLoan.statusId,
+  //         newStatusId: updateLoanStatusDto.statusId,
+  //         changedBy: user.id,
+  //         notes: `Status changed from Case: ${loan.caseId}${updateLoanStatusDto.comment ? `: ${updateLoanStatusDto.comment}` : ''}`
+  //       }));
 
-        await tx.loanStatusHistory.createMany({
-          data: historyRecords,
-        });
+  //       await tx.loanStatusHistory.createMany({
+  //         data: historyRecords,
+  //       });
 
-        // Update all other debtor's loans with the new status and lastActivite
-        const updateData: any = {
-          statusId: updateLoanStatusDto.statusId,
-        };
-        if (lastActivity) {
-          updateData.lastActivite = new Date();
-        }
+  //       // Update all other debtor's loans with the new status and lastActivite
+  //       const updateData: any = {
+  //         statusId: updateLoanStatusDto.statusId,
+  //       };
+  //       if (lastActivity) {
+  //         updateData.lastActivite = new Date();
+  //       }
 
-        await tx.loan.updateMany({
-          where: {
-            publicId: { in: debtorLoans.map(l => l.publicId) },
-            deletedAt: null
-          },
-          data: updateData
-        });
-      }
+  //       await tx.loan.updateMany({
+  //         where: {
+  //           publicId: { in: debtorLoans.map(l => l.publicId) },
+  //           deletedAt: null
+  //         },
+  //         data: updateData
+  //       });
+  //     }
 
-      // Handle Agreement status
-      if (status.name === 'Agreement') {
-        await tx.paymentCommitment.updateMany({
-          where: { loanId: loan.id, isActive: 1 },
-          data: { isActive: 0 },
-        });
+  //     // Handle Agreement status
+  //     if (status.name === 'Agreement') {
+  //       await tx.paymentCommitment.updateMany({
+  //         where: { loanId: loan.id, isActive: 1 },
+  //         data: { isActive: 0 },
+  //       });
 
-        const commitment = await this.paymentsHelper.createPaymentCommitment(
-          {
-            loanId: loan.id,
-            amount: updateLoanStatusDto.agreement.agreedAmount,
-            paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
-            comment: updateLoanStatusDto?.comment || null,
-            userId: user.id,
-            type: 'agreement',
-          },
-          tx
-        );
+  //       const commitment = await this.paymentsHelper.createPaymentCommitment(
+  //         {
+  //           loanId: loan.id,
+  //           amount: updateLoanStatusDto.agreement.agreedAmount,
+  //           paymentDate: updateLoanStatusDto.agreement.firstPaymentDate,
+  //           comment: updateLoanStatusDto?.comment || null,
+  //           userId: user.id,
+  //           type: 'agreement',
+  //         },
+  //         tx
+  //       );
 
-        // Save the schedule from frontend
-        await this.paymentsHelper.savePaymentSchedule(
-          {
-            commitmentId: commitment.id,
-            schedules: updateLoanStatusDto.agreement.schedule,
-          },
-          tx
-        );
+  //       // Save the schedule from frontend
+  //       await this.paymentsHelper.savePaymentSchedule(
+  //         {
+  //           commitmentId: commitment.id,
+  //           schedules: updateLoanStatusDto.agreement.schedule,
+  //         },
+  //         tx
+  //       );
 
-        await saveScheduleReminders({
-          loanId: loan.id,
-          commitmentId: commitment.id,
-          userId: user.id,
-          type: Reminders_type.Agreement,
-        }, tx);
-      }
+  //       await saveScheduleReminders({
+  //         loanId: loan.id,
+  //         commitmentId: commitment.id,
+  //         userId: user.id,
+  //         type: Reminders_type.Agreement,
+  //       }, tx);
+  //     }
 
-      // Handle Promise status
-      if (status.name === 'Promised To Pay') {
-        await tx.paymentCommitment.updateMany({
-          where: { loanId: loan.id, isActive: 1 },
-          data: { isActive: 0 },
-        });
+  //     // Handle Promise status
+  //     if (status.name === 'Promised To Pay') {
+  //       await tx.paymentCommitment.updateMany({
+  //         where: { loanId: loan.id, isActive: 1 },
+  //         data: { isActive: 0 },
+  //       });
 
-        const commitment = await this.paymentsHelper.createPaymentCommitment(
-          {
-            loanId: loan.id,
-            amount: updateLoanStatusDto.promise.agreedAmount,
-            paymentDate: updateLoanStatusDto.promise.paymentDate,
-            comment: updateLoanStatusDto?.comment || null,
-            userId: user.id,
-            type: 'promise',
-          },
-          tx
-        );
+  //       const commitment = await this.paymentsHelper.createPaymentCommitment(
+  //         {
+  //           loanId: loan.id,
+  //           amount: updateLoanStatusDto.promise.agreedAmount,
+  //           paymentDate: updateLoanStatusDto.promise.paymentDate,
+  //           comment: updateLoanStatusDto?.comment || null,
+  //           userId: user.id,
+  //           type: 'promise',
+  //         },
+  //         tx
+  //       );
 
-        // Save the schedule
-        await this.paymentsHelper.savePaymentSchedule(
-          {
-            commitmentId: commitment.id,
-            schedules: [{
-              paymentDate: updateLoanStatusDto.promise.paymentDate,
-              amount: updateLoanStatusDto.promise.agreedAmount,
-            }],
-          },
-          tx
-        );
+  //       // Save the schedule
+  //       await this.paymentsHelper.savePaymentSchedule(
+  //         {
+  //           commitmentId: commitment.id,
+  //           schedules: [{
+  //             paymentDate: updateLoanStatusDto.promise.paymentDate,
+  //             amount: updateLoanStatusDto.promise.agreedAmount,
+  //           }],
+  //         },
+  //         tx
+  //       );
 
-        await saveScheduleReminders({
-          loanId: loan.id,
-          commitmentId: commitment.id,
-          userId: user.id,
-          type: Reminders_type.Promised_to_pay,
-        }, tx);
-      }
+  //       await saveScheduleReminders({
+  //         loanId: loan.id,
+  //         commitmentId: commitment.id,
+  //         userId: user.id,
+  //         type: Reminders_type.Promised_to_pay,
+  //       }, tx);
+  //     }
 
-      if (status.name === 'Agreement Canceled') {
-        await tx.paymentCommitment.updateMany({
-          where: { loanId: loan.id, isActive: 1 },
-          data: { isActive: 0 },
-        });
+  //     if (status.name === 'Agreement Canceled') {
+  //       await tx.paymentCommitment.updateMany({
+  //         where: { loanId: loan.id, isActive: 1 },
+  //         data: { isActive: 0 },
+  //       });
 
-        await tx.reminders.updateMany({
-          where: { loanId: loan.id, type: Reminders_type.Agreement, status: true },
-          data: { status: false },
-        });
-      }
+  //       await tx.reminders.updateMany({
+  //         where: { loanId: loan.id, type: Reminders_type.Agreement, status: true },
+  //         data: { status: false },
+  //       });
+  //     }
 
-      const updateData: any = {
-        statusId: updateLoanStatusDto.statusId,
-      }
-      if (lastActivity) {
-        updateData.lastActivite = new Date();
-      }
-      // Update loan status
-      await tx.loan.update({
-        where: { publicId: String(publicId) },
-        data: updateData,
-      });
-    }, {
-      maxWait: 10000,
-      timeout: 15000,
-    });
+  //     const updateData: any = {
+  //       statusId: updateLoanStatusDto.statusId,
+  //     }
+  //     if (lastActivity) {
+  //       updateData.lastActivite = new Date();
+  //     }
+  //     // Update loan status
+  //     await tx.loan.update({
+  //       where: { publicId: String(publicId) },
+  //       data: updateData,
+  //     });
+  //   }, {
+  //     maxWait: 10000,
+  //     timeout: 15000,
+  //   });
 
-    return {
-      message: 'Loan status updated successfully',
-    };
-  }
+  //   return {
+  //     message: 'Loan status updated successfully',
+  //   };
+  // }
 
   async updateLoanStatusNew(
     publicId: ParseUUIDPipe,
@@ -2014,6 +2017,8 @@ export class LoanService {
       LoanStatusId.PROMISED_TO_PAY, // 26
       LoanStatusId.AGREEMENT, // 3
       LoanStatusId.AGREEMENT_CANCELED, // 14
+      LoanStatusId.CLOSED_PAID, //12
+      LoanStatusId.CLOSED_OTHER, //13
     ].includes(updateLoanStatusDto.statusId);
 
     // Get all other loans for this debtor (for background processing)
