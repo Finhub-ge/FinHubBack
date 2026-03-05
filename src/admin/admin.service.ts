@@ -362,6 +362,15 @@ export class AdminService {
       if (filters.currency) {
         where.currency = filters.currency;
       }
+      if (user.role_name === Role.COLLECTOR && user.team_membership?.some(tm => tm.teamRole === 'member')) {
+        where.TransactionUserAssignments = {
+          some: {
+            userId: { in: [user.id] },
+            roleId: 4,  // Collectors only
+            deletedAt: null,
+          },
+        };
+      }
     }
 
     if (Object.keys(loanFilter).length > 0) {
