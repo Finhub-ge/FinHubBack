@@ -314,7 +314,7 @@ export const preparePaymentReportExportData = (transaction: any) => {
   const getAssignmentByRole = (roleName: string) =>
     transaction.Loan.LoanAssignment?.find((a) => a.Role?.name === roleName);
 
-  const collector = getAssignmentByRole('collector');
+  // const collector = getAssignmentByRole('collector');
   const lawyer = getAssignmentByRole('lawyer');
 
   return {
@@ -334,9 +334,7 @@ export const preparePaymentReportExportData = (transaction: any) => {
     totalCollection: transaction.amount ?? '',
     channelAccountN: transaction.TransactionChannelAccounts?.name ?? '',
     currency: transaction.currency ?? '',
-    collector: collector
-      ? `${collector.User?.firstName ?? ''} ${collector.User?.lastName ?? ''}`.trim()
-      : '',
+    collector: `${transaction.TransactionUserAssignments[0]?.User?.firstName ?? ''} ${transaction.TransactionUserAssignments[0]?.User?.lastName ?? ''}`.trim(),
     // legalStage: transaction.Loan.LoanLegalStage[0]?.LegalStage?.title ?? '',
     lawyer: lawyer
       ? `${lawyer.User?.firstName ?? ''} ${lawyer.User?.lastName ?? ''}`.trim()
