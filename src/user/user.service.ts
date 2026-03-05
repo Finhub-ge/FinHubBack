@@ -628,9 +628,11 @@ export class UserService {
   async getTasks(user: User) {
     return await this.prisma.tasks.findMany({
       where: {
-        toUserId: user.id,
         deletedAt: null,
-        viewedAt: null
+        OR: [
+          { fromUser: user.id, viewedAt: null },
+          { toUserId: user.id, taskStatusId: { not: { in: [2, 4] } } }
+        ],
       },
       include: {
         Loan: {
