@@ -3334,7 +3334,14 @@ export class LoanService {
     }
 
     return await this.prisma.tasks.findMany({
-      where: { loanId: loan.id, deletedAt: null, toUserId: userId, viewedAt: null },
+      where: {
+        deletedAt: null,
+        loanId: loan.id,
+        OR: [
+          { fromUser: userId, viewedAt: null },
+          { toUserId: userId, taskStatusId: { not: { in: [2, 4] } } }
+        ],
+      },
       include: {
         User_Tasks_fromUserToUser: { select: { id: true, firstName: true, lastName: true } },
         User_Tasks_toUserIdToUser: { select: { id: true, firstName: true, lastName: true } },
