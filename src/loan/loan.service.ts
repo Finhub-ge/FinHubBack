@@ -262,11 +262,34 @@ export class LoanService {
     // Setup pagination
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
 
+    // Apply user scope: collectors see only their cases, team leads see their team's cases
+    let allowedCollectorIds: number[] | undefined = undefined;
+
+    if (user.role_name === Role.COLLECTOR) {
+      const isLeader = isTeamLead(user);
+
+      if (isLeader) {
+        // Team lead: get all team member IDs
+        const teamMemberIds = await this.getTeamMemberIds(user);
+        allowedCollectorIds = teamMemberIds;
+      } else {
+        // Regular collector: only their own cases
+        allowedCollectorIds = [user.id];
+      }
+    }
+    // For non-collectors (admin, managers, etc.), allowedCollectorIds stays undefined (see all)
+
     // Build where clause for LoanAssignment
     const where: any = {
       deletedAt: null,
       roleId: 4,
     };
+
+    // Apply user scope filter - if toAssignedUser is not explicitly provided
+    // This ensures collectors see only their assignments, team leads see their team's
+    if (allowedCollectorIds !== undefined && !toAssignedUser?.length) {
+      where.userId = { in: allowedCollectorIds };
+    }
 
     // Search filter - search by case ID, debtor info, from/to user names
     if (search) {
@@ -330,9 +353,7 @@ export class LoanService {
 
     // Portfolio filter
     if (portfolio?.length) {
-      where.PortfolioCaseGroup = {
-        id: { in: portfolio },
-      };
+      where.portfolioCaseGroupId = { in: portfolio };
     }
 
     // Portfolio seller filter
@@ -398,7 +419,7 @@ export class LoanService {
       where.assignedBy = { in: assignedBy };
     }
 
-    // Assigned date range filter
+    // Assigned date range filter - filters by when assignment was created
     if (assignedDateStart || assignedDateEnd) {
       where.assignedAt = {};
       if (assignedDateStart) {
