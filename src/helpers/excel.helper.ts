@@ -298,6 +298,7 @@ export const generateExcelStream = async (
 
   // add extra columns
   columns.splice(columns.indexOf('visitStatus') + 1, 0, 'visitStatusDate');
+  columns.splice(columns.indexOf('lender') + 1, 0, 'subLender');
   // Add header row
   const loanHeaders = headerMap || getLoanExportHeaders();
   const displayHeaders = getDisplayHeaders(columns, loanHeaders);
