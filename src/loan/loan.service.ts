@@ -3270,7 +3270,7 @@ export class LoanService {
     // Load ALL loans in single query
     const loans = await this.permissionsHelper.loan.findMany({
       where: filterResult.where,
-      orderBy: { id: 'asc' },
+      orderBy: { lastActivite: 'asc' },
       include: this.getExportIncludeConfig(),
       _skipUserScope: filterResult.skipUserScope,
     });
