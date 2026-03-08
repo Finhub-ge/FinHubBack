@@ -14,6 +14,8 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
   async incrementLoanActDay() {
+    // @ToDo - Stopped by Asher for the new server so it will not run twice till we move to the new server, once we move to the new server we can remove this check and uncomment the code below
+    return;
     try {
       this.logger.log('Starting daily loan actDay increment...');
 
@@ -34,6 +36,8 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
   async updateLoanVisitStatus() {
+    // @ToDo - Stopped by Asher for the new server so it will not run twice till we move to the new server, once we move to the new server we can remove this check and uncomment the code below
+    return;
     try {
       this.logger.log('Starting loan visit status update...');
 
@@ -72,6 +76,8 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
   async aggrementCancellation() {
+    // @ToDo - Stopped by Asher for the new server so it will not run twice till we move to the new server, once we move to the new server we can remove this check and uncomment the code below
+    return;
     try {
       this.logger.log('Starting agreement cancellation...');
 
@@ -102,6 +108,8 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Runs every day at 00:00
   async taskReminder() {
+    // @ToDo - Stopped by Asher for the new server so it will not run twice till we move to the new server, once we move to the new server we can remove this check and uncomment the code below
+    return;
     try {
       this.logger.log('Starting task reminder...');
 
@@ -149,6 +157,8 @@ export class CronService {
 
   // @Cron('30 * * * * *') // Runs every 30 seconds
   async ommitteeReversion() {
+    // @ToDo - Stopped by Asher for the new server so it will not run twice till we move to the new server, once we move to the new server we can remove this check and uncomment the code below
+    return;
     try {
       const before7Days = subtractDays(new Date(), 7);
 
