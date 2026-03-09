@@ -2842,28 +2842,33 @@ export class AdminService {
 
   async createRegion(data: CreateRegionDto) {
     // Validate manager exists if provided
-    if (data.managerId) {
-      const manager = await this.prisma.user.findUnique({
-        where: { id: data.managerId, deletedAt: null }
+    if (data.managerIds && data.managerIds.length > 0) {
+      const managers = await this.prisma.user.findMany({
+        where: {
+          id: { in: data.managerIds },
+          deletedAt: null
+        }
       });
-      if (!manager) {
-        throw new BadRequestException('Manager not found');
+      if (managers.length !== data.managerIds.length) {
+        throw new BadRequestException('One or more managers not found');
       }
     }
 
     // Validate activation requirements
     if (data.isActive === true) {
-      if (!data.managerId) {
-        throw new BadRequestException('Cannot activate region: Manager must be assigned before activation');
+      if (!data.managerIds || data.managerIds.length === 0) {
+        throw new BadRequestException('Cannot activate region: At least one manager must be assigned before activation');
       }
-      // Note: Teams can be assigned after creation, so we only check manager during creation
+      // Note: Teams can be assigned after creation, so we only check managers during creation
     }
 
     await this.prisma.region.create({
       data: {
         name: data.name,
-        managerId: data.managerId || null,
-        isActive: data.isActive ?? false
+        isActive: data.isActive ?? false,
+        RegionManager: {
+          create: data.managerIds?.map(userId => ({ userId })) || []
+        }
       }
     });
 
@@ -2886,12 +2891,17 @@ export class AdminService {
       where.OR = [
         { name: { contains: searchTerm } },
         {
-          User: {
-            OR: [
-              { firstName: { contains: searchTerm } },
-              { lastName: { contains: searchTerm } },
-              { email: { contains: searchTerm } }
-            ]
+          RegionManager: {
+            some: {
+              deletedAt: null,
+              User: {
+                OR: [
+                  { firstName: { contains: searchTerm } },
+                  { lastName: { contains: searchTerm } },
+                  { email: { contains: searchTerm } }
+                ]
+              }
+            }
           }
         }
       ];
@@ -2900,12 +2910,17 @@ export class AdminService {
     const regions = await this.prisma.region.findMany({
       where,
       include: {
-        User: {
+        RegionManager: {
+          where: { deletedAt: null },
           select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
+            User: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
           }
         },
         Team: {
@@ -2919,9 +2934,11 @@ export class AdminService {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Add team count to each region
+    // Add team count and transform managers to each region
     return regions.map(region => ({
       ...region,
+      managers: region.RegionManager.map(rm => rm.User),
+      RegionManager: undefined, // Remove the junction table from response
       teamCount: region.Team.length
     }));
   }
