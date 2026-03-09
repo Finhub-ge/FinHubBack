@@ -2947,15 +2947,20 @@ export class AdminService {
     const region = await this.prisma.region.findUnique({
       where: { id: regionId },
       include: {
-        User: {
+        RegionManager: {
+          where: { deletedAt: null },
           select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            Role: {
+            User: {
               select: {
-                name: true
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                Role: {
+                  select: {
+                    name: true
+                  }
+                }
               }
             }
           }
@@ -2997,6 +3002,8 @@ export class AdminService {
 
     return {
       ...region,
+      managers: region.RegionManager.map(rm => rm.User),
+      RegionManager: undefined, // Remove the junction table from response
       teamCount: region.Team.length
     };
   }
@@ -3008,6 +3015,10 @@ export class AdminService {
         Team: {
           where: { deletedAt: null },
           select: { id: true }
+        },
+        RegionManager: {
+          where: { deletedAt: null },
+          select: { id: true }
         }
       }
     });
@@ -3016,25 +3027,32 @@ export class AdminService {
       throw new BadRequestException('Region not found');
     }
 
-    // Validate manager exists if being updated
-    if (data.managerId !== undefined && data.managerId !== null) {
-      const manager = await this.prisma.user.findUnique({
-        where: { id: data.managerId, deletedAt: null }
-      });
-      if (!manager) {
-        throw new BadRequestException('Manager not found');
+    // Validate managers exist if being updated
+    if (data.managerIds !== undefined && data.managerIds !== null) {
+      if (data.managerIds.length > 0) {
+        const managers = await this.prisma.user.findMany({
+          where: {
+            id: { in: data.managerIds },
+            deletedAt: null
+          }
+        });
+        if (managers.length !== data.managerIds.length) {
+          throw new BadRequestException('One or more managers not found');
+        }
       }
     }
 
     // Validate activation requirements
     if (data.isActive === true) {
-      const finalManagerId = data.managerId !== undefined ? data.managerId : region.managerId;
+      const finalManagerCount = data.managerIds !== undefined
+        ? data.managerIds.length
+        : region.RegionManager.length;
       const teamCount = region.Team.length;
 
       const errors: string[] = [];
 
-      if (!finalManagerId) {
-        errors.push('Manager must be assigned');
+      if (finalManagerCount === 0) {
+        errors.push('At least one manager must be assigned');
       }
 
       if (teamCount === 0) {
@@ -3046,9 +3064,31 @@ export class AdminService {
       }
     }
 
+    // Prepare update data
+    const updateData: any = {
+      ...(data.name && { name: data.name }),
+      ...(data.isActive !== undefined && { isActive: data.isActive })
+    };
+
+    // Handle managers update if provided
+    if (data.managerIds !== undefined) {
+      // Soft delete existing managers
+      await this.prisma.regionManager.updateMany({
+        where: { regionId: regionId, deletedAt: null },
+        data: { deletedAt: new Date() }
+      });
+
+      // Create new manager assignments
+      if (data.managerIds.length > 0) {
+        updateData.RegionManager = {
+          create: data.managerIds.map(userId => ({ userId }))
+        };
+      }
+    }
+
     await this.prisma.region.update({
       where: { id: regionId },
-      data: data
+      data: updateData
     });
 
     return {
@@ -3065,7 +3105,13 @@ export class AdminService {
       throw new BadRequestException('Region not found');
     }
 
-    // Unassign all teams from this region first
+    // Soft delete all region managers
+    await this.prisma.regionManager.updateMany({
+      where: { regionId: regionId, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+
+    // Unassign all teams from this region
     await this.prisma.team.updateMany({
       where: { regionId: regionId },
       data: { regionId: null }

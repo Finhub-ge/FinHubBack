@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsBoolean, IsInt, IsOptional, IsString } from "class-validator";
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString } from "class-validator";
 
 export class UpdateRegionDto {
   @ApiProperty({ description: 'Region name', required: false })
@@ -7,10 +7,11 @@ export class UpdateRegionDto {
   @IsOptional()
   name?: string;
 
-  @ApiProperty({ description: 'Manager user ID', required: false })
-  @IsInt()
+  @ApiProperty({ description: 'Manager user IDs', required: false, type: [Number] })
+  @IsArray()
+  @IsInt({ each: true })
   @IsOptional()
-  managerId?: number;
+  managerIds?: number[];
 
   @ApiProperty({ description: 'Active status', required: false })
   @IsBoolean()
