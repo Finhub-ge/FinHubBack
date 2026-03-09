@@ -79,14 +79,21 @@ export class AuthService {
         include: {
           Role: true,
           TeamMembership: true,
-          Region: {
-            where: { deletedAt: null, isActive: true },
+          RegionManager: {
+            where: {
+              deletedAt: null,
+              Region: { deletedAt: null, isActive: true }
+            },
             select: {
-              id: true,
-              name: true,
-              Team: {
-                where: { deletedAt: null },
-                select: { id: true }
+              Region: {
+                select: {
+                  id: true,
+                  name: true,
+                  Team: {
+                    where: { deletedAt: null },
+                    select: { id: true }
+                  }
+                }
               }
             }
           }
@@ -122,7 +129,8 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, user.Region);
+    const managedRegions = user.RegionManager.map(rm => rm.Region);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, managedRegions);
   }
 
   async signinUser(dto: UserSigninDto) {
@@ -143,14 +151,21 @@ export class AuthService {
             where: { deletedAt: null },
             //     select: { id: true, teamId: true, teamRole: true }
           },
-          Region: {
-            where: { deletedAt: null, isActive: true },
+          RegionManager: {
+            where: {
+              deletedAt: null,
+              Region: { deletedAt: null, isActive: true }
+            },
             select: {
-              id: true,
-              name: true,
-              Team: {
-                where: { deletedAt: null },
-                select: { id: true }
+              Region: {
+                select: {
+                  id: true,
+                  name: true,
+                  Team: {
+                    where: { deletedAt: null },
+                    select: { id: true }
+                  }
+                }
               }
             }
           }
@@ -180,7 +195,8 @@ export class AuthService {
         'The email or password is incorrect.',
       );
 
-    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, user.Region);
+    const managedRegions = user.RegionManager.map(rm => rm.Region);
+    return this.signToken(user.id, user.email, user.accountId, user.Role.name, user.roleId, user.TeamMembership, managedRegions);
   }
 
   async changePwd(user: User, dto: SetNewPwdDto) {
@@ -200,14 +216,21 @@ export class AuthService {
             where: { deletedAt: null },
             // select: { id: true, teamId: true, teamRole: true, createdAt: true, updatedAt: true, deletedAt: true, userId: true, joinedAt: true }
           },
-          Region: {
-            where: { deletedAt: null, isActive: true },
+          RegionManager: {
+            where: {
+              deletedAt: null,
+              Region: { deletedAt: null, isActive: true }
+            },
             select: {
-              id: true,
-              name: true,
-              Team: {
-                where: { deletedAt: null },
-                select: { id: true }
+              Region: {
+                select: {
+                  id: true,
+                  name: true,
+                  Team: {
+                    where: { deletedAt: null },
+                    select: { id: true }
+                  }
+                }
               }
             }
           }
@@ -243,8 +266,8 @@ export class AuthService {
       where: { id: userHash.id },
       data: { hash: newHash, mustChangePassword: false }
     })
-
-    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name, userHash.roleId, userHash.TeamMembership, userHash.Region);
+    const managedRegions = userHash.RegionManager.map(rm => rm.Region);
+    return this.signToken(userHash.id, userHash.email, userHash.accountId, userHash.Role.name, userHash.roleId, userHash.TeamMembership, managedRegions);
   }
 
   async signToken(
