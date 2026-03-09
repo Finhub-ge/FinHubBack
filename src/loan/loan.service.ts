@@ -725,7 +725,7 @@ export class LoanService {
               orderBy: { labelId: 'asc' }
             },
             DebtorRealEstate: true,
-            DebtorGuarantors: true,
+            // DebtorGuarantors: true,
             DebtorEnforcementRecords: true,
             _count: {
               select: { Loan: true }  // This counts all loans for this debtor
@@ -983,6 +983,7 @@ export class LoanService {
             comment: true,
           }
         },
+        DebtorGuarantors: true,
         PastPayments: true,
         CallHistory: true,
         LawyerRequest: true,
