@@ -494,6 +494,7 @@ model User {
   LoanVisit                                                       LoanVisit[]
   PaymentCommitment                                               PaymentCommitment[]
   Region                                                          Region[]
+  RegionManager                                                   RegionManager[]
   Reminders_Reminders_fromUserIdToUser                            Reminders[]                  @relation("Reminders_fromUserIdToUser")
   Reminders_Reminders_toUserIdToUser                              Reminders[]                  @relation("Reminders_toUserIdToUser")
   Tasks_Tasks_fromUserToUser                                      Tasks[]                      @relation("Tasks_fromUserToUser")
@@ -2254,15 +2255,16 @@ model Old_db_legal_stage {
 }
 
 model Region {
-  id        Int       @id @default(autoincrement())
-  name      String    @db.VarChar(255)
-  managerId Int?
-  isActive  Boolean   @default(false)
-  createdAt DateTime  @default(now()) @db.DateTime(0)
-  updatedAt DateTime  @default(now()) @db.DateTime(0)
-  deletedAt DateTime? @db.DateTime(0)
-  User      User?     @relation(fields: [managerId], references: [id], onUpdate: NoAction, map: "fk_region_manager")
-  Team      Team[]
+  id            Int             @id @default(autoincrement())
+  name          String          @db.VarChar(255)
+  managerId     Int?
+  isActive      Boolean         @default(false)
+  createdAt     DateTime        @default(now()) @db.DateTime(0)
+  updatedAt     DateTime        @default(now()) @db.DateTime(0)
+  deletedAt     DateTime?       @db.DateTime(0)
+  User          User?           @relation(fields: [managerId], references: [id], onUpdate: NoAction, map: "fk_region_manager")
+  RegionManager RegionManager[]
+  Team          Team[]
 
   @@index([managerId], map: "idx_region_managerId")
 }
@@ -2558,6 +2560,22 @@ model CollectorMonthlyTargetLoan {
   @@index([createdAt], map: "idx_created")
   @@index([loanId], map: "idx_loan")
   @@index([monthlyTargetId], map: "idx_monthly_target")
+}
+
+model RegionManager {
+  id        Int       @id @default(autoincrement())
+  regionId  Int
+  userId    Int
+  createdAt DateTime  @default(now()) @db.DateTime(0)
+  updatedAt DateTime  @default(now()) @db.DateTime(0)
+  deletedAt DateTime? @db.DateTime(0)
+  Region    Region    @relation(fields: [regionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_RegionManagers_1")
+  User      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_RegionManagers_2")
+
+  @@unique([regionId, userId, deletedAt], map: "unique_active_region_manager")
+  @@index([regionId], map: "fk_RegionManagers_1_idx")
+  @@index([userId], map: "fk_RegionManagers_2_idx")
+  @@index([deletedAt], map: "idx_regionManager_deletedAt")
 }
 
 enum PaymentCommitment_type {
