@@ -329,7 +329,7 @@ export const preparePaymentReportExportData = (transaction: any) => {
     interest: transaction.interest ?? '',
     penalty: transaction.penalty ?? '',
     otherFees: transaction.fees ?? '',
-    amount: (Number(transaction.amount) - Number(transaction.legal)) || '',
+    amount: (Number(transaction.amount) - Number(transaction.legal)) || 0,
     legalCharges: transaction.legal ?? '',
     totalCollection: transaction.amount ?? '',
     channelAccountN: transaction.TransactionChannelAccounts?.name ?? '',
