@@ -983,6 +983,7 @@ export class LoanService {
             comment: true,
           }
         },
+        DebtorGuarantors: true,
         PastPayments: true,
         CallHistory: true,
         LawyerRequest: true,
