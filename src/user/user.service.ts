@@ -593,6 +593,39 @@ export class UserService {
       }
     }
 
+    // Add logged-in regional manager if they are NOT in any team (same format as admin unassigned)
+    if (regionalManager && regionalTeamIds.length > 0 && !isAdmin) {
+      const loggedInUserInTeam = memberships.some(m => m.userId === user.id);
+
+      if (!loggedInUserInTeam) {
+        // Logged-in user is regional manager but not in any team
+        const loggedInUserData = await this.prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            Role: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        });
+
+        if (loggedInUserData) {
+          result.push([
+            {
+              id: loggedInUserData.id,
+              firstName: loggedInUserData.firstName,
+              lastName: loggedInUserData.lastName,
+              role: loggedInUserData.Role?.name,
+            },
+          ]);
+        }
+      }
+    }
+
     // Add dummy "None" and "Pending" entries for lawyer roles
     const isLawyerFilter = role?.some(r =>
       ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(r)
