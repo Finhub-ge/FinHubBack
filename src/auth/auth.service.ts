@@ -214,7 +214,7 @@ export class AuthService {
           roleId: true,
           Role: { select: { name: true } },
           TeamMembership: {
-            where: { deletedAt: null },
+            where: { deletedAt: null, Team: { deletedAt: null } },
             // select: { id: true, teamId: true, teamRole: true, createdAt: true, updatedAt: true, deletedAt: true, userId: true, joinedAt: true }
           },
           RegionManager: {
@@ -333,7 +333,7 @@ export class AuthService {
           updatedAt: true,
           Role: true,
           TeamMembership: {
-            where: { deletedAt: null },
+            where: { deletedAt: null, Team: { deletedAt: null } },
             select: {
               id: true,
               teamId: true,
