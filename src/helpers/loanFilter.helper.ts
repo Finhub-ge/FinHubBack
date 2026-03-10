@@ -125,9 +125,20 @@ export const applyUserFilterRestrictions = (filters: any, user: any, teamMemberI
         // Can filter by assigneduser, but only team/region members
         // Validate and restrict assigneduser to only include allowed member IDs
         if (restrictedFilters.assigneduser && Array.isArray(restrictedFilters.assigneduser)) {
-          // Filter to only include IDs that are in the team/region
+          // Check if regional manager is in any team
+          const userInTeam = user.team_membership?.some(tm => tm.deletedAt === null);
+
+          // Build allowed user IDs list
+          let allowedUserIds = [...teamMemberIds];
+
+          // If regional manager is NOT in any team, also allow their own ID
+          if (regionalManager && !userInTeam) {
+            allowedUserIds.push(user.id);
+          }
+
+          // Filter to only include IDs that are in the allowed list
           restrictedFilters.assigneduser = restrictedFilters.assigneduser.filter(
-            (userId: number) => teamMemberIds.includes(userId)
+            (userId: number) => allowedUserIds.includes(userId)
           );
 
           // If after filtering, no valid users remain, remove the filter

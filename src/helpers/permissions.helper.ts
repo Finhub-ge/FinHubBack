@@ -119,16 +119,22 @@ export class PermissionsHelper {
       return where;
     }
 
-    const scopeCondition = this.buildRegionalScopeCondition(regionalTeamIds, model);
+    const scopeCondition = this.buildRegionalScopeCondition(user, regionalTeamIds, model);
     return scopeCondition ? this.mergeWhereWithCondition(where, scopeCondition) : where;
   }
 
-  private buildRegionalScopeCondition(regionalTeamIds: number[], model: string) {
+  private buildRegionalScopeCondition(user: AuthenticatedRequest['user'], regionalTeamIds: number[], model: string) {
     if (!regionalTeamIds || regionalTeamIds.length === 0) {
       return null;
     }
 
-    const baseLoanCondition = {
+    // Check if user is in any of the regional teams
+    const userInRegionalTeam = user.team_membership?.some(
+      tm => regionalTeamIds.includes(tm.teamId)
+    );
+
+    // Base condition: loans assigned to users in regional teams
+    const regionalTeamCondition = {
       LoanAssignment: {
         some: {
           isActive: true,
@@ -143,6 +149,26 @@ export class PermissionsHelper {
         },
       },
     };
+
+    // If user is NOT in any regional team, also include their own loan assignments
+    let baseLoanCondition;
+    if (!userInRegionalTeam) {
+      baseLoanCondition = {
+        OR: [
+          regionalTeamCondition,
+          {
+            LoanAssignment: {
+              some: {
+                isActive: true,
+                userId: user.id,
+              },
+            },
+          },
+        ],
+      };
+    } else {
+      baseLoanCondition = regionalTeamCondition;
+    }
 
     switch (model) {
       case 'loan':
