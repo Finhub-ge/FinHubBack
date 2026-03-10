@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Role } from "src/enums/role.enum";
 import { LoanService } from "src/loan/loan.service";
+import { getRegionalTeamIds, isRegionalManager } from "./loan.helper";
 
 @Injectable()
 export class ScopeService {
@@ -25,6 +26,28 @@ export class ScopeService {
       const isLeader = user.team_membership?.some(
         (tm: any) => tm.teamRole === 'leader'
       );
+      const regionalManager = isRegionalManager(user);
+      const regionalTeamIds = regionalManager ? getRegionalTeamIds(user) : [];
+
+      // Check if regional manager but not in any team
+      const userInTeam = user.team_membership?.some((tm: any) => tm.deletedAt === null);
+
+      // Regional manager without team → can see regional team members + himself
+      if (regionalManager && regionalTeamIds.length > 0 && !userInTeam) {
+        const teamMemberIds = await this.loanService.getTeamMemberIds(user);
+
+        // Add user's own ID if not already included
+        const allIds = teamMemberIds.includes(user.id)
+          ? teamMemberIds
+          : [...teamMemberIds, user.id];
+
+        if (requestedCollectorIds?.length) {
+          // intersection
+          return requestedCollectorIds.filter(id => allIds.includes(id));
+        }
+
+        return allIds;
+      }
 
       // Collector but NOT leader → only himself
       if (!isLeader) {
