@@ -12,6 +12,7 @@ import { SetNewPwdDto } from "./dto/setNewPwd.dto";
 import { Role } from "src/enums/role.enum";
 import { TeamMembership, TeamMembership_teamRole, User } from "@prisma/client";
 import { randomUUID } from "crypto"
+import { isRegionalManager } from "src/helpers/loan.helper";
 
 
 @Injectable()
@@ -355,6 +356,8 @@ export class AuthService {
         {},
       );
     }
+    const regionalManager = isRegionalManager(user);
+
     // Add canRequestLawyer property for specific user
     const LAWYER_REQUEST_OVERRIDE_USER_IDS = [58];
     return {
@@ -362,6 +365,7 @@ export class AuthService {
       canRequestLawyer:
         currentUser?.TeamMembership?.[0]?.teamRole === TeamMembership_teamRole.leader ||
         LAWYER_REQUEST_OVERRIDE_USER_IDS.includes(currentUser.id),
+      isRegionalManager: regionalManager,
     };
   }
 }
