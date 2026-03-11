@@ -38,6 +38,8 @@ import { UpdateCommentDto } from './dto/updateComment.dto';
 import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CommentCreatedEvent, LoanStatusUpdatedEvent } from 'src/events/events.interface';
+import { getSortedLoanIdsForBatchFields, requiresPostQuerySorting, sortLoansInMemory } from 'src/helpers/loanSort.helper';
+import { ReestriHelper } from 'src/helpers/reestri.helper';
 
 @Injectable()
 export class LoanService {
@@ -51,6 +53,7 @@ export class LoanService {
     private readonly permissionsHelper: PermissionsHelper,
     private readonly paginationService: PaginationService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly reestriHelper: ReestriHelper,
 
   ) { }
 
@@ -164,7 +167,7 @@ export class LoanService {
   // }
 
   async getAll(filterDto: GetLoansFilterWithPaginationDto, user: any): Promise<PaginatedResult<Loan>> {
-    const { page, limit, columns } = filterDto;
+    const { page, limit, columns, sortBy, sortOrder } = filterDto;
 
     // Setup pagination
     const paginationParams = columns
@@ -215,18 +218,64 @@ export class LoanService {
     // 1. User has explicit assignment filter (checked by shouldSkipUserScope)
     // 2. OR there's already a LoanAssignment filter in WHERE (from applyUserAssignmentFilter)
     const skipUserScope = shouldSkipUserScope(user, filterResults.filters) || hasLoanAssignmentInWhere(filterResults.where);
-    // Fetch loans
-    const includeConfig = getLoanIncludeConfig();
-    const loanQuery = buildLoanQuery(filterResults.where, paginationParams, includeConfig);
 
-    if (skipUserScope) {
-      loanQuery._skipUserScope = true;
+    // === TWO-QUERY APPROACH FOR BATCH-LOADED FIELDS ===
+    // For accurate cross-page sorting, fetch sorted IDs first, then fetch full data
+    let loans: any[];
+    let totalCount: number;
+
+    const useTwoQueryApproach = requiresPostQuerySorting(sortBy) && !columns;
+
+    if (useTwoQueryApproach) {
+      // Query 1: Get sorted loan IDs for current page
+      const sortResult = await getSortedLoanIdsForBatchFields(
+        this.prisma,
+        filterResults.where,
+        sortBy,
+        sortOrder,
+        page,
+        limit
+      );
+
+      if (!sortResult || sortResult.loanIds.length === 0) {
+        return this.paginationService.createPaginatedResult([], sortResult?.totalCount || 0, { page, limit });
+      }
+
+      totalCount = sortResult.totalCount;
+
+      // Fetch loans
+      const includeConfig = getLoanIncludeConfig();
+      const loanQuery: any = {
+        where: { id: { in: sortResult.loanIds } },
+        include: includeConfig,
+        // Important: Don't use pagination params here - we already have the right IDs
+      };
+      // const loanQuery = buildLoanQuery(filterResults.where, paginationParams, includeConfig, sortBy, sortOrder);
+
+      if (skipUserScope) {
+        loanQuery._skipUserScope = true;
+      }
+
+      loans = await this.permissionsHelper.loan.findMany(loanQuery);
+
+      // Preserve sort order from sortResult (MySQL IN clause doesn't preserve order)
+      const idOrderMap = new Map(sortResult.loanIds.map((id, index) => [id, index]));
+      loans.sort((a, b) => idOrderMap.get(a.id) - idOrderMap.get(b.id));
+
+    } else {
+      // === NORMAL FLOW (database-level sorting) ===
+      const includeConfig = getLoanIncludeConfig();
+      const loanQuery = buildLoanQuery(filterResults.where, paginationParams, includeConfig, sortBy, sortOrder);
+
+      if (skipUserScope) {
+        loanQuery._skipUserScope = true;
+      }
+
+      [loans, totalCount] = await Promise.all([
+        this.permissionsHelper.loan.findMany(loanQuery),
+        this.permissionsHelper.loan.count({ where: filterResults.where, _skipUserScope: skipUserScope }),
+      ]);
     }
-
-    const [loans, totalCount] = await Promise.all([
-      this.permissionsHelper.loan.findMany(loanQuery),
-      this.permissionsHelper.loan.count({ where: filterResults.where, _skipUserScope: skipUserScope }),
-    ]);
 
     // Batch load latest records for all loans (7 queries instead of N×6)
     if (loans.length > 0) {
@@ -241,23 +290,31 @@ export class LoanService {
       actDays: loan.lastActivite ? daysFromDate(loan.lastActivite) : null
     }));
 
+    // Apply post-query sorting if needed (for batch-loaded fields)
+    const needsPostSort = requiresPostQuerySorting(sortBy);
+    const finalLoans = needsPostSort && sortBy
+      ? sortLoansInMemory(enrichedLoans, sortBy, sortOrder)
+      : enrichedLoans;
+
     // Handle CSV export
     if (columns) {
-      return this.paginationService.getAllWithoutPagination(enrichedLoans, totalCount);
+      return this.paginationService.getAllWithoutPagination(finalLoans, totalCount);
     }
 
     // Enrich closed loans with additional data
     if (filterDto.showOnlyClosedLoans) {
-      await batchCalculateWriteoffs(enrichedLoans, this.paymentsHelper);
+      await batchCalculateWriteoffs(finalLoans, this.paymentsHelper);
     }
 
-    return this.paginationService.createPaginatedResult(enrichedLoans, totalCount, { page, limit });
+    return this.paginationService.createPaginatedResult(finalLoans, totalCount, { page, limit });
   }
 
   async getAssignedCases(filterDto: GetAssignedCasesFilterWithPaginationDto, user: any): Promise<PaginatedResult<any>> {
-    const { page, limit, search, portfolio, portfolioSeller, fromAssignedUser, toAssignedUser,
+    const {
+      page, limit, search, portfolio, portfolioSeller, fromAssignedUser, toAssignedUser,
       assignedLawyer, collateralStatus, clientStatus, loanStatus, litigationStage,
-      legalStage, marks, assignedBy, assignedDateStart, assignedDateEnd } = filterDto;
+      legalStage, marks, assignedBy, assignedDateStart, assignedDateEnd
+    } = filterDto;
 
     // Setup pagination
     const paginationParams = this.paginationService.getPaginationParams({ page, limit });
@@ -2676,7 +2733,7 @@ export class LoanService {
     }
 
     // Create the relationship between loan and mark
-    const loanMark = await this.prisma.loanMarks.create({
+    await this.prisma.loanMarks.create({
       data: {
         loanId: loan.id,
         markId: data.markId,
@@ -3992,5 +4049,10 @@ export class LoanService {
     // }
 
     // return debtorGuarantorsData;
+  }
+
+  async getDebtRegistryData(id = "01001008167") {
+    return this.reestriHelper.getDebtRegistryData(id)
+    // return this.riskHelper.getNaprlmrRegistryData(id)
   }
 }

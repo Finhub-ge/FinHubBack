@@ -11,6 +11,7 @@ import { S3Helper } from 'src/helpers/s3.helper';
 import { PermissionsHelper } from 'src/helpers/permissions.helper';
 import { CommentEventListener } from 'src/listeners/comment.listener';
 import { LoanStatusEventListener } from 'src/listeners/loanStatus.listener';
+import { ReestriHelper } from 'src/helpers/reestri.helper';
 
 @Module({
   imports: [JwtModule.register({}), HttpModule],
@@ -24,7 +25,8 @@ import { LoanStatusEventListener } from 'src/listeners/loanStatus.listener';
     S3Helper,
     PermissionsHelper,
     CommentEventListener,
-    LoanStatusEventListener
+    LoanStatusEventListener,
+    ReestriHelper
   ],
   exports: [LoanService]
 })

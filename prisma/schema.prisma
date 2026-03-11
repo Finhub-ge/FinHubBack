@@ -521,6 +521,8 @@ model portfolioSeller {
   updatedAt DateTime    @default(now()) @db.DateTime(0)
   deletedAt DateTime?   @db.DateTime(0)
   Portfolio Portfolio[]
+
+  @@index([name], map: "idx_portfolio_seller_name")
 }
 
 model Tasks {
@@ -1160,6 +1162,7 @@ model PortfolioCaseGroup {
   LoanAssignment LoanAssignment[]
 
   @@index([deletedAt], map: "idx_deletedAt")
+  @@index([groupName], map: "idx_portfolio_group_name")
 }
 
 model TaskStatus {

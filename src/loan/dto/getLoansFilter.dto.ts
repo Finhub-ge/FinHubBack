@@ -2,6 +2,7 @@ import { ApiProperty, IntersectionType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import { IsArray, IsDateString, IsOptional, IsString } from "class-validator";
 import { PaginationDto } from "src/common";
+import { LoanSortDto } from "./loanSort.dto";
 
 export class GetLoansFilterDto {
   @ApiProperty({
@@ -190,8 +191,8 @@ export class GetLoansFilterDto {
   closedDateEnd?: string;
 }
 
-// Combine with pagination
+// Combine with pagination and sorting
 export class GetLoansFilterWithPaginationDto extends IntersectionType(
-  GetLoansFilterDto,
-  PaginationDto,
+  IntersectionType(GetLoansFilterDto, PaginationDto),
+  LoanSortDto,
 ) { }

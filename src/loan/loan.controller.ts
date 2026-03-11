@@ -30,6 +30,7 @@ import { AddLoanReminderDto } from './dto/addLoanReminder.dto';
 import { UpdateCommentDto } from './dto/updateComment.dto';
 import { Response } from 'express';
 import { GetAssignedCasesFilterWithPaginationDto } from './dto/getAssignedCasesFilter.dto';
+import { Public } from 'src/auth/decorator/public.decorator';
 
 @ApiTags('Loans')
 @ApiBearerAuth('access-token')
@@ -41,6 +42,7 @@ export class LoanController {
   @AllRoles()
   @Get()
   getAll(@GetUser() user: User, @Query() filterDto: GetLoansFilterWithPaginationDto) {
+    console.log('filterDto', filterDto);
     return this.loanService.getAll(filterDto, user);
   }
 
@@ -570,4 +572,11 @@ export class LoanController {
   // ) {
   //   return this.loanService.getAdditionalInfo(user.id);
   // }
+
+
+  @Public()
+  @Post('/getDebtRegistryData')
+  async getDebtRegistryData() {
+    return await this.loanService.getDebtRegistryData();
+  }
 }

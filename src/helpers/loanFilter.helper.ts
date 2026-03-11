@@ -9,6 +9,8 @@ import { getLatestLoanIds } from './loan.helper';
 import { idToStatus } from 'src/enums/visitStatus.enum';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { subtractDays } from "./date.helper";
+import { SortableField, SortOrder } from "src/loan/dto/loanSort.dto";
+import { buildDatabaseOrderBy } from "./loanSort.helper";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1207,13 +1209,17 @@ export const hasDateRangeFilter = (filters: any): boolean => {
 export const buildLoanQuery = (
   where: any,
   paginationParams: any,
-  includeConfig: any
+  includeConfig: any,
+  sortBy?: SortableField,
+  sortOrder?: SortOrder
 ) => {
+  // Get the appropriate orderBy clause based on sortBy parameter
+  const orderBy = buildDatabaseOrderBy(sortBy, sortOrder);
+
   return {
     where,
     ...paginationParams,
-    // orderBy: { actDays: 'desc' as const },
-    orderBy: { lastActivite: 'asc' },
+    orderBy: orderBy || { lastActivite: 'asc' }, // Fallback to default
     include: includeConfig,
   };
 };
