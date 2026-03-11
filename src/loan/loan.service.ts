@@ -2759,8 +2759,7 @@ export class LoanService {
     // Find the loan mark relationship
     const loanMark = await this.prisma.loanMarks.findFirst({
       where: {
-        loanId: loan.id,
-        markId: markId,
+        id: markId,
         deletedAt: null,
       },
     });
