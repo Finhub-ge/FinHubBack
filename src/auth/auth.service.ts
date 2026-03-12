@@ -358,8 +358,13 @@ export class AuthService {
     }
     const regionalManager = isRegionalManager(user);
 
-    // Add canRequestLawyer property for specific user
+    // users who always can request lawyer
     const LAWYER_REQUEST_OVERRIDE_USER_IDS = [58];
+
+    if (regionalManager) {
+      LAWYER_REQUEST_OVERRIDE_USER_IDS.push(currentUser.id);
+    }
+
     return {
       ...currentUser,
       canRequestLawyer:
