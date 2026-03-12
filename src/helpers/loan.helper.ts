@@ -154,10 +154,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
       userId: user.id,
       deletedAt: null,
       Team: {
-        deletedAt: null,
-        Region: {
-          deletedAt: null
-        }
+        deletedAt: null
       }
     },
     select: {
@@ -165,6 +162,9 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
       Team: {
         select: {
           Region: {
+            where: {
+              deletedAt: null
+            },
             select: {
               RegionManager: {
                 where: { deletedAt: null },
@@ -244,6 +244,7 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   if (regionalManagerId) {
     orConditions.push({ userId: { in: regionalManagerId } });
   }
+
   return {
     AND: [
       { deletedAt: null },
