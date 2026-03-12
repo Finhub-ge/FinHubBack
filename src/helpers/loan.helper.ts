@@ -149,19 +149,27 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
   const regionalManager = isRegionalManager(user);
   const isCollector = user.role_name === 'collector';
 
-  const membership = await prisma.teamMembership.findFirst({
+  const membershipData = await prisma.teamMembership.findFirst({
     where: {
-      teamId: user.team_membership?.[0]?.teamId,
+      userId: user.id,
       deletedAt: null,
-      teamRole: TeamMembership_teamRole.leader
+      Team: {
+        deletedAt: null,
+        Region: {
+          deletedAt: null
+        }
+      }
     },
     select: {
-      userId: true, // team lead id
+      teamId: true,
       Team: {
         select: {
           Region: {
             select: {
-              managerId: true // regional manager id
+              RegionManager: {
+                where: { deletedAt: null },
+                select: { userId: true }
+              }
             }
           }
         }
@@ -169,10 +177,23 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
     }
   });
 
-  const teamLeadId = membership?.userId;
-  const regionalManagerId = membership?.Team?.Region?.managerId;
+  const teamLeadIds = await prisma.teamMembership.findMany({
+    where: {
+      teamId: membershipData?.teamId,
+      teamRole: TeamMembership_teamRole.leader,
+      deletedAt: null
+    },
+    select: {
+      userId: true
+    }
+  });
 
-  // Lawyers, team leads, admins: see ALL comments
+  const regionalManagerId =
+    membershipData?.Team?.Region?.RegionManager?.map(m => m.userId) ?? [];
+
+  const teamLeadId =
+    teamLeadIds.map(t => t.userId);
+
   if (!isCollector || teamLead || regionalManager) {
     return { deletedAt: null };
   }
@@ -195,8 +216,6 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
     return { id: -1 }; // No comments visible
   }
 
-  // const assignmentDate = assignments[0].createdAt;
-
   // Build collector filter: combines BOTH requirements
   const orConditions: any[] = [
     { userId: user.id }, // Own comments
@@ -218,12 +237,12 @@ export const buildCommentsWhereClause = async (prisma: PrismaService, user: any,
 
   // Add team lead if exists
   if (teamLeadId) {
-    orConditions.push({ userId: teamLeadId });
+    orConditions.push({ userId: { in: teamLeadId } });
   }
 
   // Add regional manager if exists
   if (regionalManagerId) {
-    orConditions.push({ userId: regionalManagerId });
+    orConditions.push({ userId: { in: regionalManagerId } });
   }
   return {
     AND: [
