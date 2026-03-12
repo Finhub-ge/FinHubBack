@@ -455,6 +455,7 @@ export class UserService {
     // Logged-in user role & team info
     const loggedInRole = user.role_name;
     const isCollectorUser = loggedInRole === Role.COLLECTOR;
+    const isLawyerUser = ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(loggedInRole);
 
     const isLeader = user.team_membership?.some(m => m.teamRole === 'leader');
     const leaderTeamIds = user.team_membership
@@ -465,6 +466,141 @@ export class UserService {
     const regionalTeamIds = regionalManager ? getRegionalTeamIds(user) : [];
 
     const filterHasCollector = role?.includes(Role.COLLECTOR);
+
+    // ✅ If lawyer is querying collectors, show ALL collectors (including regional managers)
+    if (isLawyerUser && filterHasCollector) {
+      // Fetch collectors in teams
+      const memberships = await this.prisma.teamMembership.findMany({
+        where: {
+          deletedAt: null,
+          User: {
+            deletedAt: null,
+            isActive: true,
+            Role: { name: { in: role } },
+          },
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              Role: true,
+            },
+          },
+          Team: true,
+        },
+      });
+
+      // Group memberships by team
+      const teamsMap = new Map<number, any>();
+
+      for (const m of memberships) {
+        const { teamId, teamRole, User, Team } = m;
+
+        if (!teamsMap.has(teamId)) {
+          teamsMap.set(teamId, {
+            teamId,
+            teamName: Team?.name,
+            teamLeaderId: null,
+            teamLeader: null,
+            teamLeaderRole: null,
+            members: [],
+          });
+        }
+
+        const team = teamsMap.get(teamId);
+
+        if (teamRole === TeamMembership_teamRole.leader) {
+          team.teamLeaderId = User.id;
+          team.teamLeader = `${User.firstName} ${User.lastName}`;
+          team.teamLeaderRole = User.Role?.name;
+        } else {
+          team.members.push({
+            id: User.id,
+            firstName: User.firstName,
+            lastName: User.lastName,
+            role: User.Role?.name,
+          });
+        }
+      }
+
+      let result = Array.from(teamsMap.values()).filter(t => t.teamLeader);
+
+      // Filter members by role=collector
+      result = result.map(team => ({
+        ...team,
+        members: team.members.filter(m => m.role === Role.COLLECTOR),
+      }));
+
+      // ✅ ADD: Fetch unassigned collectors (including regional managers not in teams)
+      const assignedUserIds = new Set(memberships.map(m => m.userId));
+
+      const unassignedCollectors = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          isActive: true,
+          Role: { name: { in: role } }, // collectors
+          id: { notIn: Array.from(assignedUserIds) }, // not in any team
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          Role: true,
+        },
+      });
+
+      // ✅ ADD: If there are unassigned collectors, add them as a "No Team" group
+      if (unassignedCollectors.length > 0) {
+        result.push({
+          teamId: 0,
+          teamName: 'No Team',
+          teamLeaderId: null,
+          teamLeader: 'Unassigned',
+          teamLeaderRole: null,
+          members: unassignedCollectors.map(u => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            role: u.Role?.name,
+          })),
+        });
+      }
+
+      // Add dummy "None" and "Pending" entries for lawyer roles
+      const isLawyerFilter = role?.some(r =>
+        ['lawyer', 'junior_lawyer', 'execution_lawyer', 'super_lawyer'].includes(r)
+      );
+
+      if (isLawyerFilter) {
+        result.unshift({
+          teamId: -1,
+          teamName: 'Special Filters',
+          teamLeaderId: null,
+          teamLeader: null,
+          teamLeaderRole: null,
+          members: [
+            {
+              id: -1,
+              firstName: 'None',
+              lastName: '(Unassigned)',
+              role: 'special'
+            },
+            {
+              id: -2,
+              firstName: 'Pending',
+              lastName: '(Requested)',
+              role: 'special'
+            }
+          ]
+        });
+      }
+
+      return result;
+    }
+
+    // ===== REST OF THE ORIGINAL CODE =====
 
     // Regional manager + filter=collector → restrict to regional teams
     if (isCollectorUser && filterHasCollector && regionalManager && regionalTeamIds.length > 0) {
@@ -479,10 +615,8 @@ export class UserService {
     let collectorTeamFilter = {};
     if (isCollectorUser && filterHasCollector) {
       if (regionalManager && regionalTeamIds.length > 0) {
-        // Regional managers see all teams in their regions
         collectorTeamFilter = { teamId: { in: regionalTeamIds } };
       } else if (isLeader) {
-        // Team leads see only their teams
         collectorTeamFilter = { teamId: { in: leaderTeamIds } };
       }
     }
@@ -491,10 +625,7 @@ export class UserService {
     const memberships = await this.prisma.teamMembership.findMany({
       where: {
         deletedAt: null,
-
-        // Apply collector leader restriction if needed
         ...collectorTeamFilter,
-
         User: {
           deletedAt: null,
           isActive: true,
@@ -593,12 +724,11 @@ export class UserService {
       }
     }
 
-    // Add logged-in regional manager if they are NOT in any team (same format as admin unassigned)
+    // Add logged-in regional manager if they are NOT in any team
     if (regionalManager && regionalTeamIds.length > 0 && !isAdmin) {
       const loggedInUserInTeam = memberships.some(m => m.userId === user.id);
 
       if (!loggedInUserInTeam) {
-        // Logged-in user is regional manager but not in any team
         const loggedInUserData = await this.prisma.user.findUnique({
           where: { id: user.id },
           select: {
@@ -632,7 +762,6 @@ export class UserService {
     );
 
     if (isLawyerFilter) {
-      // Add special team for dummy entries
       result.unshift({
         teamId: -1,
         teamName: 'Special Filters',
@@ -655,8 +784,10 @@ export class UserService {
         ]
       });
     }
+
     return result;
   }
+
 
   async getTasks(user: User) {
     return await this.prisma.tasks.findMany({
