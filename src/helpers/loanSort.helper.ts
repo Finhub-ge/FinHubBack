@@ -22,6 +22,9 @@ export function buildDatabaseOrderBy(
     case 'caseId':
       return { caseId: order };
 
+    case 'actDay':
+      return { lastActivite: order };
+
     // ===== 1-LEVEL RELATIONS =====
     case 'groupName':
       return { PortfolioCaseGroup: { groupName: order } };
@@ -54,6 +57,7 @@ export function buildDatabaseOrderBy(
     case 'otherFee':
     case 'legalCharges':
     case 'currentDebt':
+    case 'statusDate':
     case 'city':
     case 'address':
     case 'collateralStatus':
@@ -61,6 +65,13 @@ export function buildDatabaseOrderBy(
     case 'legalStage':
     case 'mark':
     case 'visitStatus':
+    case 'collector':
+    case 'collAssignDate':
+    case 'lawyer':
+    case 'lawAssignDate':
+    case 'juniorLawyer':
+    case 'execLawyer':
+    case 'lastPay':
       // These use two-query approach for accurate cross-page sorting
       // Return null to trigger two-query flow
       return null;
@@ -89,6 +100,7 @@ export function requiresPostQuerySorting(sortBy?: SortableField): boolean {
     'otherFee',          // Latest LoanRemaining.otherFee
     'legalCharges',      // Latest LoanRemaining.legalCharges
     'currentDebt',       // Latest LoanRemaining.currentDebt
+    'statusDate',        // Latest LoanStatusHistory.createdAt
     'city',              // Latest LoanAddress.City.city
     'address',           // Latest LoanAddress.address
     'collateralStatus',  // Latest LoanCollateralStatus
@@ -96,6 +108,13 @@ export function requiresPostQuerySorting(sortBy?: SortableField): boolean {
     'legalStage',        // Latest LoanLegalStage
     'mark',              // Latest LoanMarks
     'visitStatus',       // Latest LoanVisit.status
+    'collector',         // Active LoanAssignment.User (Role = collector)
+    'collAssignDate',    // Active LoanAssignment.assignedAt (Role = collector)
+    'lawyer',            // Active LoanAssignment.User (Role = lawyer)
+    'lawAssignDate',     // Active LoanAssignment.assignedAt (Role = lawyer)
+    'juniorLawyer',      // Active LoanAssignment.User (Role = junior_lawyer)
+    'execLawyer',        // Active LoanAssignment.User (Role = execution_lawyer)
+    'lastPay',           // Latest Transaction.paymentDate
   ];
 
   return postQueryFields.includes(sortBy);
@@ -110,6 +129,9 @@ export function extractSortValue(loan: any, sortBy: SortableField): any {
     // Direct fields
     case 'caseId':
       return loan.caseId || '';
+
+    case 'actDay':
+      return loan.actDays ?? 0;
 
     // 1-level relations
     case 'groupName':
@@ -154,6 +176,9 @@ export function extractSortValue(loan: any, sortBy: SortableField): any {
     case 'currentDebt':
       return loan.LoanRemaining?.[0]?.currentDebt ?? 0;
 
+    case 'statusDate':
+      return loan.LoanStatusHistory?.[0]?.createdAt || null;
+
     case 'city':
       return loan.LoanAddress?.[0]?.City?.city || '';
 
@@ -174,6 +199,35 @@ export function extractSortValue(loan: any, sortBy: SortableField): any {
 
     case 'visitStatus':
       return loan.LoanVisit?.[0]?.status || '';
+
+    case 'collector':
+      const collectorFirstName = loan.LoanAssignment?.[0]?.User?.firstName || '';
+      const collectorLastName = loan.LoanAssignment?.[0]?.User?.lastName || '';
+      return `${collectorFirstName} ${collectorLastName}`.trim();
+
+    case 'collAssignDate':
+      return loan.LoanAssignment?.[0]?.assignedAt || null;
+
+    case 'lawyer':
+      const lawyerFirstName = loan.LoanAssignment?.[0]?.User?.firstName || '';
+      const lawyerLastName = loan.LoanAssignment?.[0]?.User?.lastName || '';
+      return `${lawyerFirstName} ${lawyerLastName}`.trim();
+
+    case 'lawAssignDate':
+      return loan.LoanAssignment?.[0]?.assignedAt || null;
+
+    case 'juniorLawyer':
+      const juniorFirstName = loan.LoanAssignment?.[0]?.User?.firstName || '';
+      const juniorLastName = loan.LoanAssignment?.[0]?.User?.lastName || '';
+      return `${juniorFirstName} ${juniorLastName}`.trim();
+
+    case 'execLawyer':
+      const execFirstName = loan.LoanAssignment?.[0]?.User?.firstName || '';
+      const execLastName = loan.LoanAssignment?.[0]?.User?.lastName || '';
+      return `${execFirstName} ${execLastName}`.trim();
+
+    case 'lastPay':
+      return loan.Transaction?.[0]?.paymentDate || null;
 
     default:
       return null;
@@ -291,6 +345,19 @@ function buildMinimalSelectForSort(sortBy: SortableField): any {
         }
       };
 
+    case 'statusDate':
+      return {
+        ...baseSelect,
+        LoanStatusHistory: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' as const },
+          take: 1,
+          select: {
+            createdAt: true
+          }
+        }
+      };
+
     case 'city':
     case 'address':
       return {
@@ -367,6 +434,114 @@ function buildMinimalSelectForSort(sortBy: SortableField): any {
           take: 1,
           select: {
             status: true
+          }
+        }
+      };
+
+    case 'collector':
+    case 'collAssignDate':
+      return {
+        ...baseSelect,
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            Role: { name: 'collector' }
+          },
+          orderBy: { assignedAt: 'desc' as const },
+          take: 1,
+          select: {
+            assignedAt: true,
+            User: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      };
+
+    case 'lawyer':
+    case 'lawAssignDate':
+      return {
+        ...baseSelect,
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            Role: { name: 'lawyer' }
+          },
+          orderBy: { assignedAt: 'desc' as const },
+          take: 1,
+          select: {
+            assignedAt: true,
+            User: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      };
+
+    case 'juniorLawyer':
+      return {
+        ...baseSelect,
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            Role: { name: 'junior_lawyer' }
+          },
+          orderBy: { assignedAt: 'desc' as const },
+          take: 1,
+          select: {
+            User: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      };
+
+    case 'execLawyer':
+      return {
+        ...baseSelect,
+        LoanAssignment: {
+          where: {
+            deletedAt: null,
+            isActive: true,
+            Role: { name: 'execution_lawyer' }
+          },
+          orderBy: { assignedAt: 'desc' as const },
+          take: 1,
+          select: {
+            User: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      };
+
+    case 'lastPay':
+      return {
+        ...baseSelect,
+        Transaction: {
+          where: {
+            deleted: 0,
+            paymentDate: { not: null }
+          },
+          orderBy: { paymentDate: 'desc' as const },
+          take: 1,
+          select: {
+            paymentDate: true
           }
         }
       };

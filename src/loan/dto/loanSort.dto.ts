@@ -18,29 +18,40 @@ export type SortableField =
   | 'otherFee'         // Other Fees (latest LoanRemaining.otherFee) - two-query approach
   | 'legalCharges'     // Legal Charges (latest LoanRemaining.legalCharges) - two-query approach
   | 'currentDebt'      // Total Debt (latest LoanRemaining.currentDebt) - two-query approach
+  | 'statusDate'       // Status Date (latest LoanStatusHistory.createdAt) - two-query approach
+  | 'actDay'           // Activity Days (Loan.actDays) - direct field
   | 'city'             // City (latest LoanAddress) - two-query approach
   | 'address'          // Address (latest LoanAddress) - two-query approach
   | 'collateralStatus' // Collateral Status (latest) - two-query approach
   | 'litigationStage'  // Litigation Stage (latest) - two-query approach
   | 'legalStage'       // Legal Stage (latest) - two-query approach
   | 'mark'             // Mark (latest) - two-query approach
-  | 'visitStatus';     // Visit Status (latest) - two-query approach
+  | 'visitStatus'      // Visit Status (latest) - two-query approach
+  | 'collector'        // Collector (LoanAssignment.User name where Role = collector) - two-query approach
+  | 'collAssignDate'   // Collector Assign Date (LoanAssignment.assignedAt where Role = collector) - two-query approach
+  | 'lawyer'           // Lawyer (LoanAssignment.User name where Role = lawyer) - two-query approach
+  | 'lawAssignDate'    // Lawyer Assign Date (LoanAssignment.assignedAt where Role = lawyer) - two-query approach
+  | 'juniorLawyer'     // Junior Lawyer (LoanAssignment.User name where Role = junior_lawyer) - two-query approach
+  | 'execLawyer'       // Execution Lawyer (LoanAssignment.User name where Role = execution_lawyer) - two-query approach
+  | 'lastPay';         // Last Payment Date (latest Transaction.paymentDate) - two-query approach
 
 export class LoanSortDto {
   @ApiPropertyOptional({
     description: 'Field to sort by',
     enum: [
       'caseId', 'groupName', 'portfolioSeller', 'debtorName', 'idNumber', 'clientStatus', 'collectionStatus',
-      'principal', 'interest', 'penalty', 'otherFee', 'legalCharges', 'currentDebt',
-      'city', 'address', 'collateralStatus', 'litigationStage', 'legalStage', 'mark', 'visitStatus'
+      'principal', 'interest', 'penalty', 'otherFee', 'legalCharges', 'currentDebt', 'statusDate', 'actDay',
+      'city', 'address', 'collateralStatus', 'litigationStage', 'legalStage', 'mark', 'visitStatus',
+      'collector', 'collAssignDate', 'lawyer', 'lawAssignDate', 'juniorLawyer', 'execLawyer', 'lastPay'
     ],
     example: 'caseId'
   })
   @IsOptional()
   @IsIn([
     'caseId', 'groupName', 'portfolioSeller', 'debtorName', 'idNumber', 'clientStatus', 'collectionStatus',
-    'principal', 'interest', 'penalty', 'otherFee', 'legalCharges', 'currentDebt',
-    'city', 'address', 'collateralStatus', 'litigationStage', 'legalStage', 'mark', 'visitStatus'
+    'principal', 'interest', 'penalty', 'otherFee', 'legalCharges', 'currentDebt', 'statusDate', 'actDay',
+    'city', 'address', 'collateralStatus', 'litigationStage', 'legalStage', 'mark', 'visitStatus',
+    'collector', 'collAssignDate', 'lawyer', 'lawAssignDate', 'juniorLawyer', 'execLawyer', 'lastPay'
   ])
   sortBy?: SortableField;
 
